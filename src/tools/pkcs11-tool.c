@@ -222,7 +222,7 @@ static const char *option_help[] = {
 	"Decrypt some data",
 	"Hash some data",
 	"Derive a secret key using another key and some data",
-	"Derive ECDHpass DER encoded pubkey for compatibility with some PKCS#11 implementations,"
+	"Derive ECDHpass DER encoded pubkey for compatibility with some PKCS#11 implementations",
 	"Specify mechanism (use -M for a list of supported mechanisms)",
 
 	"Log into the token first",
@@ -4511,6 +4511,7 @@ static int test_verify(CK_SESSION_HANDLE sess)
 			printf(" -- can't get the modulus length, skipping\n");
 			continue;
 		}
+		printf("\n");
 
 		errors += sign_verify(sess, priv_key, key_len, pub_key, i != 0);
 	}
