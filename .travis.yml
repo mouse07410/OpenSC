@@ -29,6 +29,7 @@ env:
     - secure: "ERhjW0yhfQtjLoGS/VDyiGPq/dwtLNGv8SVK0r3BJKM75ZwxtVwHJBYlMmI9awKFL1nHMTolDMQeNZP6ie+EFj1T2HU09GEUVioC2ME0k6ajKl0PjKrwvWrqWhNW5nEmsjvJJ4NRWH1oeBnsm5b0WpqY9dvu50g9TeSKczybjo9jdn9s7+i5rVf5CR0DAetQR7COBNHhYBW04LPSsX/wo/NVvZr77cqA4SUxzz7MvbNunP4/STetO8tnEvopBRP7vldBWMBYChS2NzHABjbRNOdUhRxEryODp5qE/IfyvOBiExtPVStNiEPOli0Iv75g53ePXLF41N/kAmrVccbxj+JP9z5KW/Bsude6ZHB2amHAwd2kA1QMl2z7+eyN7WeYgxRP0CUOZ2UogfDAjbQznTkRKmHI+W41tqUJ9C0hDx0miqwvY5wfndcMDpoIOv3TUOkf8kLd+tUhLw9J46TmUSl3Ip8dZHw67j/cPzS7jGZLDD00AKizcufIsglqecKDByoQobClJz+o/Di00P7H1B2bvbI+i+l9vJbjBSTViZgxlKjOMmtBjaTtpWbZ9ZWZ8HjpZdmEjvLntVM+lPh8cI/CbPjz9SKHtyK+alwvWOs3pfwKFz7NdZ7+deRAcA/jqiyIBW7Ej6wXhMyIdiLIuOsO91x7lYhGoadKmiX6PcM="
 
 matrix:
+  fast_finish: true
   include:
     - compiler: clang
       os: osx
@@ -40,6 +41,11 @@ matrix:
     - compiler: gcc
       os: linux
       env: ENABLE_DOC=--enable-doc
+    - os: linux
+      env: HOST=x86_64-w64-mingw32
+    - os: linux
+      env: HOST=i686-w64-mingw32
+  allow_failures:
     - os: linux
       env: HOST=x86_64-w64-mingw32
     - os: linux
