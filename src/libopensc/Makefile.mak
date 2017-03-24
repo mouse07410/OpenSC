@@ -12,7 +12,7 @@ OBJECTS			= \
 	\
 	muscle.obj muscle-filesystem.obj \
 	\
-	ctbcs.obj reader-ctapi.obj reader-pcsc.obj reader-openct.obj \
+	ctbcs.obj reader-ctapi.obj reader-pcsc.obj reader-openct.obj reader-tr03119.obj \
 	\
 	card-setcos.obj card-miocos.obj card-flex.obj card-gpk.obj \
 	card-cardos.obj card-tcos.obj card-default.obj \
@@ -27,6 +27,7 @@ OBJECTS			= \
 	card-iasecc.obj iasecc-sdo.obj iasecc-sm.obj cwa-dnie.obj cwa14890.obj \
 	card-sc-hsm.obj card-dnie.obj card-isoApplet.obj pkcs15-coolkey.obj \
 	card-masktech.obj card-gids.obj card-jpki.obj \
+	card-npa.obj \
 	\
 	pkcs15-openpgp.obj pkcs15-infocamere.obj pkcs15-starcert.obj \
 	pkcs15-tcos.obj pkcs15-esteid.obj pkcs15-postecert.obj pkcs15-gemsafeGPK.obj \
@@ -40,6 +41,7 @@ OBJECTS			= \
 LIBS = $(TOPDIR)\src\scconf\scconf.lib \
 	   $(TOPDIR)\src\common\common.lib \
 	   $(TOPDIR)\src\common\libscdl.lib \
+	   $(TOPDIR)\src\sm\libsmeac.lib \
 	   $(TOPDIR)\src\pkcs15init\pkcs15init.lib
 
 all: $(TOPDIR)\win32\versioninfo.res $(TARGET)
@@ -50,8 +52,8 @@ opensc.dll: $(OBJECTS) $(LIBS)
 	echo LIBRARY $* > $*.def
 	echo EXPORTS >> $*.def
 	type lib$*.exports >> $*.def
-	link $(LINKFLAGS) /dll /def:$*.def /implib:$*.lib /out:opensc.dll $(OBJECTS) $(LIBS) $(OPENSSL_LIB) $(ZLIB_LIB) gdi32.lib advapi32.lib ws2_32.lib
+	link $(LINKFLAGS) /dll /def:$*.def /implib:$*.lib /out:opensc.dll $(OBJECTS) $(LIBS) $(OPENPACE_LIB) $(OPENSSL_LIB) $(ZLIB_LIB) gdi32.lib advapi32.lib ws2_32.lib
 	if EXIST opensc.dll.manifest mt -manifest opensc.dll.manifest -outputresource:opensc.dll;2
 
 opensc_a.lib: $(OBJECTS) $(LIBS)
-	lib $(LIBFLAGS) /out:opensc_a.lib $(OBJECTS) $(LIBS) $(OPENSSL_LIB) $(ZLIB_LIB) user32.lib advapi32.lib ws2_32.lib
+	lib $(LIBFLAGS) /out:opensc_a.lib $(OBJECTS) $(LIBS) $(OPENPACE_LIB) $(OPENSSL_LIB) $(ZLIB_LIB) user32.lib advapi32.lib ws2_32.lib
