@@ -552,7 +552,7 @@ app default {
 		# Older PKCS#11 applications not supporting CKA_ALWAYS_AUTHENTICATE
 		# may need to set this to get signatures to work with some cards.
 		# Default: false
-		pin_cache_ignore_user_consent = true;
+		#pin_cache_ignore_user_consent = true;
 		#
 		# Enable pkcs15 emulation.
 		# Default: yes
