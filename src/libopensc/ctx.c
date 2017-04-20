@@ -56,10 +56,8 @@ int _sc_delete_reader(sc_context_t *ctx, sc_reader_t *reader)
 	}
 	if (reader->ops->release)
 			reader->ops->release(reader);
-	if (reader->name)
-		free(reader->name);
-	if (reader->vendor)
-		free(reader->vendor);
+	free(reader->name);
+	free(reader->vendor);
 	list_delete(&ctx->readers, reader);
 	free(reader);
 	return SC_SUCCESS;
@@ -528,8 +526,6 @@ static int load_card_drivers(sc_context_t *ctx, struct _sc_ctx_options *opts)
 		ctx->card_drivers[drv_count] = func();
 		if (ctx->card_drivers[drv_count] == NULL) {
 			sc_log(ctx, "Driver '%s' not available.", ent->name);
-			if (dll)
-				sc_dlclose(dll);
 			continue;
 		}
 
@@ -796,11 +792,6 @@ int sc_context_create(sc_context_t **ctx_out, const sc_context_param_t *parm)
 
 #ifdef ENABLE_PCSC
 	ctx->reader_driver = sc_get_pcsc_driver();
-/* XXX: remove cardmod pseudoreader driver */
-#ifdef ENABLE_MINIDRIVER
-	if(strcmp(ctx->app_name, "cardmod") == 0)
-		ctx->reader_driver = sc_get_cardmod_driver();
-#endif
 #elif defined(ENABLE_CRYPTOTOKENKIT)
 	ctx->reader_driver = sc_get_cryptotokenkit_driver();
 #elif defined(ENABLE_CTAPI)
@@ -825,8 +816,8 @@ int sc_context_create(sc_context_t **ctx_out, const sc_context_param_t *parm)
 		}
 	}
 	if (opts.forced_card_driver) {
-		/* FIXME: check return value? */
-		sc_set_card_driver(ctx, opts.forced_card_driver);
+		if (SC_SUCCESS != sc_set_card_driver(ctx, opts.forced_card_driver))
+			sc_log(ctx, "Warning: Could not load %s.", opts.forced_card_driver);
 		free(opts.forced_card_driver);
 	}
 	del_drvs(&opts);
