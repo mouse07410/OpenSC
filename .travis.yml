@@ -53,7 +53,8 @@ before_install:
         brew uninstall libtool;
         brew install libtool;
         brew install gengetopt;
-	brew install openssl;
+        brew install openssl;
+        export PKG_CONFIG_PATH="/usr/local/opt/openssl/lib/pkgconfig:${PKG_CONFIG_PATH}"
     fi
 
 before_script:
