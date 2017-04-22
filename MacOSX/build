@@ -1,8 +1,20 @@
 #!/bin/bash
-set -ex
+#set -ex
 # generate configure
 test -x ./configure || ./bootstrap
+# For MacOS standard/default location/destination for OpenSC is /Library/OpenSC/
+# However if env variable PREFIX is set, we will not interfere with it
+if [ "x${PREFIX}" = "x" ]; then
+      PREFIX="/Library/OpenSC"
+else
+   echo "Destination given in env variable PREFIX=${PREFIX}"
+fi
+if [ "x$1" != "x" ]; then
+      PREFIX="$1"
+fi
+echo "Destination for OpenSC is set to ${PREFIX}"
+#
 # configure once to set the version in build script
-./configure
+./configure --prefix=${PREFIX} --sysconfdir=${PREFIX}/etc --disable-dependency-tracking --enable-shared --disable-static --enable-strict --disable-assert --enable-sm
 # build and package installer
 bash ./MacOSX/build-package $@

@@ -1,9 +1,40 @@
-#!/bin/bash
+#!/bin/bash -x
 
-if !([ -e "/usr/local/lib/opensc-pkcs11.so" ])
-then
-	ln -s /Library/OpenSC/lib/opensc-pkcs11.so /usr/local/lib/opensc-pkcs11.so
-fi
+# We do not enforce symlinking of "opensc-pkcs11.so" because of the
+# OpenSSH (7.4p1 and newer) that has a bug preventing it to whitelist
+# /Library/OpenSC/lib, and it also tracks symlinks. So if you want to
+# use ssh with a OpenSC-supported token, it will need the real library
+# opensc-pkcs11.so in /usr/local/lib, putting a symlink won't be sufficient.
+#
+#if !([ -e "/usr/local/lib/opensc-pkcs11.so" ])
+#then
+#	ln -s /Library/OpenSC/lib/opensc-pkcs11.so /usr/local/lib/opensc-pkcs11.so
+#fi
+echo "Please copy or symlink /Library/OpenSC/lib/opensc-pkcs11.so to /usr/local/lib/ as appropriate."
+
+# Provide symlinks for the libraries from /Library/OpenSC/lib to /usr/local/lib
+for f in /Library/OpenSC/*.dylib
+do
+	ln -sf $i /usr/local/lib/
+done
+ln -sf /Library/OpenSC/lib/libopensc.a /usr/local/lib/
+ln -sf /Library/OpenSC/lib/pkcs11-spy.so /usr/local/lib/
+ln -sf /Library/OpenSC/lib/onepin-opensc-pkcs11.so /usr/local/lib/
+# Just in case. Should not be necessary, but won't hurt...
+ln -sf /Library/OpenSC/lib/opensc-pkcs11.so /Library/OpenSC/lib/opensc-pkcs11.dylib
+
+# Provide symlinks for man pages
+for f in /Library/OpenSC/share/man/man1/*.1
+do
+	ln -sf $i /usr/local/share/man/man1/
+done
+for f in /Library/OpenSC/share/man/man5/*.5
+do
+	ln -sf $i /usr/local/share/man/man5/
+done
+
+
+# Restore opensc.conf if necessary, and make sure MD5 hash of this file is recorded correctly
 if [ -e "/Library/OpenSC/etc/opensc.conf.md5" ]
 then
 	read cs_fromfile file < "/Library/OpenSC/etc/opensc.conf.md5"
@@ -17,8 +48,11 @@ else
 	mv /Library/OpenSC/etc/opensc.conf.orig /Library/OpenSC/etc/opensc.conf
 	md5 -r /Library/OpenSC/etc/opensc.conf  > /Library/OpenSC/etc/opensc.conf.md5
 fi
+
+# Force symlinks for OpenSC executables to /usr/local/bin directory
 for f in /Library/OpenSC/bin/*
 do
-	ln -sf $f /usr/local/bin
+	ln -sf $f /usr/local/bin/
 done
+
 exit 0
