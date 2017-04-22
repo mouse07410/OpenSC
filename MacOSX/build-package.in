@@ -41,6 +41,7 @@ if ! pkg-config libcrypto --atleast-version=1.0.1; then
 
 	export OPENSSL_CFLAGS="`env PKG_CONFIG_PATH=$BUILDPATH/openssl_bin/$PREFIX/lib/pkgconfig PKG_CONFIG_SYSROOT_DIR=$BUILDPATH/openssl_bin pkg-config --static --cflags libcrypto`"
 	export OPENSSL_LIBS="`env PKG_CONFIG_PATH=$BUILDPATH/openssl_bin/$PREFIX/lib/pkgconfig PKG_CONFIG_SYSROOT_DIR=$BUILDPATH/openssl_bin pkg-config --static --libs libcrypto`"
+	export OPENSSL_LOCAL="true"
 fi
 
 # MacOS seems to have a problem if target dir has not been wiped - it does not rebuild the libraries!
@@ -82,8 +83,14 @@ fi
 
 # Create the symlink to OpenSC sources
 test -L OpenSC.tokend/build/opensc-src || ln -sf ${BUILDPATH}/src OpenSC.tokend/build/opensc-src
+if [ "${OPENSSL_LOCAL}" = "true" ]; then
+    # Try to make openssl_bin that we built available to OpenSC.tokend build process
+    ln -sf ${BUILDPATH}/openssl_bin/$PREFIX/include/openssl ${BUILDPATH}/src/common/
+    ln -sf ${BUILDPATH}/openssl_bin/$PREFIX/lib/libcrypto.a ${BUILDPATH}/target/$PREFIX/lib/
+fi
 
 # Build and copy OpenSC.tokend
+#env OPENSSL_CFLAGS="${OPENSSL_CFLAGS}" OPENSSL_LIBS="${OPENSSL_LIBS}"
 xcodebuild -target OpenSC -configuration Deployment -project OpenSC.tokend/Tokend.xcodeproj install DSTROOT=${PWD}/target
 
 # Prepare target root
@@ -111,3 +118,6 @@ do
 	fi
 done
 
+# Cleanup local OpenSSL
+rm -f ${BUILDPATH}/src/common/openssl
+rm -f ${BUILDPATH}/target/$PREFIX/lib/libcrypto.a
