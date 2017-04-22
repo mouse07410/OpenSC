@@ -53,6 +53,7 @@ before_install:
         brew uninstall libtool;
         brew install libtool;
         brew install gengetopt;
+	brew install openssl;
     fi
 
 before_script:
