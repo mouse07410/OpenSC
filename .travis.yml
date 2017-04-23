@@ -77,8 +77,12 @@ before_script:
     fi
 
 script:
+  - if [ $TRAVIS_OS_NAME == osx ]; then
+      defaults write com.apple.dt.Xcode UseSanitizedBuildSystemEnvironment -bool NO
+    fi
   - if [ "${COVERITY_SCAN_BRANCH}" != 1 ]; then
       if [ $TRAVIS_OS_NAME == osx ]; then
+        defaults write com.apple.dt.Xcode UseSanitizedBuildSystemEnvironment -bool NO
         ./MacOSX/build;
       else
         make;
