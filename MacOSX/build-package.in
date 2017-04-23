@@ -39,15 +39,20 @@ if ! pkg-config libcrypto --atleast-version=1.0.1; then
 	# Make sure now-unnecessary OpenSSL-1.0.2 source files (98+MB) are removed
 	rm -rf openssl
 
+	# The following lines pass the "local" OpenSSL installation location (headers and libraries)
+	# to the OpenSC configurator.
 	export OPENSSL_CFLAGS="`env PKG_CONFIG_PATH=$BUILDPATH/openssl_bin/$PREFIX/lib/pkgconfig PKG_CONFIG_SYSROOT_DIR=$BUILDPATH/openssl_bin pkg-config --static --cflags libcrypto`"
 	export OPENSSL_LIBS="`env PKG_CONFIG_PATH=$BUILDPATH/openssl_bin/$PREFIX/lib/pkgconfig PKG_CONFIG_SYSROOT_DIR=$BUILDPATH/openssl_bin pkg-config --static --libs libcrypto`"
+	
+	# The following lines are needed to pass the "local" OpenSSL installation location (headers and libraries)
+	# to the Xcode (xcodebuild) builder on MacOS. 
 	export OPENSSL_INCLUDE="$BUILDPATH/openssl_bin/$PREFIX/include"
 	export OPENSSL_LIB="-L$BUILDPATH/openssl_bin/$PREFIX/lib -lssl -lcrypto"
 	export OPENSSL_LOCAL="true"
 fi
 
-# MacOS seems to have a problem if target dir has not been wiped - it does not rebuild the libraries!
-# So force the correct re-configuration and rebuild by this crude but effective measure
+# MacOS seems to have a problem: if target dir has not been wiped - it does not rebuild the libraries!
+# So force the correct re-configuration, and achieve rebuild by this crude but effective measure
 rm -rf ${BUILDPATH}/target/$PREFIX/lib/pkgconfig
 # If target directory has already been build, no need to re-configure
 if ! test -e ${BUILDPATH}/target/$PREFIX/lib/pkgconfig; then
@@ -75,6 +80,9 @@ if ! test -e ${BUILDPATH}/target/$PREFIX/lib/pkgconfig; then
 	rm -f target/$PREFIX/lib/*.la
 
 	# generate .bundle (required by Adobe Acrobat)
+	# (ULB) Probably Acrobat does not require this any more, at least Acrobat 11 and 15
+	# rely on CSDA tokend rather than opensc-pkcs11 bundle. Still, it doesn't hurt to
+	# keep this one around.
 	./MacOSX/libtool-bundle target/$PREFIX/lib/opensc-pkcs11.so target/$PREFIX/lib
 fi
 
