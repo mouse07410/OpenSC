@@ -79,7 +79,6 @@ before_script:
 script:
   - if [ "${COVERITY_SCAN_BRANCH}" != 1 ]; then
       if [ $TRAVIS_OS_NAME == osx ]; then
-        # to avoid linker warning ("directory not found")
         mkdir -p /opt/local/lib
 	mkdir -p /Library/OpenSC/lib
         ./MacOSX/build;
