@@ -17,7 +17,10 @@ for f in /Library/OpenSC/*.dylib
 do
 	ln -sf $i /usr/local/lib/
 done
-ln -sf /Library/OpenSC/lib/libopensc.a /usr/local/lib/
+# Usually static library is not built... But if it was built, by all means symlink it...
+if [ -e /Library/OpenSC/lib/libopensc.a ]; then
+	ln -sf /Library/OpenSC/lib/libopensc.a /usr/local/lib/
+fi
 ln -sf /Library/OpenSC/lib/pkcs11-spy.so /usr/local/lib/
 ln -sf /Library/OpenSC/lib/onepin-opensc-pkcs11.so /usr/local/lib/
 # Just in case. Should not be necessary, but won't hurt...
