@@ -90,9 +90,9 @@ fi
 
 
 # Clean the old stuff
-rm -rf /tmp/OpenSC
+rm -rf ${INSTDIR}
 # Make sure the directory exists
-mkdir -p /tmp/OpenSC
+mkdir -p ${INSTDIR}
 
 # No need to touch the local repo, as "git bisect" takes care of that
 
@@ -104,8 +104,8 @@ ${OPENSSL} ${PUBKEYEC}
 ${OPENSSL} ${GENRAND}
 
 # Re-do the configuration because commits could affect it
-./configure --prefix=/tmp/OpenSC
-# Build and install into /tmp/OpenSC
+./configure --prefix=${INSTDIR}
+# Build and install into ${INSTDIR} (usually /tmp/OpenSC for testing)
 make install
 
 
