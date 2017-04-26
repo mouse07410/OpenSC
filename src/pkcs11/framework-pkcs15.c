@@ -3880,6 +3880,7 @@ pkcs15_pubkey_get_attribute(struct sc_pkcs11_session *session, void *object, CK_
 		case CKA_MODULUS:
 		case CKA_MODULUS_BITS:
 		case CKA_VALUE:
+		case CKA_SPKI:
 		case CKA_PUBLIC_EXPONENT:
 		case CKA_EC_PARAMS:
 		case CKA_EC_POINT:
@@ -3982,9 +3983,17 @@ pkcs15_pubkey_get_attribute(struct sc_pkcs11_session *session, void *object, CK_
 		return get_modulus_bits(pubkey->pub_data, attr);
 	case CKA_PUBLIC_EXPONENT:
 		return get_public_exponent(pubkey->pub_data, attr);
+	/* 
+	 * PKCS#11 does not define a CKA_VALUE for a CKO_PUBLIC_KEY.
+	 * OpenSC does, but it is not consistent it what it returns
+	 * Internally to do verify, with OpenSSL, we need a SPKI that
+	 * can be converted into a EVP_KEY with d2i_PUBKEY
+	 * CKA_SPKI is defined internally as a CKA_VENDOR_DFINED attribute.
+	 */
 	case CKA_VALUE:
+	case CKA_SPKI:
 
-		if (pubkey->pub_info && pubkey->pub_info->direct.raw.value && pubkey->pub_info->direct.raw.len)   {
+		if (attr->type != CKA_SPKI && pubkey->pub_info && pubkey->pub_info->direct.raw.value && pubkey->pub_info->direct.raw.len)   {
 			check_attribute_buffer(attr, pubkey->pub_info->direct.raw.len);
 			memcpy(attr->pValue, pubkey->pub_info->direct.raw.value, pubkey->pub_info->direct.raw.len);
 		}
@@ -3996,8 +4005,13 @@ pkcs15_pubkey_get_attribute(struct sc_pkcs11_session *session, void *object, CK_
 			unsigned char *value = NULL;
 			size_t len;
 
-			if (sc_pkcs15_encode_pubkey(context, pubkey->pub_data, &value, &len))
-				return sc_to_cryptoki_error(SC_ERROR_INTERNAL, "C_GetAttributeValue");
+			if (attr->type != CKA_SPKI) {
+				if (sc_pkcs15_encode_pubkey(context, pubkey->pub_data, &value, &len))
+					return sc_to_cryptoki_error(SC_ERROR_INTERNAL, "C_GetAttributeValue");
+				} else {
+					if (sc_pkcs15_encode_pubkey_as_spki(context, pubkey->pub_data, &value, &len))
+					return sc_to_cryptoki_error(SC_ERROR_INTERNAL, "C_GetAttributeValue");
+				}
 
 			if (attr->pValue == NULL_PTR) {
 				attr->ulValueLen = len;
@@ -4014,7 +4028,7 @@ pkcs15_pubkey_get_attribute(struct sc_pkcs11_session *session, void *object, CK_
 
 			free(value);
 		}
-		else if (pubkey->base.p15_object && pubkey->base.p15_object->content.value && pubkey->base.p15_object->content.len)   {
+		else if (attr->type != CKA_SPKI && pubkey->base.p15_object && pubkey->base.p15_object->content.value && pubkey->base.p15_object->content.len)   {
 			check_attribute_buffer(attr, pubkey->base.p15_object->content.len);
 			memcpy(attr->pValue, pubkey->base.p15_object->content.value, pubkey->base.p15_object->content.len);
 		}
