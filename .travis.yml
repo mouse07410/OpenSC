@@ -9,10 +9,10 @@ addons:
     - binutils-mingw-w64-i686
     - binutils-mingw-w64-x86-64
     - docbook-xsl
-    - gcc-mingw-w64-i686
-    - gcc-mingw-w64-x86-64
+#    - gcc-mingw-w64-i686
+#    - gcc-mingw-w64-x86-64
     - libpcsclite-dev
-    - mingw-w64
+#    - mingw-w64
     - wine
     - xsltproc
     - gengetopt
@@ -44,10 +44,10 @@ matrix:
     - compiler: gcc
       os: linux
       env: ENABLE_DOC=--enable-doc
-    - os: linux
-      env: HOST=x86_64-w64-mingw32
-    - os: linux
-      env: HOST=i686-w64-mingw32
+  #  - os: linux
+  #    env: HOST=x86_64-w64-mingw32
+  #  - os: linux
+  #    env: HOST=i686-w64-mingw32
 
 before_install:
   - if [ "$TRAVIS_OS_NAME" == "osx" ]; then
