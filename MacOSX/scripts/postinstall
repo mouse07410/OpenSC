@@ -1,30 +1,17 @@
 #!/bin/bash -x
 
-# We do not enforce symlinking of "opensc-pkcs11.so" because of the
-# OpenSSH (7.4p1 and newer) that has a bug preventing it to whitelist
-# /Library/OpenSC/lib, and it also tracks symlinks. So if you want to
-# use ssh with a OpenSC-supported token, it will need the real library
-# opensc-pkcs11.so in /usr/local/lib, putting a symlink won't be sufficient.
-#
-#if !([ -e "/usr/local/lib/opensc-pkcs11.so" ])
-#then
-#	ln -s /Library/OpenSC/lib/opensc-pkcs11.so /usr/local/lib/opensc-pkcs11.so
-#fi
-echo "Please copy or symlink /Library/OpenSC/lib/opensc-pkcs11.so to /usr/local/lib/ as appropriate."
 
 # Provide symlinks for the libraries from /Library/OpenSC/lib to /usr/local/lib
-for f in /Library/OpenSC/*.dylib
-do
-	ln -sf $i /usr/local/lib/
-done
+#for f in /Library/OpenSC/*.dylib
+#do
+#	ln -sf $i /usr/local/lib/
+#done
+#ln -sf /Library/OpenSC/lib/pkcs11-spy.so /usr/local/lib/
+
 # Usually static library is not built... But if it was built, by all means symlink it...
 if [ -e /Library/OpenSC/lib/libopensc.a ]; then
 	ln -sf /Library/OpenSC/lib/libopensc.a /usr/local/lib/
 fi
-ln -sf /Library/OpenSC/lib/pkcs11-spy.so /usr/local/lib/
-ln -sf /Library/OpenSC/lib/onepin-opensc-pkcs11.so /usr/local/lib/
-# Just in case. Should not be necessary, but won't hurt...
-ln -sf /Library/OpenSC/lib/opensc-pkcs11.so /Library/OpenSC/lib/opensc-pkcs11.dylib
 
 # Provide symlinks for man pages
 for f in /Library/OpenSC/share/man/man1/*.1
@@ -36,8 +23,26 @@ do
 	ln -sf $i /usr/local/share/man/man5/
 done
 
+# Physical copy of the libraries to /usr/local/lib to fix the bug
+# in OpenSSH on MacOS that does not allow whitelisting other directories
+# (so it refuses to load libraries from /Library/OpenSC, even if they are
+# symlink'ed to /usr/local/lib)
+cp -f /Library/OpenSC/lib/opensc-pkcs11.so /usr/local/lib/opensc-pkcs11.so
+cp -f /Library/OpenSC/lib/onepin-opensc-pkcs11.so /usr/local/lib/onepin-opensc-pkcs11.so
+# Take care of libopensc.dylib
+cp -f /Library/OpenSC/lib/libopensc.4.dylib /usr/local/lib/
+ln -sf /usr/local/lib/libopensc.4.dylib /usr/local/lib/libopensc.dylib
 
 # Restore opensc.conf if necessary, and make sure MD5 hash of this file is recorded correctly
+if [ -e "/Library/OpenSC/etc/opensc.conf.orig" ]
+then
+    # File exists, fine. Save the conf to .new
+    cp /Library/OpenSC/etc/opensc.conf /Library/OpenSC/etc/opensc.conf.new
+else
+    # Save the copy of the current config file
+    cp /Library/OpenSC/etc/opensc.conf /Library/OpenSC/etc/opensc.conf.orig
+fi
+
 if [ -e "/Library/OpenSC/etc/opensc.conf.md5" ]
 then
 	read cs_fromfile file < "/Library/OpenSC/etc/opensc.conf.md5"
