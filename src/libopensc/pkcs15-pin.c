@@ -270,7 +270,9 @@ _validate_pin(struct sc_pkcs15_card *p15card, struct sc_pkcs15_auth_info *auth_i
 		return SC_ERROR_BUFFER_TOO_SMALL;
 
 	/* if we use pinpad, no more checks are needed */
-	if (p15card->card->reader->capabilities & SC_READER_CAP_PIN_PAD && !pinlen)
+	if ((p15card->card->reader->capabilities & SC_READER_CAP_PIN_PAD
+				|| p15card->card->caps & SC_CARD_CAP_PROTECTED_AUTHENTICATION_PATH)
+		   	&& !pinlen)
 		return SC_SUCCESS;
 
 	/* If pin is given, make sure it is within limits */
@@ -329,6 +331,22 @@ int
 _sc_pkcs15_verify_pin(struct sc_pkcs15_card *p15card, struct sc_pkcs15_object *pin_obj,
 		const unsigned char *pincode, size_t pinlen)
 {
+	return sc_pkcs15_verify_pin_with_session_pin(p15card, pin_obj, pincode,
+			pinlen, NULL, NULL);
+}
+
+/*
+ * Verify a PIN and generate a session PIN
+ *
+ * If the code given to us has zero length, this means we
+ * should ask the card reader to obtain the PIN from the
+ * reader's PIN pad
+ */
+int sc_pkcs15_verify_pin_with_session_pin(struct sc_pkcs15_card *p15card,
+			 struct sc_pkcs15_object *pin_obj,
+			 const unsigned char *pincode, size_t pinlen,
+			 const unsigned char *sessionpin, size_t *sessionpinlen)
+{
 	struct sc_context *ctx = p15card->card->ctx;
 	struct sc_pkcs15_auth_info *auth_info = (struct sc_pkcs15_auth_info *)pin_obj->data;
 	int r;
@@ -348,7 +366,6 @@ _sc_pkcs15_verify_pin(struct sc_pkcs15_card *p15card, struct sc_pkcs15_object *p
 
 	/* Initialize arguments */
 	memset(&data, 0, sizeof(data));
-	data.cmd = SC_PIN_CMD_VERIFY;
 	data.pin_type = auth_info->auth_method;
 
 	if (auth_info->auth_type == SC_PKCS15_PIN_AUTH_TYPE_PIN)   {
@@ -391,13 +408,28 @@ _sc_pkcs15_verify_pin(struct sc_pkcs15_card *p15card, struct sc_pkcs15_object *p
 		data.pin_reference = skey_info->key_reference;
 	}
 
-	if(p15card->card->reader->capabilities & SC_READER_CAP_PIN_PAD && !pinlen) {
+	if((p15card->card->reader->capabilities & SC_READER_CAP_PIN_PAD
+				|| p15card->card->caps & SC_CARD_CAP_PROTECTED_AUTHENTICATION_PATH)
+			&& !pinlen) {
 		data.flags |= SC_PIN_CMD_USE_PINPAD;
 
 		if (auth_info->attrs.pin.flags & SC_PKCS15_PIN_FLAG_SO_PIN)
 			data.pin1.prompt = "Please enter SO PIN";
 		else
 			data.pin1.prompt = "Please enter PIN";
+	}
+
+	if (card->caps & SC_CARD_CAP_SESSION_PIN && sessionpin && sessionpinlen) {
+		/* session pin is requested and supported with standard verification*/
+		data.cmd = SC_PIN_CMD_GET_SESSION_PIN;
+		memcpy(&data.pin2, &data.pin1, sizeof (data.pin1));
+		data.pin2.data = sessionpin;
+		data.pin2.len = *sessionpinlen;
+	} else {
+		/* perform a standard verify */
+		data.cmd = SC_PIN_CMD_VERIFY;
+		if (sessionpinlen)
+			*sessionpinlen = 0;
 	}
 
 	r = sc_lock(card);
@@ -412,6 +444,16 @@ _sc_pkcs15_verify_pin(struct sc_pkcs15_card *p15card, struct sc_pkcs15_object *p
 
 	r = sc_pin_cmd(card, &data, &auth_info->tries_left);
 	sc_log(ctx, "PIN cmd result %i", r);
+	if (r == SC_SUCCESS) {
+		sc_pkcs15_pincache_add(p15card, pin_obj, pincode, pinlen);
+		if (data.cmd == SC_PIN_CMD_GET_SESSION_PIN) {
+			*sessionpinlen = data.pin2.len;
+		}
+	} else {
+		if (data.cmd == SC_PIN_CMD_GET_SESSION_PIN) {
+			*sessionpinlen = 0;
+		}
+	}
 out:
 	sc_unlock(card);
 	LOG_FUNC_RETURN(ctx, r);
@@ -487,7 +529,8 @@ int sc_pkcs15_change_pin(struct sc_pkcs15_card *p15card,
 	}
 
 	if((!oldpin || !newpin)
-			&& p15card->card->reader->capabilities & SC_READER_CAP_PIN_PAD) {
+			&& (p15card->card->reader->capabilities & SC_READER_CAP_PIN_PAD
+				|| p15card->card->caps & SC_CARD_CAP_PROTECTED_AUTHENTICATION_PATH)) {
 		data.flags |= SC_PIN_CMD_USE_PINPAD;
 		if (auth_info->attrs.pin.flags & SC_PKCS15_PIN_FLAG_SO_PIN) {
 			data.pin1.prompt = "Please enter SO PIN";
@@ -600,7 +643,8 @@ int sc_pkcs15_unblock_pin(struct sc_pkcs15_card *p15card,
 		break;
 	}
 
-	if(p15card->card->reader->capabilities & SC_READER_CAP_PIN_PAD) {
+	if((p15card->card->reader->capabilities & SC_READER_CAP_PIN_PAD
+				|| p15card->card->caps & SC_CARD_CAP_PROTECTED_AUTHENTICATION_PATH)) {
 		data.flags |= SC_PIN_CMD_USE_PINPAD;
 		if (auth_info->attrs.pin.flags & SC_PKCS15_PIN_FLAG_SO_PIN) {
 			data.pin1.prompt = "Please enter PUK";
@@ -743,7 +787,8 @@ sc_pkcs15_pincache_revalidate(struct sc_pkcs15_card *p15card, const sc_pkcs15_ob
 		return SC_ERROR_SECURITY_STATUS_NOT_SATISFIED;
 	}
 
-	if (p15card->card->reader->capabilities & SC_READER_CAP_PIN_PAD)
+	if ((p15card->card->reader->capabilities & SC_READER_CAP_PIN_PAD
+				|| p15card->card->caps & SC_CARD_CAP_PROTECTED_AUTHENTICATION_PATH))
 		return SC_ERROR_SECURITY_STATUS_NOT_SATISFIED;
 
 	r = sc_pkcs15_find_pin_by_auth_id(p15card, &obj->auth_id, &pin_obj);
