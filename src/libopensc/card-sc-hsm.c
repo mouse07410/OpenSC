@@ -64,16 +64,67 @@ static struct sc_atr_table sc_hsm_atrs[] = {
 	/* standard version */
 	{"3B:FE:18:00:00:81:31:FE:45:80:31:81:54:48:53:4D:31:73:80:21:40:81:07:FA", NULL, NULL, SC_CARD_TYPE_SC_HSM, 0, NULL},
 	{"3B:8E:80:01:80:31:81:54:48:53:4D:31:73:80:21:40:81:07:18", NULL, NULL, SC_CARD_TYPE_SC_HSM, 0, NULL},
-	{NULL, NULL, NULL, 0, 0, NULL}
-};
-
-/* Known ATRs for JavaCards that qualify for SmartCard-HSMs */
-static struct sc_atr_table sc_hsm_jc_atrs[] = {
-	/* standard version */
-	{"3b:f8:13:00:00:81:31:fe:45:4a:43:4f:50:76:32:34:31:b7", NULL, NULL, SC_CARD_TYPE_SC_HSM, 0, NULL},	// JCOP 2.4.1 Default ATR contact based
-	{"3b:88:80:01:4a:43:4f:50:76:32:34:31:5e", NULL, NULL, SC_CARD_TYPE_SC_HSM, 0, NULL},	// JCOP 2.4.1 Default ATR contactless
-	/* SoC Sample Card */
-	{"3B:80:80:01:01", NULL, NULL, SC_CARD_TYPE_SC_HSM_SOC, 0, NULL},
+	{"3B:80:80:01:01", NULL, NULL, SC_CARD_TYPE_SC_HSM_SOC, 0, NULL},	// SoC Sample Card
+	{
+		"3B:84:80:01:47:6f:49:44:00",
+		"FF:FF:FF:FF:FF:FF:FF:FF:00",
+		"GoID", SC_CARD_TYPE_SC_HSM_SOC, 0, NULL
+	},
+	{
+		"3B:85:80:01:47:6f:49:44:00:00",
+		"FF:FF:FF:FF:FF:FF:FF:FF:00:00",
+		"GoID", SC_CARD_TYPE_SC_HSM_SOC, 0, NULL
+	},
+	{
+		"3B:86:80:01:47:6f:49:44:00:00:00",
+		"FF:FF:FF:FF:FF:FF:FF:FF:00:00:00",
+		"GoID", SC_CARD_TYPE_SC_HSM_SOC, 0, NULL
+	},
+	{
+		"3B:87:80:01:47:6f:49:44:00:00:00:00",
+		"FF:FF:FF:FF:FF:FF:FF:FF:00:00:00:00",
+		"GoID", SC_CARD_TYPE_SC_HSM_SOC, 0, NULL
+	},
+	{
+		"3B:88:80:01:47:6f:49:44:00:00:00:00:00",
+		"FF:FF:FF:FF:FF:FF:FF:FF:00:00:00:00:00",
+		"GoID", SC_CARD_TYPE_SC_HSM_SOC, 0, NULL
+	},
+	{
+		"3B:89:80:01:47:6f:49:44:00:00:00:00:00:00",
+		"FF:FF:FF:FF:FF:FF:FF:FF:00:00:00:00:00:00",
+		"GoID", SC_CARD_TYPE_SC_HSM_SOC, 0, NULL
+	},
+	{
+		"3B:8a:80:01:47:6f:49:44:00:00:00:00:00:00:00",
+		"FF:FF:FF:FF:FF:FF:FF:FF:00:00:00:00:00:00:00",
+		"GoID", SC_CARD_TYPE_SC_HSM_SOC, 0, NULL
+	},
+	{
+		"3B:8b:80:01:47:6f:49:44:00:00:00:00:00:00:00:00",
+		"FF:FF:FF:FF:FF:FF:FF:FF:00:00:00:00:00:00:00:00",
+		"GoID", SC_CARD_TYPE_SC_HSM_SOC, 0, NULL
+	},
+	{
+		"3B:8c:80:01:47:6f:49:44:00:00:00:00:00:00:00:00:00",
+		"FF:FF:FF:FF:FF:FF:FF:FF:00:00:00:00:00:00:00:00:00",
+		"GoID", SC_CARD_TYPE_SC_HSM_SOC, 0, NULL
+	},
+	{
+		"3B:8d:80:01:47:6f:49:44:00:00:00:00:00:00:00:00:00:00",
+		"FF:FF:FF:FF:FF:FF:FF:FF:00:00:00:00:00:00:00:00:00:00",
+		"GoID", SC_CARD_TYPE_SC_HSM_SOC, 0, NULL
+	},
+	{
+		"3B:8e:80:01:47:6f:49:44:00:00:00:00:00:00:00:00:00:00:00",
+		"FF:FF:FF:FF:FF:FF:FF:FF:00:00:00:00:00:00:00:00:00:00:00",
+		"GoID", SC_CARD_TYPE_SC_HSM_SOC, 0, NULL
+	},
+	{
+		"3B:8f:80:01:47:6f:49:44:00:00:00:00:00:00:00:00:00:00:00:00",
+		"FF:FF:FF:FF:FF:FF:FF:FF:00:00:00:00:00:00:00:00:00:00:00:00",
+		"GoID", SC_CARD_TYPE_SC_HSM_SOC, 0, NULL
+	},
 	{NULL, NULL, NULL, 0, 0, NULL}
 };
 
@@ -183,15 +234,12 @@ static int sc_hsm_match_card(struct sc_card *card)
 	if (i >= 0)
 		return 1;
 
-	i = _sc_match_atr(card, sc_hsm_jc_atrs, &card->type);
-	if (i >= 0)
-		return 1;
-
 	sc_path_set(&path, SC_PATH_TYPE_DF_NAME, sc_hsm_aid.value, sc_hsm_aid.len, 0, 0);
 	r = sc_hsm_select_file(card, &path, NULL);
 	LOG_TEST_RET(card->ctx, r, "Could not select SmartCard-HSM application");
 
-	// Select Applet to be sure
+	card->type = SC_CARD_TYPE_SC_HSM;
+
 	return 1;
 }
 
@@ -438,13 +486,11 @@ static int sc_hsm_perform_chip_authentication(sc_card_t *card)
 		goto err;
 	}
 
-	if (card->type == SC_CARD_TYPE_SC_HSM_SOC) {
-		/* SoC cards are known to be implemented on newer JCOPs */
-		protocol = NID_id_CA_ECDH_AES_CBC_CMAC_128;
-	} else {
-		/* Older cards may not support AES accelerator */
-		protocol = NID_id_CA_ECDH_3DES_CBC_CBC;
-	}
+	/* XXX on older JCOPs only NID_id_CA_ECDH_3DES_CBC_CBC may be
+	 * supported. The card does not export its capabilities. We hardcode
+	 * NID_id_CA_ECDH_AES_CBC_CMAC_128 here, because we don't have the older
+	 * cards in production. */
+	protocol = NID_id_CA_ECDH_AES_CBC_CMAC_128;
 
 	/* initialize CA domain parameter with the document's public key */
 	if (!EAC_CTX_init_ca(ctx, protocol, 8)) {
@@ -513,8 +559,9 @@ static int sc_hsm_pin_cmd(sc_card_t *card, struct sc_pin_cmd_data *data,
 	}
 
 	/* For contactless cards always establish a secure channel before PIN
-	 * verification */
-	if (card->type == SC_CARD_TYPE_SC_HSM_SOC
+	 * verification. Also, Session PIN generation requires SM. */
+	if ((card->type == SC_CARD_TYPE_SC_HSM_SOC || card->reader->uid.len
+				|| cmd == SC_PIN_CMD_GET_SESSION_PIN)
 			&& (data->cmd != SC_PIN_CMD_GET_INFO)
 			&& card->sm_ctx.sm_mode != SM_MODE_TRANSMIT) {
 		LOG_TEST_RET(card->ctx,
