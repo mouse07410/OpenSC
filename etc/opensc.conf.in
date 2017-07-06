@@ -547,12 +547,12 @@ app default {
 		#
 		# How many times to use a PIN from cache before re-authenticating it?
 		# Default: 10
-		#pin_cache_counter = 3;
+		pin_cache_counter = 3;
 		#
 		# Older PKCS#11 applications not supporting CKA_ALWAYS_AUTHENTICATE
 		# may need to set this to get signatures to work with some cards.
 		# Default: false
-		pin_cache_ignore_user_consent = true;
+		#pin_cache_ignore_user_consent = true;
 		#
 		# Enable pkcs15 emulation.
 		# Default: yes
