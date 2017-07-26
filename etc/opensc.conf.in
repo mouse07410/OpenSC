@@ -102,7 +102,7 @@ app default {
 		#
 		# Enable pinpad if detected (PC/SC v2.0.2 Part 10)
 		# Default: true
-		# enable_pinpad = false;
+		enable_pinpad = false;
 		#
 		# Detect reader capabilities with escape commands (wrapped APDUs with
 		# CLA=0xFF as defined by PC/SC pt. 3 and BSI TR-03119, e.g. for getting
