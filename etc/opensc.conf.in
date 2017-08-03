@@ -786,6 +786,10 @@ app tokend {
 		# Default: 300
 		#
 		score = 1000;
+		# Tokend ignore to read PIN protected certificate that is set SC_PKCS15_CO_FLAG_PRIVATE flag.
+		# Default: true
+		#
+		# ignore_private_certificate = false;
 	}
 }
 
