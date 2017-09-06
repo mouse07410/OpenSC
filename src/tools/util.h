@@ -31,7 +31,7 @@ void util_print_usage_and_die(const char *app_name, const struct option options[
 const char * util_acl_to_str(const struct sc_acl_entry *e);
 void util_warn(const char *fmt, ...);
 void util_error(const char *fmt, ...);
-void util_fatal(const char *fmt, ...);
+void util_fatal(const char *fmt, ...) __attribute__((noreturn));
 /* All singing all dancing card connect routine */
 int util_connect_card_ex(struct sc_context *, struct sc_card **, const char *reader_id, int do_wait, int do_lock, int verbose);
 int util_connect_card(struct sc_context *, struct sc_card **, const char *reader_id, int do_wait, int verbose);
