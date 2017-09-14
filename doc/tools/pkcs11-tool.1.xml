@@ -75,7 +75,7 @@
 					<term>
 						<option>--hash-algorithm</option> <replaceable>mechanism</replaceable>
 					</term>
-					<listitem><para>Specify hash algorithm used with generic RSA-PSS signature</para></listitem>
+					<listitem><para>Specify hash algorithm used with generic RSA-PSS signature or RSA-OAEP decryption. Allowed values are "SHA-1", "SHA256", "SHA384", "SHA512".</para></listitem>
 				</varlistentry>
 
 				<varlistentry>
@@ -225,7 +225,7 @@
 					</term>
 					<listitem><para>Use the specified Message Generation
 					Function (MGF) <replaceable>function</replaceable>
-					for RSA-PSS signatures. Supported arguments are MGF1-SHA1
+					for RSA-PSS signatures or RSA-OAEP decryptions. Supported arguments are MGF1-SHA1
 					to MGF1-SHA512 if supported by the driver.</para></listitem>
 				</varlistentry>
 
