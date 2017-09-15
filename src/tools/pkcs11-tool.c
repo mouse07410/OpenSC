@@ -1876,10 +1876,8 @@ static void decrypt_data(CK_SLOT_ID slot, CK_SESSION_HANDLE session,
 	/* set "default" MGF and hash algorithms. We can overwrite MGF later */
 	switch (opt_mechanism) {
 	case CKM_RSA_PKCS_OAEP:
+		oaep_params.hashAlg = opt_hash_alg;
 		switch (opt_hash_alg) {
-		case CKM_SHA_1:
-			oaep_params.mgf = CKG_MGF1_SHA1;
-			break;
 		case CKM_SHA256:
 			oaep_params.mgf = CKG_MGF1_SHA256;
 			break;
@@ -1889,10 +1887,12 @@ static void decrypt_data(CK_SLOT_ID slot, CK_SESSION_HANDLE session,
 		case CKM_SHA512:
 			oaep_params.mgf = CKG_MGF1_SHA512;
 			break;
-		default:
-			util_fatal("RSA-PKCS-OAEP requires explicit hash mechanism");
+		default:  /* fallthrough */
+			oaep_params.hashAlg = CKM_SHA_1;
+		case CKM_SHA_1:
+			oaep_params.mgf = CKG_MGF1_SHA1;
+			break;
 		}
-		oaep_params.hashAlg = opt_hash_alg;
 		break;
 
 #if 0 /* we do not have these definitions yet! */
