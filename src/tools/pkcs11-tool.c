@@ -1768,6 +1768,10 @@ to zero, or equal to -1 (meaning: use digest size) or to -2 \
 	if (r < 0)
 		util_fatal("Cannot read from %s: %m", opt_input);
 
+  if (opt_mechanism == CKM_RSA_PKCS_PSS && (unsigned long)r != hashlen)
+    util_fatal("For %s mechanism, message size (got %d bytes) must be equal to specified digest length (%lu)\n",
+               p11_mechanism_to_name(opt_mechanism), r, hashlen);
+
 	rv = CKR_CANCEL;
 	if (r < (int) sizeof(in_buffer))   {
 		rv = p11->C_SignInit(session, &mech, key);
