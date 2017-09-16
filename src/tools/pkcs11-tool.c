@@ -1930,16 +1930,18 @@ static void decrypt_data(CK_SLOT_ID slot, CK_SESSION_HANDLE session,
 		if (opt_mgf != 0)
 			oaep_params.mgf = opt_mgf;
 
-		oaep_params.source = 1UL;
-		oaep_params.pSourceData = in_buffer;
-		oaep_params.ulSourceDataLen = in_len;
+		/* These settings are compatible with OpenSSL 1.0.2L and 1.1.0+ */
+		oaep_params.source = 0UL;  /* empty encoding parameter (label) */
+		oaep_params.pSourceData = NULL; /* PKCS#11 standard: this must be NULLPTR */
+		oaep_params.ulSourceDataLen = 0; /* PKCS#11 standard: this must be 0 */
 
 		mech.pParameter = &oaep_params;
 		mech.ulParameterLen = sizeof(oaep_params);
 
-		fprintf(stderr, "OAEP parameters: hashAlg=%s, mgf=%s, data_len=%lu\n",
+		fprintf(stderr, "OAEP parameters: hashAlg=%s, mgf=%s, data_ptr=%p, data_len=%lu\n",
 			p11_mechanism_to_name(oaep_params.hashAlg),
 			p11_mgf_to_name(oaep_params.mgf),
+			oaep_params.pSourceData,
 			oaep_params.ulSourceDataLen);
 
 	} 
