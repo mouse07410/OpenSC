@@ -1926,6 +1926,7 @@ static void decrypt_data(CK_SLOT_ID slot, CK_SESSION_HANDLE session,
 		if (opt_mgf != 0)
 			oaep_params.mgf = opt_mgf;
 
+		oaep_params.source = 1UL;
 		oaep_params.pSourceData = in_buffer;
 		oaep_params.ulSourceDataLen = in_len;
 
