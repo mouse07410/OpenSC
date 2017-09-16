@@ -852,7 +852,7 @@ C_DecryptInit(CK_SESSION_HANDLE hSession, CK_MECHANISM_PTR pMechanism, CK_OBJECT
 		fprintf(spy_output, "pMechanism->pParameter->mgf=%s\n",
 			lookup_enum(MGF_T, param->mgf));
 		fprintf(spy_output, "pMechanism->pParameter->source=%lu\n", param->source);
-		fprintf(spy_output, "pMechanism->pParameter->mLen=%lu\n", param->ulSourceDataLen);
+		spy_dump_string_out("pSourceData[ulSourceDalaLen]", param->pSourceData, param->ulSourceDataLen);
 	}
 	spy_dump_ulong_in("hKey", hKey);
 	rv = po->C_DecryptInit(hSession, pMechanism, hKey);
