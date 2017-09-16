@@ -134,6 +134,7 @@ enum {
 	OPT_KEY_USAGE_DECRYPT,
 	OPT_KEY_USAGE_DERIVE,
 	OPT_PRIVATE,
+	OPT_SENSITIVE,
 	OPT_TEST_HOTPLUG,
 	OPT_UNLOCK_PIN,
 	OPT_PUK,
@@ -210,6 +211,7 @@ static const struct option options[] = {
 	{ "moz-cert",		1, NULL,		'z' },
 	{ "verbose",		0, NULL,		'v' },
 	{ "private",		0, NULL,		OPT_PRIVATE },
+	{ "sensitive",		0, NULL,		OPT_SENSITIVE },
 	{ "test-ec",		0, NULL,		OPT_TEST_EC },
 #ifndef _WIN32
 	{ "test-fork",		0, NULL,		OPT_TEST_FORK },
@@ -278,6 +280,7 @@ static const char *option_help[] = {
 	"Test Mozilla-like keypair gen and cert req, <arg>=certfile",
 	"Verbose operation. (Set OPENSC_DEBUG to enable OpenSC specific debugging)",
 	"Set the CKA_PRIVATE attribute (object is only viewable after a login)",
+	"Set the CKA_SENSITIVE attribute (object cannot be revealed in plaintext)",
 	"Test EC (best used with the --login or --pin option)",
 #ifndef _WIN32
 	"Test forking and calling C_Initialize() in the child",
@@ -317,6 +320,7 @@ static char *		opt_subject = NULL;
 static char *		opt_key_type = NULL;
 static char *		opt_sig_format = NULL;
 static int		opt_is_private = 0;
+static int		opt_is_sensitive = 0;
 static int		opt_test_hotplug = 0;
 static int		opt_login_type = -1;
 static int		opt_key_usage_sign = 0;
@@ -832,6 +836,9 @@ int main(int argc, char * argv[])
 			break;
 		case OPT_PRIVATE:
 			opt_is_private = 1;
+			break;
+		case OPT_SENSITIVE:
+			opt_is_sensitive = 1;
 			break;
 		case OPT_TEST_HOTPLUG:
 			opt_test_hotplug = 1;
@@ -1354,7 +1361,7 @@ static int login(CK_SESSION_HANDLE session, int login_type)
 			pin_flags=info.flags & (
 				CKF_SO_PIN_COUNT_LOW |
 				CKF_SO_PIN_FINAL_TRY |
-				CKF_SO_PIN_LOCKED | 
+				CKF_SO_PIN_LOCKED |
 				CKF_SO_PIN_TO_BE_CHANGED);
 			if(pin_flags)
 				printf("WARNING: %s\n",p11_token_info_flags(pin_flags));
@@ -1365,7 +1372,7 @@ static int login(CK_SESSION_HANDLE session, int login_type)
 			pin_flags=info.flags & (
 				CKF_USER_PIN_COUNT_LOW |
 				CKF_USER_PIN_FINAL_TRY |
-				CKF_USER_PIN_LOCKED | 
+				CKF_USER_PIN_LOCKED |
 				CKF_USER_PIN_TO_BE_CHANGED);
 			if(pin_flags)
 				printf("WARNING: %s\n",p11_token_info_flags(pin_flags));
@@ -2179,6 +2186,7 @@ gen_key(CK_SLOT_ID slot, CK_SESSION_HANDLE session, CK_OBJECT_HANDLE *hSecretKey
 	CK_MECHANISM mechanism = {CKM_AES_KEY_GEN, NULL_PTR, 0};
 	CK_OBJECT_CLASS secret_key_class = CKO_SECRET_KEY;
 	CK_BBOOL _true = TRUE;
+	CK_BBOOL _false = FALSE;
 	CK_KEY_TYPE key_type = CKK_AES;
 	CK_ULONG    key_length;
 	CK_ATTRIBUTE keyTemplate[20] = {
@@ -2251,6 +2259,15 @@ gen_key(CK_SLOT_ID slot, CK_SESSION_HANDLE session, CK_OBJECT_HANDLE *hSecretKey
 		}
 		else {
 			util_fatal("Unknown key type %s", type);
+		}
+
+		if (opt_is_sensitive != 0) {
+			FILL_ATTR(keyTemplate[n_attr], CKA_SENSITIVE, &_true, sizeof(_true));
+			n_attr++;
+		}
+		else {
+			FILL_ATTR(keyTemplate[n_attr], CKA_SENSITIVE, &_false, sizeof(_false));
+			n_attr++;
 		}
 
 		FILL_ATTR(keyTemplate[n_attr], CKA_ENCRYPT, &_true, sizeof(_true));
