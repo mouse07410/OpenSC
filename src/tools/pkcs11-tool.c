@@ -1916,6 +1916,10 @@ static void decrypt_data(CK_SLOT_ID slot, CK_SESSION_HANDLE session,
 		oaep_params.mgf = CKG_MGF1_SHA512;
 		break;
 #endif
+	case CKM_RSA_PKCS:
+		mech.pParameter = NULL;
+		mech.ulParameterLen = 0;
+		break;
 	default:
 		util_fatal("Illegal mechanism %s for RSA-OAEP\n", p11_mechanism_to_name(opt_mechanism));
 	}
@@ -1938,12 +1942,7 @@ static void decrypt_data(CK_SLOT_ID slot, CK_SESSION_HANDLE session,
 			p11_mgf_to_name(oaep_params.mgf),
 			oaep_params.ulSourceDataLen);
 
-	} else {
-		fprintf(stderr, "Imporperly set OAEP parameters: hashAlg=%s, mgf=%s, data_len=%lu\n",
-			p11_mechanism_to_name(oaep_params.hashAlg),
-			p11_mgf_to_name(oaep_params.mgf),
-			oaep_params.ulSourceDataLen);
-	}
+	} 
 
 	rv = p11->C_DecryptInit(session, &mech, key);
 	if (rv != CKR_OK)
