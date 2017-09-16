@@ -1860,7 +1860,7 @@ static void decrypt_data(CK_SLOT_ID slot, CK_SESSION_HANDLE session,
 	oaep_params.hashAlg = 0;
 
 	if (opt_hash_alg != 0 && opt_mechanism != CKM_RSA_PKCS_OAEP)
-		util_fatal("The hash-algorithm is applicable only to generic"
+		util_fatal("The hash-algorithm is applicable only to "
                "RSA-PKCS-OAEP mechanism"); 
 
 	if (opt_input == NULL)
