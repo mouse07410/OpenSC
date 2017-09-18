@@ -235,8 +235,8 @@ static const char *option_help[] = {
 	"Derive a secret key using another key and some data",
 	"Derive ECDHpass DER encoded pubkey for compatibility with some PKCS#11 implementations",
 	"Specify mechanism (use -M for a list of supported mechanisms)",
-	"Specify hash algorithm used with RSA-PKCS-PSS signature",
-	"Specify MGF (Message Generation Function) used for RSA-PSS signatures (possible values are MGF1-SHA1 to MGF1-SHA512)",
+	"Specify hash algorithm used with RSA-PKCS-PSS signature and RSA-PKCS-OAEP decryption",
+	"Specify MGF (Message Generation Function) used for RSA-PSS signature and RSA-OAEP decryption (possible values are MGF1-SHA1 to MGF1-SHA512)",
 	"Specify how many bytes should be used for salt in RSA-PSS signatures (default is digest size)",
 
 	"Log into the token first",
