@@ -1894,9 +1894,9 @@ static void decrypt_data(CK_SLOT_ID slot, CK_SESSION_HANDLE session,
 		case CKM_SHA512:
 			oaep_params.mgf = CKG_MGF1_SHA512;
 			break;
-		default:  /* fallthrough */
-			oaep_params.hashAlg = CKM_SHA_1;
+		default:  /* fallthrough to default SHA-1 */
 		case CKM_SHA_1:
+			oaep_params.hashAlg = CKM_SHA_1;
 			oaep_params.mgf = CKG_MGF1_SHA1;
 			break;
 		}
@@ -1945,9 +1945,10 @@ static void decrypt_data(CK_SLOT_ID slot, CK_SESSION_HANDLE session,
 		mech.pParameter = &oaep_params;
 		mech.ulParameterLen = sizeof(oaep_params);
 
-		fprintf(stderr, "OAEP parameters: hashAlg=%s, mgf=%s, data_ptr=%p, data_len=%lu\n",
+		fprintf(stderr, "OAEP parameters: hashAlg=%s, mgf=%s, source_type=%lu, source_ptr=%p, source_len=%lu\n",
 			p11_mechanism_to_name(oaep_params.hashAlg),
 			p11_mgf_to_name(oaep_params.mgf),
+			oaep_params.source,
 			oaep_params.pSourceData,
 			oaep_params.ulSourceDataLen);
 
