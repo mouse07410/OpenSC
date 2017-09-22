@@ -1762,7 +1762,8 @@ to zero, or equal to -1 (meaning: use digest size) or to -2 \
 
 		mech.pParameter = &pss_params;
 		mech.ulParameterLen = sizeof(pss_params);
-		fprintf(stderr, "PSS parameters: hashAlg=%s, mgf=%s, salt=%lu B\n",
+
+		fprintf(stderr, "PSS parameters: hashAlg=%s, mgf=%s, salt_len=%lu B\n",
 			p11_mechanism_to_name(pss_params.hashAlg),
 			p11_mgf_to_name(pss_params.mgf),
 			pss_params.sLen);
