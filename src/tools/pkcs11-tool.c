@@ -1692,6 +1692,9 @@ static void sign_data(CK_SLOT_ID slot, CK_SESSION_HANDLE session,
 		pss_params.hashAlg = opt_hash_alg;
 
 		switch (opt_hash_alg) {
+		case CKM_SHA224:
+			pss_params.mgf = CKG_MGF1_SHA224;
+			break;
 		case CKM_SHA256:
 			pss_params.mgf = CKG_MGF1_SHA256;
 			break;
@@ -1713,6 +1716,11 @@ static void sign_data(CK_SLOT_ID slot, CK_SESSION_HANDLE session,
 	case CKM_SHA1_RSA_PKCS_PSS:
 		pss_params.hashAlg = CKM_SHA_1;
 		pss_params.mgf = CKG_MGF1_SHA1;
+		break;
+
+	case CKM_SHA224_RSA_PKCS_PSS:
+		pss_params.hashAlg = CKM_SHA224;
+		pss_params.mgf = CKG_MGF1_SHA224;
 		break;
 
 	case CKM_SHA256_RSA_PKCS_PSS:
@@ -1824,7 +1832,7 @@ to zero, or equal to -1 (meaning: use digest size) or to -2 \
 		util_fatal("failed to open %s: %m", opt_output);
 	}
 
-	if (opt_mechanism == CKM_ECDSA || opt_mechanism == CKM_ECDSA_SHA1 || opt_mechanism == CKM_ECDSA_SHA256 || opt_mechanism == CKM_ECDSA_SHA384 || opt_mechanism == CKM_ECDSA_SHA512) {
+	if (opt_mechanism == CKM_ECDSA || opt_mechanism == CKM_ECDSA_SHA1 || opt_mechanism == CKM_ECDSA_SHA256 || opt_mechanism == CKM_ECDSA_SHA384 || opt_mechanism == CKM_ECDSA_SHA512 || opt_mechanism == CKM_ECDSA_SHA224) {
 		if (opt_sig_format &&  (!strcmp(opt_sig_format, "openssl") || !strcmp(opt_sig_format, "sequence"))) {
 			unsigned char *seq;
 			size_t seqlen;
@@ -1886,6 +1894,9 @@ static void decrypt_data(CK_SLOT_ID slot, CK_SESSION_HANDLE session,
 	case CKM_RSA_PKCS_OAEP:
 		oaep_params.hashAlg = opt_hash_alg;
 		switch (opt_hash_alg) {
+		case CKM_SHA224:
+			oaep_params.mgf = CKG_MGF1_SHA224;
+			break;
 		case CKM_SHA256:
 			oaep_params.mgf = CKG_MGF1_SHA256;
 			break;
@@ -1895,9 +1906,10 @@ static void decrypt_data(CK_SLOT_ID slot, CK_SESSION_HANDLE session,
 		case CKM_SHA512:
 			oaep_params.mgf = CKG_MGF1_SHA512;
 			break;
-		default:  /* fallthrough to default SHA-1 */
-		case CKM_SHA_1:
+		default: 
 			oaep_params.hashAlg = CKM_SHA_1;
+			/* fallthrough to SHA-1 default */
+		case CKM_SHA_1:
 			oaep_params.mgf = CKG_MGF1_SHA1;
 			break;
 		}
@@ -1907,6 +1919,11 @@ static void decrypt_data(CK_SLOT_ID slot, CK_SESSION_HANDLE session,
 	case CKM_SHA1_RSA_PKCS_OAEP:
 		oaep_params.hashAlg = CKM_SHA_1;
 		oaep_params.mgf = CKG_MGF1_SHA1;
+		break;
+
+	case CKM_SHA224_RSA_PKCS_OAEP:
+		oaep_params.hashAlg = CKM_SHA224;
+		oaep_params.mgf = CKG_MGF1_SHA224;
 		break;
 
 	case CKM_SHA256_RSA_PKCS_OAEP:
@@ -5866,6 +5883,7 @@ static struct mech_info	p11_mechanisms[] = {
       { CKM_MD2_RSA_PKCS,	"MD2-RSA-PKCS",	NULL },
       { CKM_MD5_RSA_PKCS,	"MD5-RSA-PKCS",	"rsa-md5" },
       { CKM_SHA1_RSA_PKCS,	"SHA1-RSA-PKCS",	"rsa-sha1" },
+      { CKM_SHA224_RSA_PKCS,	"SHA224-RSA-PKCS",	"rsa-sha224" },
       { CKM_SHA256_RSA_PKCS,	"SHA256-RSA-PKCS",	"rsa-sha256" },
       { CKM_SHA384_RSA_PKCS,	"SHA384-RSA-PKCS",	"rsa-sha384" },
       { CKM_SHA512_RSA_PKCS,	"SHA512-RSA-PKCS",	"rsa-sha512" },
@@ -5877,6 +5895,7 @@ static struct mech_info	p11_mechanisms[] = {
       { CKM_SHA1_RSA_X9_31,	"SHA1-RSA-X9-31",	NULL },
       { CKM_RSA_PKCS_PSS,	"RSA-PKCS-PSS",	NULL },
       { CKM_SHA1_RSA_PKCS_PSS,	"SHA1-RSA-PKCS-PSS",	"rsa-pss-sha1" },
+      { CKM_SHA224_RSA_PKCS_PSS,"SHA224-RSA-PKCS-PSS",	"rsa-pss-sha224" },
       { CKM_SHA256_RSA_PKCS_PSS,"SHA256-RSA-PKCS-PSS",	"rsa-pss-sha256" },
       { CKM_SHA384_RSA_PKCS_PSS,"SHA384-RSA-PKCS-PSS",	"rsa-pss-sha384" },
       { CKM_SHA512_RSA_PKCS_PSS,"SHA512-RSA-PKCS-PSS",	"rsa-pss-sha512" },
@@ -5925,6 +5944,8 @@ static struct mech_info	p11_mechanisms[] = {
       { CKM_SHA_1,		"SHA-1", NULL },
       { CKM_SHA_1_HMAC,		"SHA-1-HMAC", NULL },
       { CKM_SHA_1_HMAC_GENERAL,	"SHA-1-HMAC-GENERAL", NULL },
+      { CKM_SHA224,		"SHA224", NULL },
+      { CKM_SHA224_HMAC,	"SHA224-HMAC", NULL },
       { CKM_SHA256,		"SHA256", NULL },
       { CKM_SHA256_HMAC,	"SHA256-HMAC", NULL },
       { CKM_SHA384,		"SHA384", NULL },
