@@ -130,6 +130,8 @@ static int starcos_init(sc_card_t *card)
 
 	if (card->type == SC_CARD_TYPE_STARCOS_V3_4) {
 		card->name = "STARCOS SPK 3.4";
+		card->caps |= SC_CARD_CAP_ISO7816_PIN_INFO;
+
 		flags |= SC_CARD_FLAG_RNG
 			| SC_ALGORITHM_RSA_HASH_SHA224
 			| SC_ALGORITHM_RSA_HASH_SHA256
@@ -1336,7 +1338,7 @@ static int starcos_set_security_env(sc_card_t *card,
 		 * algorithm / cipher from PKCS#1 padding prefix */
 		*p++ = 0x84;
 		*p++ = 0x01;
-		*p++ = 0x84;
+		*p++ = *env->key_ref;
 
 		/* algorithm / cipher selector? */
 		*p++ = 0x89;
@@ -1631,33 +1633,51 @@ static int starcos_get_serialnr(sc_card_t *card, sc_serial_number_t *serial)
 {
 	int r;
 	u8  rbuf[SC_MAX_APDU_BUFFER_SIZE];
+	const unsigned char *iccsn;
+	size_t iccsn_len;
 	sc_apdu_t apdu;
 
 	if (!serial)
 		return SC_ERROR_INVALID_ARGUMENTS;
+
 	/* see if we have cached serial number */
 	if (card->serialnr.len) {
 		memcpy(serial, &card->serialnr, sizeof(*serial));
 		return SC_SUCCESS;
 	}
-	CHECK_NOT_SUPPORTED_V3_4(card);
-	/* get serial number via GET CARD DATA */
-	sc_format_apdu(card, &apdu, SC_APDU_CASE_2_SHORT, 0xf6, 0x00, 0x00);
-	apdu.cla |= 0x80;
-	apdu.resp = rbuf;
-	apdu.resplen = sizeof(rbuf);
-	apdu.le   = 256;
-	apdu.lc   = 0;
-	apdu.datalen = 0;
-        r = sc_transmit_apdu(card, &apdu);
-	SC_TEST_RET(card->ctx, SC_LOG_DEBUG_NORMAL, r, "APDU transmit failed");
-	if (apdu.sw1 != 0x90 || apdu.sw2 != 0x00)
-		return SC_ERROR_INTERNAL;
-	/* cache serial number */
-	memcpy(card->serialnr.value, apdu.resp, MIN(apdu.resplen, SC_MAX_SERIALNR));
-	card->serialnr.len = MIN(apdu.resplen, SC_MAX_SERIALNR);
+
+	switch (card->type) {
+		case SC_CARD_TYPE_STARCOS_V3_4:
+			r = sc_parse_ef_gdo(card, &iccsn, &iccsn_len, NULL, 0);
+			if (r < 0)
+				return r;
+			/* cache serial number */
+			memcpy(card->serialnr.value, iccsn, MIN(iccsn_len, SC_MAX_SERIALNR));
+			card->serialnr.len = MIN(iccsn_len, SC_MAX_SERIALNR);
+			break;
+
+		default:
+			/* get serial number via GET CARD DATA */
+			sc_format_apdu(card, &apdu, SC_APDU_CASE_2_SHORT, 0xf6, 0x00, 0x00);
+			apdu.cla |= 0x80;
+			apdu.resp = rbuf;
+			apdu.resplen = sizeof(rbuf);
+			apdu.le   = 256;
+			apdu.lc   = 0;
+			apdu.datalen = 0;
+			r = sc_transmit_apdu(card, &apdu);
+			SC_TEST_RET(card->ctx, SC_LOG_DEBUG_NORMAL, r, "APDU transmit failed");
+			if (apdu.sw1 != 0x90 || apdu.sw2 != 0x00)
+				return SC_ERROR_INTERNAL;
+			/* cache serial number */
+			memcpy(card->serialnr.value, apdu.resp, MIN(apdu.resplen, SC_MAX_SERIALNR));
+			card->serialnr.len = MIN(apdu.resplen, SC_MAX_SERIALNR);
+			break;
+	}
+
 	/* copy and return serial number */
 	memcpy(serial, &card->serialnr, sizeof(*serial));
+
 	return SC_SUCCESS;
 }
 
