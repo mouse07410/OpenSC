@@ -971,7 +971,6 @@ static int asepcos_pin_cmd(sc_card_t *card, struct sc_pin_cmd_data *pdata,
 		}
 		if (apdu.sw1 != 0x90 || apdu.sw2 != 0x00) {
 			/* unable to verify the old PIN */
-			r = sc_check_sw(card, apdu.sw1, apdu.sw2);
 			break;
 		}
 		/* 2, step: use CHANGE KEY to update the PIN */
@@ -981,7 +980,6 @@ static int asepcos_pin_cmd(sc_card_t *card, struct sc_pin_cmd_data *pdata,
 		r = sc_transmit_apdu(card, &apdu);
 		if (r != SC_SUCCESS)
 			sc_debug(card->ctx, SC_LOG_DEBUG_NORMAL, "APDU transmit failed");
-		r = sc_check_sw(card, apdu.sw1, apdu.sw2);
 		break;
 	case SC_PIN_CMD_UNBLOCK:
 		if (pdata->pin_type != SC_AC_CHV)
@@ -1008,7 +1006,6 @@ static int asepcos_pin_cmd(sc_card_t *card, struct sc_pin_cmd_data *pdata,
 			sc_debug(card->ctx, SC_LOG_DEBUG_NORMAL, "APDU transmit failed");
 			break;
 		}
-		r = sc_check_sw(card, apdu.sw1, apdu.sw2);
 		break;
 	default:
 		sc_debug(card->ctx, SC_LOG_DEBUG_NORMAL, "error: unknow cmd type");
@@ -1017,12 +1014,16 @@ static int asepcos_pin_cmd(sc_card_t *card, struct sc_pin_cmd_data *pdata,
 	/* Clear the buffer - it may contain pins */
 	sc_mem_clear(sbuf, sizeof(sbuf));
 	/* check for remaining tries if verification failed */
-	if (apdu.sw1 == 0x63) {
-		if ((apdu.sw2 & 0xF0) == 0xC0 && tries_left != NULL)
-			*tries_left = apdu.sw2 & 0x0F;
-		return SC_ERROR_PIN_CODE_INCORRECT;
+	if (r == SC_SUCCESS) {
+		if (apdu.sw1 == 0x63) {
+			if ((apdu.sw2 & 0xF0) == 0xC0 && tries_left != NULL)
+				*tries_left = apdu.sw2 & 0x0F;
+			r = SC_ERROR_PIN_CODE_INCORRECT;
+		}
+		r = sc_check_sw(card, apdu.sw1, apdu.sw2);
 	}
-	return sc_check_sw(card, apdu.sw1, apdu.sw2);
+
+	return r;
 }
 
 static struct sc_card_driver * sc_get_driver(void)

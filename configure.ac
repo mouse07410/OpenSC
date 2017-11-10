@@ -133,8 +133,8 @@ case "${host}" in
 	;;
 esac
 
-AX_CHECK_COMPILE_FLAG(-Wno-error=unused-but-set-variable, [have_unused_but_set_variable="yes"], [have_unused_but_set_variable="no"], [-Werror -Wunknown-warning-option])
-AM_CONDITIONAL([HAVE_UNUSED_BUT_SET_VARIABLE], [test "${have_unused_but_set_variable}" = "yes"])
+AX_CHECK_COMPILE_FLAG(-Wunknown-warning-option, [have_unknown_warning_option="yes"], [have_unknown_warning_option="no"], [-Werror])
+AM_CONDITIONAL([HAVE_UNKNOWN_WARNING_OPTION], [test "${have_unknown_warning_option}" = "yes"])
 
 AC_ARG_ENABLE(
 	[strict],
@@ -253,13 +253,6 @@ AC_ARG_ENABLE(
 	[AS_HELP_STRING([--enable-notify],[enable notifications @<:@detect@:>@])],
 	,
 	[enable_notify="detect"]
-)
-
-AC_ARG_ENABLE(
-	[werror-declaration-after-statement],
-	[AS_HELP_STRING([--disable-werror-declaration-after-statement],[disable -Werror 'declaration-after-statement' @<:@enabled@:>@])],
-	,
-	[werror_declaration_after_statement="yes"]
 )
 
 AC_ARG_WITH(
@@ -1019,18 +1012,10 @@ AM_CONDITIONAL([GIT_CHECKOUT], [test "${GIT_CHECKOUT}" = "yes"])
 
 if test "${enable_pedantic}" = "yes"; then
 	enable_strict="yes";
-	CFLAGS="${CFLAGS} -pedantic -Wextra"
+	CFLAGS="${CFLAGS} -pedantic"
 fi
 if test "${enable_strict}" = "yes"; then
-	CFLAGS="${CFLAGS} -Wall -Wextra -Wno-unused-parameter"
-fi
-if test "$GCC" = "yes"; then
-	# This should be resolved not ignored.
-	CFLAGS="-fno-strict-aliasing ${CFLAGS}"
-fi
-
-if test "${werror_declaration_after_statement}" = "yes"; then
-	CFLAGS="${CFLAGS} -Werror=declaration-after-statement"
+	CFLAGS="${CFLAGS} -Wall -Wextra -Wno-unused-parameter -Werror"
 fi
 
 AC_CONFIG_FILES([

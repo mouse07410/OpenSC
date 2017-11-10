@@ -169,6 +169,7 @@ typedef struct cac_private_data {
 	cac_object_t *pki_current;      /* current pki object _ctl function */
 	list_t general_list;            /* list of general containers */
 	cac_object_t *general_current;  /* current object for _ctl function */
+	sc_path_t *aca_path;		/* ACA path to be selected before pin verification */
 } cac_private_data_t;
 
 #define CAC_DATA(card) ((cac_private_data_t*)card->drv_data)
@@ -207,6 +208,7 @@ static void cac_free_private_data(cac_private_data_t *priv)
 {
 	free(priv->cac_id);
 	free(priv->cache_buf);
+	free(priv->aca_path);
 	list_destroy(&priv->pki_list);
 	list_destroy(&priv->general_list);
 	free(priv);
@@ -228,6 +230,12 @@ static int cac_add_object_to_list(list_t *list, const cac_object_t *object)
 #define CAC_2_RID "\xA0\x00\x00\x01\x16"
 #define CAC_1_RID "\xA0\x00\x00\x00\x79"
 #define CAC_1_CM_AID "\xA0\x00\x00\x00\x30\x00\00"
+
+static const sc_path_t cac_ACA_Path = {
+	"", 0,
+	0,0,SC_PATH_TYPE_DF_NAME,
+	{ CAC_TO_AID(CAC_1_RID "\x10\x00") }
+};
 
 static const sc_path_t cac_CCC_Path = {
 	"", 0,
@@ -282,7 +290,6 @@ static const cac_object_t cac_1_objects[] = {
 };
 
 static const int cac_1_object_count = sizeof(cac_1_objects)/sizeof(cac_1_objects[0]);
-
 
 /*
  * use the object id to find our object info on the object in our CAC-1 list
@@ -785,11 +792,21 @@ static int cac_get_serial_nr_from_CUID(sc_card_t* card, sc_serial_number_t* seri
 	if (priv->cac_id_len) {
 		serial->len = MIN(priv->cac_id_len, SC_MAX_SERIALNR);
 		memcpy(serial->value, priv->cac_id, priv->cac_id_len);
-                SC_FUNC_RETURN(card->ctx, SC_LOG_DEBUG_NORMAL, SC_SUCCESS);
+		SC_FUNC_RETURN(card->ctx, SC_LOG_DEBUG_NORMAL, SC_SUCCESS);
 	}
 	SC_FUNC_RETURN(card->ctx, SC_LOG_DEBUG_NORMAL, SC_ERROR_FILE_NOT_FOUND);
 }
 
+static int cac_get_ACA_path(sc_card_t *card, sc_path_t *path)
+{
+	cac_private_data_t * priv = CAC_DATA(card);
+
+	SC_FUNC_CALLED(card->ctx, SC_LOG_DEBUG_NORMAL);
+	if (priv->aca_path) {
+		*path = *priv->aca_path;
+	}
+	SC_FUNC_RETURN(card->ctx, SC_LOG_DEBUG_NORMAL, SC_SUCCESS);
+}
 
 static int cac_card_ctl(sc_card_t *card, unsigned long cmd, void *ptr)
 {
@@ -802,6 +819,8 @@ static int cac_card_ctl(sc_card_t *card, unsigned long cmd, void *ptr)
 		LOG_FUNC_RETURN(card->ctx, SC_ERROR_INTERNAL);
 	}
 	switch(cmd) {
+		case SC_CARDCTL_CAC_GET_ACA_PATH:
+			return cac_get_ACA_path(card, (sc_path_t *) ptr);
 		case SC_CARDCTL_GET_SERIALNR:
 			return cac_get_serial_nr_from_CUID(card, (sc_serial_number_t *) ptr);
 		case SC_CARDCTL_CAC_INIT_GET_GENERIC_OBJECTS:
@@ -1157,6 +1176,12 @@ static int cac_select_CCC(sc_card_t *card)
 	return cac_select_file_by_type(card, &cac_CCC_Path, NULL, SC_CARD_TYPE_CAC_II);
 }
 
+/* Select ACA in non-standard location */
+static int cac_select_ACA(sc_card_t *card)
+{
+	return cac_select_file_by_type(card, &cac_ACA_Path, NULL, SC_CARD_TYPE_CAC_II);
+}
+
 static int cac_path_from_cardurl(sc_card_t *card, sc_path_t *path, cac_card_url_t *val, int len)
 {
 	if (len < 10) {
@@ -1473,6 +1498,27 @@ static int cac_find_and_initialize(sc_card_t *card, int initialize)
 			card->type = SC_CARD_TYPE_CAC_II;
 			card->drv_data = priv;
 			return r;
+		}
+	}
+
+	/* Even some ALT tokens can be missing CCC so we should try with ACA */
+	r = cac_select_ACA(card);
+	if (r == SC_SUCCESS) {
+		r = cac_find_first_pki_applet(card, &index);
+	        if (r == SC_SUCCESS) {
+			priv = cac_new_private_data();
+			if (!priv)
+				return SC_ERROR_OUT_OF_MEMORY;
+			r = cac_populate_cac_1(card, index, priv);
+			if (r == SC_SUCCESS) {
+				priv->aca_path = malloc(sizeof(sc_path_t));
+				if (!priv->aca_path)
+					return SC_ERROR_OUT_OF_MEMORY;
+				memcpy(priv->aca_path, &cac_ACA_Path, sizeof(sc_path_t));
+				card->type = SC_CARD_TYPE_CAC_II;
+				card->drv_data = priv;
+				return r;
+			}
 		}
 	}
 

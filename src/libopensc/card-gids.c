@@ -743,6 +743,7 @@ static int gids_set_security_env(sc_card_t *card,
 	assert(card != NULL && env != NULL);
 
 	SC_FUNC_CALLED(card->ctx, SC_LOG_DEBUG_NORMAL);
+	memset(sbuf, 0, sizeof(sbuf));
 
 	sc_format_apdu(card, &apdu, SC_APDU_CASE_3_SHORT, INS_MANAGE_SECURITY_ENVIRONMENT, P1_DECIPHERMENT_INTERNAL_AUTHENTICATE_KEY_AGREEMENT, 0);
 	switch (env->operation) {
@@ -1052,7 +1053,7 @@ gids_get_container_detail(sc_card_t* card, sc_cardctl_gids_get_container_t* cont
 	memset(container, 0, sizeof(sc_cardctl_gids_get_container_t));
 	container->containernum = num;
 
-	if (!records[num].bFlags & CONTAINER_MAP_VALID_CONTAINER) {
+	if (!(records[num].bFlags & CONTAINER_MAP_VALID_CONTAINER)) {
 		return SC_SUCCESS;
 	}
 	// ignore problematic containers
@@ -1258,7 +1259,6 @@ static int gids_create_keyfile(sc_card_t *card, sc_pkcs15_object_t *object) {
 			SC_FUNC_RETURN(card->ctx, SC_LOG_DEBUG_NORMAL, SC_ERROR_INTERNAL);
 		}
 		// else can be empty if not record
-		keymaprecordnum = 0;
 		keymapbuffersize = 0;
 	} else {
 		keymaprecordnum = (keymapbuffersize - 1) / sizeof(struct gids_keymap_record);
