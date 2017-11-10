@@ -152,14 +152,14 @@ osacompile -o "OpenSC Uninstaller.app" "MacOSX/OpenSC_Uninstaller.applescript"
 # Create .dmg
 rm -f OpenSC-@PACKAGE_VERSION@.dmg
 i=0
-while ! hdiutil create -srcfolder "OpenSC-@PACKAGE_VERSION@.pkg" -srcfolder "OpenSC Uninstaller.app" -volname "@PACKAGE_NAME@" OpenSC-@PACKAGE_VERSION@.dmg
-do
-	i=$[$i+1]
-	if [ $i -gt 2 ]
-	then
-		exit 1
-	fi
-done
+#while ! hdiutil create -srcfolder "OpenSC-@PACKAGE_VERSION@.pkg" -srcfolder "OpenSC Uninstaller.app" -volname "@PACKAGE_NAME@" OpenSC-@PACKAGE_VERSION@.dmg
+#do
+#	i=$[$i+1]
+#	if [ $i -gt 2 ]
+#	then
+#		exit 1
+#	fi
+#done
 
 # Cleanup local OpenSSL
 rm -f ${BUILDPATH}/src/common/openssl
