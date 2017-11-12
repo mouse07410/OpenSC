@@ -152,14 +152,20 @@ osacompile -o "OpenSC Uninstaller.app" "MacOSX/OpenSC_Uninstaller.applescript"
 # Create .dmg
 rm -f OpenSC-@PACKAGE_VERSION@.dmg
 i=0
-#while ! hdiutil create -srcfolder "OpenSC-@PACKAGE_VERSION@.pkg" -srcfolder "OpenSC Uninstaller.app" -volname "@PACKAGE_NAME@" OpenSC-@PACKAGE_VERSION@.dmg
-#do
-#	i=$[$i+1]
-#	if [ $i -gt 2 ]
-#	then
-#		exit 1
-#	fi
-#done
+# Workaround for MacOS High Sierra, whose hdiutil hangs when
+# more than one "-srcfolder xxx" parameter is present
+tmpdir=$(mktemp -d /tmp/hdiutil.XXXXX)
+cp -pr "OpenSC-@PACKAGE_VERSION@.pkg" ${tmpdir}/.
+cp -pr "OpenSC Uninstaller.app" ${tmpdir}/.
+while ! hdiutil create -srcfolder ${tmpdir} -volname "@PACKAGE_NAME@" OpenSC-@PACKAGE_VERSION@.dmg
+do
+	i=$[$i+1]
+	if [ $i -gt 2 ]
+	then
+		exit 1
+	fi
+done
+rm -rf ${tmpdir}
 
 # Cleanup local OpenSSL
 rm -f ${BUILDPATH}/src/common/openssl
