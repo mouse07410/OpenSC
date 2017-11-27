@@ -84,7 +84,9 @@ static void sc_do_log_va(sc_context_t *ctx, int level, const char *file, int lin
 #ifdef _WIN32
 	GetLocalTime(&st);
 	r = snprintf(p, left,
-			"%i-%02i-%02i %02i:%02i:%02i.%03i ",
+			"P:%lu; T:%lu %i-%02i-%02i %02i:%02i:%02i.%03i ",
+			(unsigned long)GetCurrentProcessId(),
+			(unsigned long)GetCurrentThreadId(),
 			st.wYear, st.wMonth, st.wDay,
 			st.wHour, st.wMinute, st.wSecond, st.wMilliseconds);
 #else
@@ -163,28 +165,24 @@ void _sc_debug_hex(sc_context_t *ctx, int type, const char *file, int line,
 	if (buf == NULL)
 		return;
 
-	sc_hex_dump(ctx, type, data, len, buf, blen);
+	sc_hex_dump(data, len, buf, blen);
 
 	if (label)
 		sc_do_log(ctx, type, file, line, func,
-			"\n%s (%u byte%s):\n%s",
-			label, (unsigned int) len, len==1?"":"s", buf);
+			"\n%s (%"SC_FORMAT_LEN_SIZE_T"u byte%s):\n%s",
+			label, len, len==1?"":"s", buf);
 	else
 		sc_do_log(ctx, type, file, line, func,
-			"%u byte%s:\n%s",
-			(unsigned int) len, len==1?"":"s", buf);
+			"%"SC_FORMAT_LEN_SIZE_T"u byte%s:\n%s",
+			len, len==1?"":"s", buf);
 
 	free(buf);
 }
 
-/* Although not used, we need this for consistent exports */
-void sc_hex_dump(struct sc_context *ctx, int level, const u8 * in, size_t count, char *buf, size_t len)
+void sc_hex_dump(const u8 * in, size_t count, char *buf, size_t len)
 {
 	char *p = buf;
 	int lines = 0;
-
-	if (!ctx || ctx->debug < level)
-		return;
 
 	if (buf == NULL || (in == NULL && count != 0)) {
 		return;
@@ -219,7 +217,7 @@ void sc_hex_dump(struct sc_context *ctx, int level, const u8 * in, size_t count,
 	}
 }
 
-char *
+const char *
 sc_dump_hex(const u8 * in, size_t count)
 {
 	static char dump_buf[0x1000];
@@ -252,7 +250,7 @@ sc_dump_hex(const u8 * in, size_t count)
 	return dump_buf;
 }
 
-char *
+const char *
 sc_dump_oid(const struct sc_object_id *oid)
 {
 	static char dump_buf[SC_MAX_OBJECT_ID_OCTETS * 20];

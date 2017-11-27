@@ -63,4 +63,9 @@ do
 	ln -sf $f /usr/local/bin/
 done
 
+if [ -e "/Library/OpenSC/OpenSCTokenApp.app/Contents/PlugIns/OpenSCToken.appex" ]
+then
+	pluginkit -a /Library/OpenSC/OpenSCTokenApp.app/Contents/PlugIns/OpenSCToken.appex
+fi
+
 exit 0

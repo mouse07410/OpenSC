@@ -7,6 +7,7 @@ VDFORMAT=GZIP
 endif
 
 do_subst = $(SED) \
+	   -e 's,[@]bindir[@],$(bindir),g' \
 	   -e 's,[@]CVCDIR[@],$(CVCDIR),g' \
 	   -e 's,[@]PACKAGE[@],$(PACKAGE),g' \
 	   -e 's,[@]PACKAGE_BUGREPORT[@],$(PACKAGE_BUGREPORT),g' \
@@ -21,22 +22,23 @@ do_subst = $(SED) \
 EGK_TOOL_BUILT_SOURCES = egk-tool-cmdline.h egk-tool-cmdline.c
 NPA_TOOL_BUILT_SOURCES = npa-tool-cmdline.h npa-tool-cmdline.c
 OPENSC_NOTIFY_BUILT_SOURCES = opensc-notify-cmdline.h opensc-notify-cmdline.c
+OPENSC_ASN1_BUILT_SOURCES = opensc-asn1-cmdline.h opensc-asn1-cmdline.c
 
 MAINTAINERCLEANFILES = $(srcdir)/Makefile.in $(srcdir)/versioninfo-tools.rc $(srcdir)/versioninfo-opensc-notify.rc
-EXTRA_DIST = Makefile.mak versioninfo-tools.rc.in versioninfo-opensc-notify.rc.in npa-tool.ggo.in npa-tool.1 opensc-notify.ggo.in egk-tool.ggo.in egk-tool.1
+EXTRA_DIST = Makefile.mak versioninfo-tools.rc.in versioninfo-opensc-notify.rc.in npa-tool.ggo.in npa-tool.1 opensc-notify.ggo.in egk-tool.ggo.in egk-tool.1 opensc-asn1.ggo.in opensc-asn1.1 org.opensc-project.opensc-notify.desktop.in
 
 noinst_HEADERS = util.h fread_to_eof.h
 noinst_PROGRAMS = sceac-example
 bin_PROGRAMS = opensc-tool opensc-explorer opensc-notify \
 	pkcs15-tool pkcs15-crypt pkcs11-tool \
-	cardos-tool eidenv openpgp-tool iasecc-tool egk-tool
+	cardos-tool eidenv openpgp-tool iasecc-tool egk-tool opensc-asn1
 if ENABLE_OPENSSL
 bin_PROGRAMS += cryptoflex-tool pkcs15-init netkey-tool piv-tool \
 	westcos-tool sc-hsm-tool dnie-tool gids-tool npa-tool
 endif
 
 if ENABLE_MAN
-dist_man1_MANS = npa-tool.1 opensc-notify.1 egk-tool.1
+dist_man1_MANS = npa-tool.1 opensc-notify.1 egk-tool.1 opensc-asn1.1
 endif
 
 # compile with $(PTHREAD_CFLAGS) to allow debugging with gdb
@@ -164,6 +166,30 @@ egk-tool.1:
 		--source='$(PACKAGE_STRING)' \
 		$(builddir)/egk-tool$(EXEEXT)
 
+opensc_asn1_SOURCES = opensc-asn1.c fread_to_eof.c $(OPENSC_ASN1_BUILT_SOURCES)
+opensc_asn1_LDADD = $(top_builddir)/src/libopensc/libopensc.la $(OPTIONAL_ZLIB_LIBS)
+opensc_asn1_CFLAGS = -I$(top_srcdir)/src $(OPTIONAL_ZLIB_CFLAGS)
+opensc_asn1_CFLAGS += -Wno-unused-but-set-variable -Wno-unknown-warning-option
+
+opensc-asn1.c: $(abs_builddir)/opensc-asn1.ggo $(OPENSC_ASN1_BUILT_SOURCES)
+
+# We only want *cmdline* to be generated when they have explicitly been removed.
+$(OPENSC_ASN1_BUILT_SOURCES):
+	$(MAKE) $(abs_builddir)/opensc-asn1.ggo
+	$(GENGETOPT) --include-getopt --file-name=opensc-asn1-cmdline --output-dir=$(builddir) < $(abs_builddir)/opensc-asn1.ggo --unamed-opts
+
+$(abs_builddir)/opensc-asn1.ggo: opensc-asn1.ggo.in 
+	$(do_subst) < $(abs_srcdir)/opensc-asn1.ggo.in > $@
+
+# We only want opensc-asn1.1 to be generated when it has explicitly been removed.
+opensc-asn1.1:
+	$(MAKE) opensc-asn1$(EXEEXT)
+	$(HELP2MAN) \
+		--output=$@ \
+		--no-info \
+		--source='$(PACKAGE_STRING)' \
+		$(builddir)/opensc-asn1$(EXEEXT)
+
 if WIN32
 opensc_tool_SOURCES += versioninfo-tools.rc
 piv_tool_SOURCES += versioninfo-tools.rc
@@ -183,6 +209,12 @@ sc_hsm_tool_SOURCES += versioninfo-tools.rc
 gids_tool_SOURCES += versioninfo-tools.rc
 opensc_notify_SOURCES += versioninfo-opensc-notify.rc
 endif
+
+applicationsdir = $(datadir)/applications
+applications_DATA = org.opensc-project.opensc-notify.desktop
+
+org.opensc-project.opensc-notify.desktop: org.opensc-project.opensc-notify.desktop
+	$(do_subst) < $(abs_srcdir)/org.opensc-project.opensc-notify.desktop.in > $@
 
 clean-local:
 	rm -f $(abs_builddir)/npa-tool.ggo $(abs_builddir)/opensc-notify.ggo
