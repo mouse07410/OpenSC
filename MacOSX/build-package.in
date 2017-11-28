@@ -9,7 +9,7 @@
 # If you want to compile with OpenSCToken/CryptoTokenKit set the following:
 #ENABLE_CRYPTOTOKENKIT="--disable-pcsc  --enable-cryptotokenkit"
 # When using CryptoTokenKit, code signing is required
-#SIGNING_IDENTITY=BA3CE53D402E3C75246557E2890F929F4A778DDE
+SIGNING_IDENTITY=10D48618E61527C275C70AD5725E3DD15E62B515
 
 if test -z "$ENABLE_CRYPTOTOKENKIT"; then
 	export MACOSX_DEPLOYMENT_TARGET="10.10"
