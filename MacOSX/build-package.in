@@ -170,6 +170,8 @@ else
 	codesign --sign "$SIGNING_IDENTITY" --force --entitlements MacOSX/opensc.entitlements --deep target/Library/OpenSC/lib/opensc-pkcs11.bundle
 fi
 
+imagedir=$(mktemp -d)
+
 # Prepare target root
 mkdir -p ${BUILDPATH}/target/usr/local/bin
 cp MacOSX/opensc-uninstall ${BUILDPATH}/target/usr/local/bin
@@ -177,20 +179,15 @@ cp MacOSX/opensc-uninstall ${BUILDPATH}/target/usr/local/bin
 # Build package
 pkgbuild --root ${BUILDPATH}/target --scripts MacOSX/scripts --identifier org.opensc-project.mac --version @PACKAGE_VERSION@ --install-location / OpenSC.pkg
 # Build product
-productbuild --distribution MacOSX/Distribution.xml --package-path . --resources MacOSX/resources "OpenSC-@PACKAGE_VERSION@.pkg"
+productbuild --distribution MacOSX/Distribution.xml --package-path . --resources MacOSX/resources "${imagedir}/OpenSC @PACKAGE_VERSION@.pkg"
 
 # Build "Uninstaller"
-osacompile -o "OpenSC Uninstaller.app" "MacOSX/OpenSC_Uninstaller.applescript"
+osacompile -o "${imagedir}/OpenSC Uninstaller.app" "MacOSX/OpenSC_Uninstaller.applescript"
 
 # Create .dmg
 rm -f OpenSC-@PACKAGE_VERSION@.dmg
 i=0
-# Workaround for MacOS High Sierra, whose hdiutil hangs when
-# more than one "-srcfolder xxx" parameter is present
-tmpdir=$(mktemp -d /tmp/hdiutil.XXXXX)
-cp -pr "OpenSC-@PACKAGE_VERSION@.pkg" ${tmpdir}/.
-cp -pr "OpenSC Uninstaller.app" ${tmpdir}/.
-while ! hdiutil create -srcfolder ${tmpdir} -volname "@PACKAGE_NAME@" OpenSC-@PACKAGE_VERSION@.dmg
+while ! hdiutil create -srcfolder "${imagedir}" -volname "@PACKAGE_NAME@" OpenSC-@PACKAGE_VERSION@.dmg
 do
 	i=$[$i+1]
 	if [ $i -gt 2 ]
@@ -198,8 +195,10 @@ do
 		exit 1
 	fi
 done
-rm -rf ${tmpdir}
 
 # Cleanup local OpenSSL
 rm -f ${BUILDPATH}/src/common/openssl
 rm -f ${BUILDPATH}/target/$PREFIX/lib/libcrypto.a
+# Cleanup temporary imagedir
+rm -rf ${imagedir}
+
