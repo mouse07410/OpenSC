@@ -49,6 +49,7 @@ static struct sc_atr_table pgp_atrs[] = {
 	{ "3b:da:18:ff:81:b1:fe:75:1f:03:00:31:c5:73:c0:01:40:00:90:00:0c", NULL, "CryptoStick v1.2 (OpenPGP v2.0)", SC_CARD_TYPE_OPENPGP_V2, 0, NULL },
 	{ "3b:da:11:ff:81:b1:fe:55:1f:03:00:31:84:73:80:01:80:00:90:00:e4", NULL, "Gnuk v1.0.x (OpenPGP v2.0)", SC_CARD_TYPE_OPENPGP_GNUK, 0, NULL },
 	{ "3b:fc:13:00:00:81:31:fe:15:59:75:62:69:6b:65:79:4e:45:4f:72:33:e1", NULL, "Yubikey NEO (OpenPGP v2.0)", SC_CARD_TYPE_OPENPGP_V2, 0, NULL },
+	{ "3b:da:18:ff:81:b1:fe:75:1f:03:00:31:f5:73:c0:01:60:00:90:00:1c", NULL, "OpenPGP card V3", SC_CARD_TYPE_OPENPGP_V3, 0, NULL },
 	{ NULL, NULL, NULL, 0, 0, NULL }
 };
 
@@ -83,7 +84,8 @@ enum _version {		/* 2-byte BCD-alike encoded version number */
 	OPENPGP_CARD_1_1 = 0x0101,
 	OPENPGP_CARD_2_0 = 0x0200,
 	OPENPGP_CARD_2_1 = 0x0201,
-	OPENPGP_CARD_3_0 = 0x0300
+	OPENPGP_CARD_3_0 = 0x0300,
+	OPENPGP_CARD_3_1 = 0x0301,
 };
 
 enum _access {		/* access flags for the respective DO/file */
@@ -332,30 +334,35 @@ pgp_match_card(sc_card_t *card)
 	}
 	else {
 		sc_path_t	partial_aid;
-		unsigned char aid[16];
+		sc_file_t *file = NULL;
 
 		/* select application "OpenPGP" */
 		sc_format_path("D276:0001:2401", &partial_aid);
 		partial_aid.type = SC_PATH_TYPE_DF_NAME;
-		if (SC_SUCCESS == iso_ops->select_file(card, &partial_aid, NULL)) {
-			/* read information from AID */
-			i = sc_get_data(card, 0x004F, aid, sizeof aid);
-			if (i == 16) {
-				switch ((aid[6] << 8) | aid[7]) {	/* BCD-coded bytes */
-				case 0x0101:
-					card->type = SC_CARD_TYPE_OPENPGP_V1;
-					sc_log(card->ctx, "OpenPGPv1-type card found");
-					return 1;
-				case 0x0200:
-				case 0x0201:
-					card->type = SC_CARD_TYPE_OPENPGP_V2;
-					sc_log(card->ctx, "OpenPGPv2-type card found");
-					return 1;
-				default:
-					sc_log(card->ctx, "unsupported OpenPGP-type card found");
-					/* fall through */
+		/* OpenPGP card only supports selection *with* requested FCI */
+		i = iso_ops->select_file(card, &partial_aid, &file);
+		if (SC_SUCCESS == i) {
+			static char card_name[SC_MAX_APDU_BUFFER_SIZE] = "OpenPGP card";
+			card->type = SC_CARD_TYPE_OPENPGP_BASE;
+			card->name = card_name;
+			if (file->namelen == 16) {
+				unsigned char major = file->name[6];
+				unsigned char minor = file->name[7];
+				switch (major) {
+					case 1:
+						card->type = SC_CARD_TYPE_OPENPGP_V1;
+						break;
+					case 2:
+						card->type = SC_CARD_TYPE_OPENPGP_V2;
+						break;
+					case 3:
+						card->type = SC_CARD_TYPE_OPENPGP_V3;
+						break;
 				}
+				snprintf(card_name, sizeof card_name, "OpenPGP card V%u.%u", major, minor);
 			}
+			sc_file_free(file);
+			return 1;
 		}
 	}
 	return 0;
@@ -385,14 +392,6 @@ pgp_init(sc_card_t *card)
 	card->drv_data = priv;
 
 	card->cla = 0x00;
-
-	/* set pointer to correct list of card objects */
-	priv->pgp_objects = (card->type == SC_CARD_TYPE_OPENPGP_V2 || card->type == SC_CARD_TYPE_OPENPGP_GNUK)
-				? pgp2_objects : pgp1_objects;
-
-	/* set detailed card version */
-	priv->bcd_version = (card->type == SC_CARD_TYPE_OPENPGP_V2 || card->type == SC_CARD_TYPE_OPENPGP_GNUK)
-				? OPENPGP_CARD_2_0 : OPENPGP_CARD_1_1;
 
 	/* select application "OpenPGP" */
 	sc_format_path("D276:0001:2401", &aid);
@@ -428,6 +427,27 @@ pgp_init(sc_card_t *card)
 		/* kludge: get card's serial number from manufacturer ID + serial number */
 		memcpy(card->serialnr.value, file->name + 8, 6);
 		card->serialnr.len = 6;
+	} else {
+		/* set detailed card version */
+		switch (card->type) {
+			case SC_CARD_TYPE_OPENPGP_V3:
+				priv->bcd_version = OPENPGP_CARD_3_0;
+				break;
+			case SC_CARD_TYPE_OPENPGP_GNUK:
+			case SC_CARD_TYPE_OPENPGP_V2:
+				priv->bcd_version = OPENPGP_CARD_2_0;
+				break;
+			default:
+				priv->bcd_version = OPENPGP_CARD_1_1;
+				break;
+		}
+	}
+
+	/* set pointer to correct list of card objects */
+	if (priv->bcd_version < OPENPGP_CARD_2_0) {
+		priv->pgp_objects = pgp1_objects;
+	} else {
+		priv->pgp_objects = pgp2_objects;
 	}
 
 	/* change file path to MF for re-use in MF */
@@ -517,15 +537,19 @@ pgp_get_card_features(sc_card_t *card)
 		}
 	}
 
+	if (priv->bcd_version >= OPENPGP_CARD_3_1) {
+		card->caps |= SC_CARD_CAP_ISO7816_PIN_INFO;
+	}
+
 	if ((pgp_get_blob(card, priv->mf, 0x006e, &blob6e) >= 0) &&
 	    (pgp_get_blob(card, blob6e, 0x0073, &blob73) >= 0)) {
 
 		/* get "extended capabilities" DO */
 		if ((pgp_get_blob(card, blob73, 0x00c0, &blob) >= 0) &&
 		    (blob->data != NULL) && (blob->len > 0)) {
-			/* in v2.0 bit 0x04 in first byte means "algorithm attributes changeable */
+			/* in v2.0 bit 0x04 in first byte means "algorithm attributes changeable" */
 			if ((blob->data[0] & 0x04) &&
-				(card->type == SC_CARD_TYPE_OPENPGP_V2 || card->type == SC_CARD_TYPE_OPENPGP_GNUK))
+					(priv->bcd_version >= OPENPGP_CARD_2_0))
 				priv->ext_caps |= EXT_CAP_ALG_ATTR_CHANGEABLE;
 			/* bit 0x08 in first byte means "support for private use DOs" */
 			if (blob->data[0] & 0x08)
@@ -543,7 +567,7 @@ pgp_get_card_features(sc_card_t *card)
 			}
 			/* in v2.0 bit 0x80 in first byte means "support Secure Messaging" */
 			if ((blob->data[0] & 0x80) &&
-				(card->type == SC_CARD_TYPE_OPENPGP_V2 || card->type == SC_CARD_TYPE_OPENPGP_GNUK))
+					(priv->bcd_version >= OPENPGP_CARD_2_0))
 				priv->ext_caps |= EXT_CAP_SM;
 
 			if ((priv->bcd_version >= OPENPGP_CARD_2_0) && (blob->len >= 10)) {
@@ -989,7 +1013,7 @@ pgp_seek_blob(sc_card_t *card, pgp_blob_t *root, unsigned int id,
 	for (child = root->files; child; child = child->next) {
 		/* The DO of SIMPLE type or the DO holding certificate
 		 * does not contain children */
-		if (child->info->type == SIMPLE || child->id == DO_CERT)
+		if ((child->info && child->info->type == SIMPLE) || child->id == DO_CERT)
 			continue;
 		r = pgp_seek_blob(card, child, id, ret);
 		if (r == 0)
@@ -1176,6 +1200,24 @@ pgp_list_files(sc_card_t *card, u8 *buf, size_t buflen)
 	}
 
 	LOG_FUNC_RETURN(card->ctx, k);
+}
+
+static int
+pgp_get_challenge(struct sc_card *card, u8 *rnd, size_t len)
+{
+	struct pgp_priv_data *priv = DRVDATA(card);
+
+	LOG_FUNC_CALLED(card->ctx);
+
+	if (0 == (priv->ext_caps & EXT_CAP_GET_CHALLENGE)) {
+		LOG_FUNC_RETURN(card->ctx, SC_ERROR_NOT_SUPPORTED);
+	}
+
+	if (priv->max_challenge_size > 0 && len > priv->max_challenge_size) {
+		LOG_FUNC_RETURN(card->ctx, SC_ERROR_WRONG_LENGTH);
+	}
+
+	LOG_FUNC_RETURN(card->ctx, iso_ops->get_challenge(card, rnd, len));
 }
 
 
@@ -1595,6 +1637,36 @@ pgp_pin_cmd(sc_card_t *card, struct sc_pin_cmd_data *data, int *tries_left)
 					 "key-id should be 1, 2, 3.");
 	}
 	LOG_FUNC_RETURN(card->ctx, iso_ops->pin_cmd(card, data, tries_left));
+}
+
+
+int pgp_logout(struct sc_card *card)
+{
+	int r = SC_SUCCESS;
+	struct pgp_priv_data *priv = DRVDATA(card);
+
+	LOG_FUNC_CALLED(card->ctx);
+
+	if (priv->bcd_version >= OPENPGP_CARD_3_1) {
+		unsigned char pin_reference;
+		for (pin_reference = 0x81; pin_reference <= 0x83; pin_reference++) {
+			int tmp = iso7816_logout(card, pin_reference);
+			if (r == SC_SUCCESS) {
+				r = tmp;
+			}
+		}
+	} else {
+		sc_path_t path;
+		sc_file_t *file = NULL;
+
+		/* select application "OpenPGP" */
+		sc_format_path("D276:0001:2401", &path);
+		path.type = SC_PATH_TYPE_DF_NAME;
+		r = iso_ops->select_file(card, &path, &file);
+		sc_file_free(file);
+	}
+
+	LOG_FUNC_RETURN(card->ctx, r);
 }
 
 
@@ -2569,7 +2641,7 @@ pgp_erase_card(sc_card_t *card)
 	 * according to https://www.crypto-stick.com/en/faq
 	 * (How to reset a Crypto Stick? question).
 	 * Gnuk is known not to support this feature. */
-	static const char *apdu_hex[] = {
+	const char *apdu_hex[] = {
 		/* block PIN1 */
 		"00:20:00:81:08:40:40:40:40:40:40:40:40",
 		"00:20:00:81:08:40:40:40:40:40:40:40:40",
@@ -2582,47 +2654,57 @@ pgp_erase_card(sc_card_t *card)
 		"00:20:00:83:08:40:40:40:40:40:40:40:40",
 		/* TERMINATE */
 		"00:e6:00:00",
-		/* ACTIVATE */
-		"00:44:00:00",
 		NULL
 	};
+	sc_apdu_t apdu;
 	int i;
 	int r = SC_SUCCESS;
+	struct pgp_priv_data *priv = DRVDATA(card);
 
 	LOG_FUNC_CALLED(card->ctx);
 
-	/* check card version */
-	if (card->type != SC_CARD_TYPE_OPENPGP_V2) {
-		sc_log(card->ctx, "Card is not OpenPGP v2");
-		LOG_FUNC_RETURN(card->ctx, SC_ERROR_NO_CARD_SUPPORT);
+	if (priv->bcd_version < OPENPGP_CARD_2_0
+			|| priv->state == CARD_STATE_UNKNOWN) {
+		LOG_TEST_RET(card->ctx, SC_ERROR_NO_CARD_SUPPORT,
+				"Card does not offer life cycle management");
 	}
-	sc_log(card->ctx, "Card is OpenPGP v2. Erase card.");
 
-	/* iterate over the commands above */
-	for (i = 0; apdu_hex[i] != NULL; i++) {
-		u8 apdu_bin[25];	/* large enough to convert apdu_hex */
-		size_t apdu_bin_len = sizeof(apdu_bin);
-		sc_apdu_t apdu;
-		u8 rbuf[SC_MAX_APDU_BUFFER_SIZE];
+	switch (priv->state) {
+		case CARD_STATE_ACTIVATED:
+			/* iterate over the commands above */
+			for (i = 0; apdu_hex[i] != NULL; i++) {
+				u8 apdu_bin[25];	/* large enough to convert apdu_hex */
+				size_t apdu_bin_len = sizeof(apdu_bin);
+				u8 rbuf[SC_MAX_APDU_BUFFER_SIZE];
 
-		/* convert hex array to bin array */
-		r = sc_hex_to_bin(apdu_hex[i], apdu_bin, &apdu_bin_len);
-		LOG_TEST_RET(card->ctx, r, "Failed to convert APDU bytes");
+				/* convert hex array to bin array */
+				r = sc_hex_to_bin(apdu_hex[i], apdu_bin, &apdu_bin_len);
+				LOG_TEST_RET(card->ctx, r, "Failed to convert APDU bytes");
 
-		/* build APDU from binary array */
-		r = sc_bytes2apdu(card->ctx, apdu_bin, apdu_bin_len, &apdu);
-		if (r) {
-			sc_log(card->ctx, "Failed to build APDU");
-			LOG_FUNC_RETURN(card->ctx, SC_ERROR_INTERNAL);
-		}
+				/* build APDU from binary array */
+				r = sc_bytes2apdu(card->ctx, apdu_bin, apdu_bin_len, &apdu);
+				if (r) {
+					sc_log(card->ctx, "Failed to build APDU");
+					LOG_FUNC_RETURN(card->ctx, SC_ERROR_INTERNAL);
+				}
 
-		apdu.resp = rbuf;
-		apdu.resplen = sizeof(rbuf);
+				apdu.resp = rbuf;
+				apdu.resplen = sizeof(rbuf);
 
-		/* send APDU to card */
-		sc_log(card->ctx, "Sending APDU%d %s", i, apdu_hex[i]);
-		r = sc_transmit_apdu(card, &apdu);
-		LOG_TEST_RET(card->ctx, r, "Transmitting APDU failed");
+				/* send APDU to card */
+				sc_log(card->ctx, "Sending APDU%d %s", i, apdu_hex[i]);
+				r = sc_transmit_apdu(card, &apdu);
+				LOG_TEST_RET(card->ctx, r, "Transmitting APDU failed");
+			}
+			/* fall through */
+		case CARD_STATE_INITIALIZATION:
+			sc_format_apdu(card, &apdu, SC_APDU_CASE_1, 0x44, 0, 0);
+			r = sc_transmit_apdu(card, &apdu);
+			LOG_TEST_RET(card->ctx, r, "Transmitting APDU failed");
+			break;
+		default:
+			LOG_TEST_RET(card->ctx, SC_ERROR_NO_CARD_SUPPORT,
+					"Card does not offer life cycle management");
 	}
 
 	LOG_FUNC_RETURN(card->ctx, r);
@@ -2802,9 +2884,11 @@ sc_get_driver(void)
 	pgp_ops.finish		= pgp_finish;
 	pgp_ops.select_file	= pgp_select_file;
 	pgp_ops.list_files	= pgp_list_files;
+	pgp_ops.get_challenge	= pgp_get_challenge;
 	pgp_ops.read_binary	= pgp_read_binary;
 	pgp_ops.write_binary	= pgp_write_binary;
 	pgp_ops.pin_cmd		= pgp_pin_cmd;
+	pgp_ops.logout		= pgp_logout;
 	pgp_ops.get_data	= pgp_get_data;
 	pgp_ops.put_data	= pgp_put_data;
 	pgp_ops.set_security_env= pgp_set_security_env;
