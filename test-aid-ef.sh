@@ -5,7 +5,8 @@
 # want to test for duplicate AIDs, PIV and OpenPGP etc. 
 #
 
-CMD="/usr/local/bin/opensc-tool -c default"
+CMD="/usr/local/bin/opensc-tool -c "
+DRIVER="default"
 
 # PIV SELECT AID for PIV + Le=256
 PIV=(-s "00 A4 04 00 09 A0 00 00 03 08 00 00 10 00 00")
@@ -40,18 +41,22 @@ arg="$1"
   case $arg in 
     piv.ef)
 	echo  Select AID, try and read EF.DIR, not expected to work
-	$CMD "${PIV[@]}" "${REFDIR[@]}" "${GEFDIR[@]}" 
+	DRIVER="default"
+	$CMD $DRIVER "${PIV[@]}" "${REFDIR[@]}" "${GEFDIR[@]}" 
 	;;
 
     pgp.ef)
 	echo Select AID, try and read EF.DIR, not expected to work
-	$CMD "${PGP[@]}" "${REFDIR[@]}" "${GERDIR[@]}"
+	DRIVER="default"
+	$CMD $DRIVER "${PGP[@]}" "${REFDIR[@]}" "${GERDIR[@]}"
 	;;
 
 
     piv.login.state)
 	echo test if PIV login state is maintained
-	$CMD "${PIV[@]}" "${V800[@]}" "${V80P[@]}" "${V800[@]}" \
+	DRIVER="default"
+	DRIVER="PIV-II"
+	$CMD $DRIVER "${PIV[@]}" "${V800[@]}" "${V80P[@]}" "${V800[@]}" \
 	    "${PIV[@]}" "${V800[@]}" \
 	    "${PGP[@]}" "${V800[@]}"\
 	        "${PIV[@]}" "${V800[@]}"
@@ -60,7 +65,9 @@ arg="$1"
 
     pgp.login.state)
 	echo test if PGP login state query works
-	$CMD "${PGP[@]}" "${V820[@]}" "${V82P[@]}" "${V820[@]}" \
+	DRIVER="default"
+	DRIVER="openpgp"
+	$CMD $DRIVER "${PGP[@]}" "${V820[@]}" "${V82P[@]}" "${V820[@]}" \
 	    "${PGP[@]}" "${V820[@]}" \
 	    "${PIV[@]}" "${V820[@]}"\
 	        "${PGP[@]}" "${V820[@]}"
