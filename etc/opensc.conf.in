@@ -156,7 +156,7 @@ app default {
 	#
 	# card_drivers = customcos, internal;
 	# card_drivers = npa, internal;
-	card_drivers = PIV-II, openpgp, cac;
+	card_drivers = PIV-II, openpgp, cac, default;
 
 	# Card driver configuration blocks.
 
