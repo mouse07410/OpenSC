@@ -25,12 +25,12 @@ REFDIR=(-s "00 A4 08 00 02 2F 00 00" -s "00 B0 00 00 1F")
 GEFDIR=(-s "00 CA 00 00 02 5C 00 00")
 
 #Verify PIV pin 123456
-V80P=(-s "00 20 00 80 08 32 32 34 38 38 34 FF FF")
+V80P=(-s "00 20 00 80 08 31 32 33 34 36 36 FF FF")
 #VERIFY PIV login state i.e. VERIFY with Lc absent
 V800=(-s "00 20 00 80")
 
 #Verify PGP pin 222222 for the login pin 82
-V82P=(-s "00 20 00 82 06 32 32 34 38 38 32")
+V82P=(-s "00 20 00 82 06 31 32 33 34 35 36")
 #VERIFY PGP login state
 V820=(-s "00 20 00 82")
 
