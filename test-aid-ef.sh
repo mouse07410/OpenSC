@@ -34,7 +34,7 @@ V82P=(-s "00 20 00 82 06 31 32 33 34 35 36")
 #VERIFY PGP login state
 V820=(-s "00 20 00 82")
 
-#use General AUthenticate Challenge to test card
+#use General Authenticate Challenge to test card
 GAC=(-s "00 87 00 9B 04 7C 02 81 00 00")
 
 #
