@@ -168,6 +168,7 @@ typedef struct piv_private_data {
 	int logged_in;
 	int pstate;
 	int pin_cmd_verify;
+	int context_specific;
 	int pin_cmd_noparse;
 	unsigned int pin_cmd_verify_sw1;
 	unsigned int pin_cmd_verify_sw2;
@@ -919,6 +920,8 @@ piv_get_data(sc_card_t * card, int enumtag, u8 **buf, size_t *buf_len)
 	SC_FUNC_CALLED(card->ctx, SC_LOG_DEBUG_VERBOSE);
 	sc_log(card->ctx, "#%d", enumtag);
 
+	sc_lock(card); /* do check len and get data in same transaction */
+
 	/* assert(enumtag >= 0 && enumtag < PIV_OBJ_LAST_ENUM); */
 
 	tag_len = piv_objects[enumtag].tag_len;
@@ -970,6 +973,7 @@ piv_get_data(sc_card_t * card, int enumtag, u8 **buf, size_t *buf_len)
 	r = piv_general_io(card, 0xCB, 0x3F, 0xFF, tagbuf,  p - tagbuf, buf, buf_len);
 
 err:
+	sc_unlock(card);
 	LOG_FUNC_RETURN(card->ctx, r);
 }
 
@@ -3218,7 +3222,16 @@ static int piv_check_sw(struct sc_card *card, unsigned int sw1, unsigned int sw2
 		if (priv->pin_cmd_verify) {
 			priv->pin_cmd_verify_sw1 = sw1;
 			priv->pin_cmd_verify_sw2 = sw2;
+		} else {
+			/* a command has completed and it is not verify */
+			/* If we are in a context_specific sequence, unlock */
+			if (priv->context_specific) {
+				sc_log(card->ctx,"Clearing CONTEXT_SPECIFIC lock");
+				priv->context_specific = 0;
+				sc_unlock(card);
+			}
 		}
+
 		if (priv->card_issues & CI_VERIFY_630X) {
 
 		/* Handle the Yubikey NEO or any other PIV card which returns in response to a verify
@@ -3360,9 +3373,28 @@ piv_pin_cmd(sc_card_t *card, struct sc_pin_cmd_data *data, int *tries_left)
 		}
 	}
 
+	/*
+	 * If this was for a CKU_CONTEXT_SPECFIC login, lock the card one more time.
+	 * to avoid any interference from other applications.  
+	 * Sc_unlock will be called at a later time after the next card command 
+	 * that should be a crypto operation. If its not then it is a error by the 
+	 * calling appication. 
+	 */
+	if (data->cmd == SC_PIN_CMD_VERIFY && data->pin_type == SC_AC_CONTEXT_SPECIFIC) {
+		priv->context_specific = 1;
+		sc_log(card->ctx,"Starting CONTEXT_SPECIFIC verify");
+		sc_lock(card);
+	}
+
 	priv->pin_cmd_verify = 1; /* tell piv_check_sw its a verify to save sw1, sw2 */
 	r = iso_drv->ops->pin_cmd(card, data, tries_left);
 	priv->pin_cmd_verify = 0;
+
+	/* if verify failed, release the lock */
+	if (data->cmd == SC_PIN_CMD_VERIFY && r < 0 &&  priv->context_specific) {
+		sc_log(card->ctx,"Clearing CONTEXT_SPECIFIC");
+		priv->context_specific = 0;
+	}
 
 	/* if access to applet is know to be reset by other driver  we select_aid and try again */
 	if ( priv->card_issues & CI_OTHER_AID_LOSE_STATE && priv->pin_cmd_verify_sw1 == 0x6DU) {
