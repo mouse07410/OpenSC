@@ -3036,7 +3036,7 @@ static int piv_match_card(sc_card_t *card)
 	if (card->type == -1)
 		card->type = type;
 
-	card->drv_data = priv; /* will frre if no match, or pass on to piv_init */
+	card->drv_data = priv; /* will free if no match, or pass on to piv_init */
 	priv->aid_file = sc_file_new();
 	priv->selected_obj = -1;
 	priv->pin_preference = 0x80; /* 800-73-3 part 1, table 3 */
@@ -3394,6 +3394,7 @@ piv_pin_cmd(sc_card_t *card, struct sc_pin_cmd_data *data, int *tries_left)
 	if (data->cmd == SC_PIN_CMD_VERIFY && r < 0 &&  priv->context_specific) {
 		sc_log(card->ctx,"Clearing CONTEXT_SPECIFIC");
 		priv->context_specific = 0;
+		sc_unlock(card);
 	}
 
 	/* if access to applet is know to be reset by other driver  we select_aid and try again */
