@@ -3060,18 +3060,18 @@ static int piv_match_card(sc_card_t *card)
 	 * putting PIV driver first might help. 
 	 * TODO could be cached too
 	 */
-	 i = piv_find_discovery(card);
+	i = piv_find_discovery(card);
 
 	if (i < 0) {
-	    /* Detect by selecting applet */
-	    i = piv_find_aid(card, &aidfile);
+		/* Detect by selecting applet */
+		i = piv_find_aid(card, &aidfile);
 	}
 
 	if (i < 0) {
 		piv_finish(card);
-		 /* don't match. Does not have a PIV applet. */
-		 sc_unlock(card);
-		 return 0;
+		/* don't match. Does not have a PIV applet. */
+		sc_unlock(card);
+		return 0;
 	}
 
 	/* Matched, and priv is being passed to piv_init */
@@ -3485,17 +3485,17 @@ static int piv_card_reader_lock_obtained(sc_card_t *card, int was_reset)
 	/* We have a PCSC transaction and sc_lock */
 	if (priv == NULL || priv->pstate == PIV_STATE_MATCH) {
 		sc_debug(card->ctx, SC_LOG_DEBUG_VERBOSE,
-			    priv ? "PIV_STATE_MATCH" : "priv==NULL");
+				priv ? "PIV_STATE_MATCH" : "priv==NULL");
 		r = 0; /* do nothing, piv_match will take care of it */
 		goto err;
 	}
 
 	/* make sure our application is active */
 
-	/* first see if AID is active AID be reading discovery obkect '7E' */
+	/* first see if AID is active AID by reading discovery object '7E' */
 	/* If not try selecting AID */
 	r = piv_find_discovery(card);
-	if (r < 0) 
+	if (r < 0)
 		r = piv_select_aid(card, piv_aids[0].value, piv_aids[0].len_short, temp, &templen);
 
 	if (r < 0) /* bad error return will show up in sc_lock as error*/
