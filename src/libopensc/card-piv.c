@@ -3370,7 +3370,7 @@ static int piv_card_reader_lock_obtained(sc_card_t *card, int was_reset)
 		r = piv_select_aid(card, piv_aids[0].value, piv_aids[0].len_short, temp, &templen);
 	}
 
-	SC_FUNC_RETURN(card->ctx, SC_LOG_DEBUG_NORMAL, r);
+	LOG_FUNC_RETURN(card->ctx, r);
 }
 
 
