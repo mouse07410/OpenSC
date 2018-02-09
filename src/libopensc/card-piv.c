@@ -3100,7 +3100,7 @@ static int piv_match_card(sc_card_t *card)
 
 static int piv_init(sc_card_t *card)
 {
-	int r;
+	int r = 0;
 	piv_private_data_t * priv = PIV_DATA(card);
 	sc_apdu_t apdu;
 	unsigned long flags;
