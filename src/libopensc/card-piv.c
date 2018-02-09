@@ -213,6 +213,7 @@ static struct piv_aid piv_aids[] = {
 							/* will also test after first PIN verify if protected object can be used instead */
 #define CI_CANT_USE_GETDATA_FOR_STATE	    0x00000008U /* No object to test verification inplace of VERIFY Lc=0 */
 #define CI_LEAKS_FILE_NOT_FOUND		    0x00000010U /* GET DATA of empty object returns 6A 82 even if PIN not verified */
+#define CI_DISCOVERY_USELESS		    0x00000020U /* Discovery can not be used to query active AID */
 
 #define CI_OTHER_AID_LOSE_STATE		    0x00000100U /* Other drivers match routines may reset our security state and lose AID!!! */
 #define CI_NFC_EXPOSE_TOO_MUCH		    0x00000200U /* PIN, crypto and objects exposed over NFS in violation of 800-73-3 */
@@ -2957,7 +2958,7 @@ piv_finish(sc_card_t *card)
 
 static int piv_match_card(sc_card_t *card)
 {
-	int i, k;
+	int i, i7e, k;
 	size_t j;
 	u8 *p, *pe;
 	sc_file_t aidfile;
@@ -3058,7 +3059,7 @@ static int piv_match_card(sc_card_t *card)
 	 * We may get interference on some cards by other drivers trying SELECT_AID before
 	 * we get to see if PIV application is still active.
 	 * putting PIV driver first might help. 
-	 * TODO could be cached too
+	 * This may fail if the wrong AID is active
 	 */
 	i = piv_find_discovery(card);
 
@@ -3066,6 +3067,22 @@ static int piv_match_card(sc_card_t *card)
 		/* Detect by selecting applet */
 		i = piv_find_aid(card, &aidfile);
 	}
+
+	if (i >= 0) {
+		/*
+		 * We now know PIV AID is active, test DISCOVERY object 
+		 * Some CAC cards with PIV don't support DISCOVERY and return 
+		 * SC_ERROR_INCORRECT_PARAMETERS. Any error other then 
+		 * SC_ERROR_FILE_NOT_FOUND means we cannot use discovery 
+		 * to test for active AID.
+		 */
+		i7e = piv_find_discovery(card);
+		if (i7e != 0 && i7e !=  SC_ERROR_FILE_NOT_FOUND) {
+			priv->card_issues |= CI_DISCOVERY_USELESS;
+			priv->obj_cache[PIV_OBJ_DISCOVERY].flags |= PIV_OBJ_CACHE_NOT_PRESENT;
+		}
+	}
+
 
 	if (i < 0) {
 		piv_finish(card);
@@ -3136,7 +3153,7 @@ static int piv_init(sc_card_t *card)
 
 	switch(card->type) {
 		case SC_CARD_TYPE_PIV_II_NEO:
-			priv->card_issues = CI_NO_EC384
+			priv->card_issues |= CI_NO_EC384
 				| CI_VERIFY_630X
 				| CI_OTHER_AID_LOSE_STATE
 				| CI_LEAKS_FILE_NOT_FOUND
@@ -3146,18 +3163,18 @@ static int piv_init(sc_card_t *card)
 			break;
 
 		case SC_CARD_TYPE_PIV_II_YUBIKEY4:
-			priv->card_issues =  CI_OTHER_AID_LOSE_STATE
+			priv->card_issues |=  CI_OTHER_AID_LOSE_STATE
 				| CI_LEAKS_FILE_NOT_FOUND;
 			if (priv->neo_version  < 0x00040302)
 				priv->card_issues |= CI_VERIFY_LC0_FAIL;
 			break;
 
 		case SC_CARD_TYPE_PIV_II_HIST:
-			priv->card_issues = 0;
+			priv->card_issues |= 0;
 			break;
 
 		case SC_CARD_TYPE_PIV_II_GENERIC:
-			priv->card_issues = CI_VERIFY_LC0_FAIL
+			priv->card_issues |= CI_VERIFY_LC0_FAIL
 				| CI_OTHER_AID_LOSE_STATE;
 			/* TODO may need more research */
 			break;
@@ -3494,7 +3511,14 @@ static int piv_card_reader_lock_obtained(sc_card_t *card, int was_reset)
 
 	/* first see if AID is active AID by reading discovery object '7E' */
 	/* If not try selecting AID */
-	r = piv_find_discovery(card);
+
+	/* but if x card does not support DISCOVERY object we can not use it */
+	if (priv->card_issues & CI_DISCOVERY_USELESS) {
+	    r =  SC_ERROR_NO_CARD_SUPPORT;
+	} else {
+	    r = piv_find_discovery(card);
+	}
+
 	if (r < 0)
 		r = piv_select_aid(card, piv_aids[0].value, piv_aids[0].len_short, temp, &templen);
 
