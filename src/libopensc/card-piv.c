@@ -3213,12 +3213,13 @@ static int piv_init(sc_card_t *card)
 	 * 800-73-3 cards may have a history object and/or a discovery object
 	 * We want to process them now as this has information on what
 	 * keys and certs the card has and how the pin might be used.
+	 * If they fail, ignore it there are optional and introdced in
+	 * NIST 800-73-3 and NIST 800-73-2 so some older cards may 
+	 * not handle the requets. 
 	 */
 	piv_process_history(card);
 
-	r = piv_process_discovery(card);
-	if (r > 0)
-		r = 0;
+	piv_process_discovery(card);
 
 	priv->pstate=PIV_STATE_NORMAL;
 	sc_unlock(card) ; /* obtained in piv_match */
