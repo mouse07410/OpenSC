@@ -2663,7 +2663,6 @@ err:
 }
 
 
-/* Do not use the cache value but read every time */
 static int piv_find_discovery(sc_card_t *card)
 {
 	int r = 0;
@@ -3495,7 +3494,6 @@ static int piv_card_reader_lock_obtained(sc_card_t *card, int was_reset)
 	int r = 0;
 	u8 temp[256];
 	size_t templen = sizeof(temp);
-	struct sc_pin_cmd_data data;
 	piv_private_data_t * priv = PIV_DATA(card); /* may be null */
 
 	SC_FUNC_CALLED(card->ctx, SC_LOG_DEBUG_VERBOSE);
@@ -3529,15 +3527,7 @@ static int piv_card_reader_lock_obtained(sc_card_t *card, int was_reset)
 	if (was_reset > 0)
 		priv->logged_in =  SC_PIN_STATE_UNKNOWN;
 
-	/* See if VERIFY Lc=empty will tell us the state */
-	memset(&data, 0, sizeof(data));
-	data.cmd = SC_PIN_CMD_GET_INFO;
-	data.pin_type = SC_AC_CHV;
-	data.pin_reference =  priv->pin_preference;
-	/* will try our best to see if logged_in or not */
-	r = piv_pin_cmd(card, &data, NULL);
-
-	r = 0; /* ignore return from piv_pin_cmd */
+	r = 0;
 
 err:
 	LOG_FUNC_RETURN(card->ctx, r);
