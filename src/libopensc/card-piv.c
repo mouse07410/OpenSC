@@ -825,7 +825,7 @@ static int piv_find_aid(sc_card_t * card, sc_file_t *aid_file)
 		r = sc_check_sw(card, apdu.sw1, apdu.sw2);
 		if (r)  {
 			if (card->type != 0 && card->type == piv_aids[i].enumtag)
-				LOG_FUNC_RETURN(card->ctx, i);
+				LOG_FUNC_RETURN(card->ctx, (r < 0)? r: i);
 			continue;
 		}
 
@@ -2663,7 +2663,6 @@ err:
 }
 
 
-/* Do not use the cache value but read every time */
 static int piv_find_discovery(sc_card_t *card)
 {
 	int r = 0;
@@ -2950,13 +2949,33 @@ piv_finish(sc_card_t *card)
 				free(priv->obj_cache[i].internal_obj_data);
 		}
 		free(priv);
-	card->drv_data = NULL; /* priv */
+		card->drv_data = NULL; /* priv */
 	}
 	return 0;
 }
 
-
 static int piv_match_card(sc_card_t *card)
+{
+        SC_FUNC_CALLED(card->ctx, SC_LOG_DEBUG_VERBOSE);
+
+	/* piv_match_card may be called with card->type, set by opensc.conf */
+	/* user provide card type must be one we know */
+	switch (card->type) {
+		case -1:
+		case SC_CARD_TYPE_PIV_II_GENERIC:
+		case SC_CARD_TYPE_PIV_II_HIST:
+		case SC_CARD_TYPE_PIV_II_NEO:
+		case SC_CARD_TYPE_PIV_II_YUBIKEY4:
+			break;
+		default:
+			return 0; /* can not handle the card */
+	}
+	/* its one we know, or we can test for it in piv_init */
+	return 1; /* Let piv_init finish matching */
+}
+
+
+static int piv_match_card_continued(sc_card_t *card)
 {
 	int i, i7e, k;
 	size_t j;
@@ -3101,7 +3120,7 @@ static int piv_match_card(sc_card_t *card)
 static int piv_init(sc_card_t *card)
 {
 	int r = 0;
-	piv_private_data_t * priv = PIV_DATA(card);
+	piv_private_data_t * priv = NULL;
 	sc_apdu_t apdu;
 	unsigned long flags;
 	unsigned long ext_flags;
@@ -3109,10 +3128,20 @@ static int piv_init(sc_card_t *card)
 
 	SC_FUNC_CALLED(card->ctx, SC_LOG_DEBUG_VERBOSE);
 
+	/* continue the matching get a lock and the priv */
+	r = piv_match_card_continued(card);
+	if (r != 1)  {
+		sc_log(card->ctx,"piv_match_card_continued failed");
+		piv_finish(card);
+		/* tell sc_connect_card to try other drivers */
+		LOG_FUNC_RETURN(card->ctx, SC_ERROR_INVALID_CARD);
+	}
+		
+	priv = PIV_DATA(card);
 
-	/* can not force the PIV driver to use non-PIV cards as tested in piv_card_match */
+	/* can not force the PIV driver to use non-PIV cards as tested in piv_card_match_continued */
 	if (!priv || card->type == -1)
-		LOG_FUNC_RETURN(card->ctx, SC_ERROR_NO_CARD_SUPPORT);
+		LOG_FUNC_RETURN(card->ctx, SC_ERROR_INVALID_CARD);
 
 	sc_log(card->ctx,
 	       "Max send = %"SC_FORMAT_LEN_SIZE_T"u recv = %"SC_FORMAT_LEN_SIZE_T"u card->type = %d",
@@ -3495,7 +3524,6 @@ static int piv_card_reader_lock_obtained(sc_card_t *card, int was_reset)
 	int r = 0;
 	u8 temp[256];
 	size_t templen = sizeof(temp);
-	struct sc_pin_cmd_data data;
 	piv_private_data_t * priv = PIV_DATA(card); /* may be null */
 
 	SC_FUNC_CALLED(card->ctx, SC_LOG_DEBUG_VERBOSE);
@@ -3529,15 +3557,7 @@ static int piv_card_reader_lock_obtained(sc_card_t *card, int was_reset)
 	if (was_reset > 0)
 		priv->logged_in =  SC_PIN_STATE_UNKNOWN;
 
-	/* See if VERIFY Lc=empty will tell us the state */
-	memset(&data, 0, sizeof(data));
-	data.cmd = SC_PIN_CMD_GET_INFO;
-	data.pin_type = SC_AC_CHV;
-	data.pin_reference =  priv->pin_preference;
-	/* will try our best to see if logged_in or not */
-	r = piv_pin_cmd(card, &data, NULL);
-
-	r = 0; /* ignore return from piv_pin_cmd */
+	r = 0;
 
 err:
 	LOG_FUNC_RETURN(card->ctx, r);
