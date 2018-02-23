@@ -3102,7 +3102,6 @@ static int piv_match_card_continued(sc_card_t *card)
 		}
 	}
 
-
 	if (i < 0) {
 		piv_finish(card);
 		/* don't match. Does not have a PIV applet. */
