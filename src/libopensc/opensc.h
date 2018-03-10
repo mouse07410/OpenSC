@@ -62,8 +62,7 @@ extern "C" {
 #define SC_SEC_ENV_ALG_REF_PRESENT	0x0001
 #define SC_SEC_ENV_FILE_REF_PRESENT	0x0002
 #define SC_SEC_ENV_KEY_REF_PRESENT	0x0004
-/* FIXME: the flag below is misleading */
-#define SC_SEC_ENV_KEY_REF_ASYMMETRIC	0x0008
+#define SC_SEC_ENV_KEY_REF_SYMMETRIC	0x0008
 #define SC_SEC_ENV_ALG_PRESENT		0x0010
 
 /* PK algorithms */
@@ -1337,8 +1336,8 @@ void sc_free_apps(struct sc_card *card);
 int sc_parse_ef_atr(struct sc_card *card);
 void sc_free_ef_atr(struct sc_card *card);
 int sc_parse_ef_gdo(struct sc_card *card,
-	   	const unsigned char **iccsn, size_t *iccsn_len,
-		const unsigned char **chn, size_t *chn_len);
+		unsigned char *iccsn, size_t *iccsn_len,
+		unsigned char *chn, size_t *chn_len);
 int sc_update_dir(struct sc_card *card, sc_app_info_t *app);
 
 void sc_print_cache(struct sc_card *card);
