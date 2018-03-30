@@ -1,6 +1,7 @@
 #!/bin/bash
+#
 # test how card responds to  various APDUs  to find applications
-#ISO 7816-4  Section  8 Application-independent card services
+# ISO 7816-4  Section  8 Application-independent card services
 #
 # want to test for duplicate AIDs, PIV and OpenPGP etc. 
 #
@@ -29,7 +30,7 @@ V80P=(-s "00 20 00 80 08 31 32 33 34 36 36 FF FF")
 #VERIFY PIV login state i.e. VERIFY with Lc absent
 V800=(-s "00 20 00 80")
 
-#Verify PGP pin 222222 for the login pin 82
+#Verify PGP pin 123456 for the login pin 82
 V82P=(-s "00 20 00 82 06 31 32 33 34 35 36")
 #VERIFY PGP login state
 V820=(-s "00 20 00 82")
