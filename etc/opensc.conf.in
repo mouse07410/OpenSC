@@ -91,7 +91,7 @@ app default {
 		# What to do at the end of a transaction (SCardEndTransaction)
 		# Valid values: leave, reset, unpower.
 		# Default: leave
-		# transaction_end_action = reset;
+		transaction_end_action = reset;
 		#
 		# What to do when reconnection to a card (SCardReconnect)
 		# Valid values: leave, reset, unpower.
