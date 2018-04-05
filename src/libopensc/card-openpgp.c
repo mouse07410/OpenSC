@@ -358,7 +358,7 @@ pgp_match_card(sc_card_t *card)
 			card->type = SC_CARD_TYPE_OPENPGP_BASE;
 			card->name = card_name;
 			if (file->namelen != 16)
-				i = get_full_pgp_aid(card, file);
+				(void) get_full_pgp_aid(card, file);
 			if (file->namelen == 16) {
 				unsigned char major = file->name[6];
 				unsigned char minor = file->name[7];
