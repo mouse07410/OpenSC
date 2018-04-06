@@ -377,6 +377,14 @@ app default {
 		# notify_pin_bad_text = "bad text";
 	# }
 
+	# ACS CryptoMate Nano (T2)
+	card_atr 3b:be:96:00:00:41:05:30:00:00:00:00:00:00:00:00:00:90:00 {
+		name = "ACS CryptoMate Nano";
+		driver = "acos5";
+		flags = "keep_alive";
+		pkcs11_enable_InitToken = yes;
+	}
+
 	# Yubikey is known to have the PIV applet and the OpenPGP applet. OpenSC
 	# can handle both to access keys and certificates, but only one at a time.
 	card_atr 3b:f8:13:00:00:81:31:fe:15:59:75:62:69:6b:65:79:34:d4 {
