@@ -459,6 +459,7 @@ int sc_pkcs15_compute_signature(struct sc_pkcs15_card *p15card,
 		if (obj->type == SC_PKCS15_TYPE_PRKEY_RSA && tmpoutlen < modlen) {
 		memmove(out + modlen - tmpoutlen, out, tmpoutlen);
 		memset(out, 0, modlen - tmpoutlen);
+		r = modlen;
 	}
 
 	sc_mem_clear(buf, sizeof(buf));
