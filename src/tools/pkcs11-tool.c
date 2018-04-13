@@ -4588,6 +4588,7 @@ static int test_signature(CK_SESSION_HANDLE sess)
 	if (firstMechType == CKM_RSA_X_509) {
 		/* make sure our data is smaller than the modulus */
 		data[0] = 0x00;
+		data[1] = 0x00;
 	}
 
 	ck_mech.mechanism = firstMechType;
