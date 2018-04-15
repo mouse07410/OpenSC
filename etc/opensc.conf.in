@@ -1186,6 +1186,10 @@ app tokend {
 	#
 	# debug_file = /Library/Logs/OpenSC.tokend.log
 
+	reader_driver pcsc {
+		transaction_end_action = reset;
+	}
+
 	framework tokend {
 		# Score for OpenSC.tokend
 		# The tokend with the highest score shall be used.
