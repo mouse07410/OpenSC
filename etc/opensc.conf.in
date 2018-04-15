@@ -91,7 +91,7 @@ app default {
 		# What to do at the end of a transaction (SCardEndTransaction)
 		# Valid values: leave, reset, unpower.
 		# Default: leave
-		transaction_end_action = reset;
+		# transaction_end_action = reset;
 		#
 		# What to do when reconnection to a card (SCardReconnect)
 		# Valid values: leave, reset, unpower.
@@ -838,6 +838,17 @@ app default {
 		notify_pin_good_text = "GoID ist entsperrt";
 		notify_pin_bad = "Fingerabdruck bzw. PIN nicht verifiziert";
 		notify_pin_bad_text = "GoID ist gesperrt";
+	}
+
+	# Latvian eID card
+	card_atr 3b:dd:18:00:81:31:fe:45:90:4c:41:54:56:49:41:2d:65:49:44:90:00:8c {
+		name = "Latvian eID";
+		# Try EstEID card driver - as we don't have anything better yet
+		driver = "mcrd";
+		# Recover from other applications accessing a different applet
+		flags = "keep_alive";
+		# Maybe allow initialization?
+		# pkcs11_enable_InitToken = yes;
 	}
 
 	secure_messaging local_authentic  {
