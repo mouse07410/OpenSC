@@ -314,7 +314,7 @@ int sc_pkcs15_compute_signature(struct sc_pkcs15_card *p15card,
 	sc_algorithm_info_t *alg_info;
 	const struct sc_pkcs15_prkey_info *prkey = (const struct sc_pkcs15_prkey_info *) obj->data;
 	u8 buf[1024], *tmp;
-	size_t modlen;
+	size_t modlen, tmpoutlen;
 	unsigned long pad_flags = 0, sec_flags = 0;
 
 	LOG_FUNC_CALLED(ctx);
@@ -452,6 +452,16 @@ int sc_pkcs15_compute_signature(struct sc_pkcs15_card *p15card,
 	r = use_key(p15card, obj, &senv, sc_compute_signature, tmp, inlen,
 			out, outlen);
 	LOG_TEST_RET(ctx, r, "use_key() failed");
+
+	/* Some cards may return RSA signature as integer without leading zero bytes */
+	/* Already know outlen >= modlen and r >= 0 */
+	tmpoutlen = r;
+		if (obj->type == SC_PKCS15_TYPE_PRKEY_RSA && tmpoutlen < modlen) {
+		memmove(out + modlen - tmpoutlen, out, tmpoutlen);
+		memset(out, 0, modlen - tmpoutlen);
+		r = modlen;
+	}
+
 	sc_mem_clear(buf, sizeof(buf));
 
 	LOG_FUNC_RETURN(ctx, r);
