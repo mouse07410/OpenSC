@@ -12,7 +12,8 @@ app default {
 	# A greater value means more debug info.
 	# Default: 0
 	#
-	#debug = 2;
+	# Max debugging is 9
+	#debug = 9;
 
 	# The file to which debug output will be written
 	#
@@ -287,7 +288,7 @@ app default {
 
 		# Enable pkcs11 initialization.
 		# Default: no
-		# pkcs11_enable_InitToken = yes;
+		pkcs11_enable_InitToken = yes;
 
 		#
 		# Context: PKCS#15 emulation layer
@@ -399,6 +400,7 @@ app default {
 		driver = "PIV-II";
 		# Recover from other applications accessing a different applet
 		flags = "keep_alive";
+		pkcs11_enable_InitToken = yes;
 	}
 	card_atr 3b:fc:13:00:00:81:31:fe:15:59:75:62:69:6b:65:79:4e:45:4f:72:33:e1 {
 		name = "Yubikey Neo";
@@ -406,6 +408,7 @@ app default {
 		driver = "PIV-II";
 		# Recover from other applications accessing a different applet
 		flags = "keep_alive";
+		pkcs11_enable_InitToken = yes;
 	}
 	card_atr 3b:8c:80:01:59:75:62:69:6b:65:79:4e:45:4f:72:33:58 {
 		atrmask = "FF:FF:FF:FF:FF:FF:FF:FF:FF:FF:FF:FF:FF:FF:FF:00:00";
@@ -414,6 +417,7 @@ app default {
 		driver = "PIV-II";
 		# Recover from other applications accessing a different applet
 		flags = "keep_alive";
+		pkcs11_enable_InitToken = yes;
 	}
 
 	# Micardo driver sometimes only play together with T=0
@@ -996,7 +1000,7 @@ app default {
 		# List of the builtin pkcs15 emulators to test
 		# Default: esteid, openpgp, tcos, starcert, itacns, infocamere, postecert, actalis, atrust-acos, gemsafeGPK, gemsafeV1, tccardos, PIV-II;
 		# builtin_emulators = openpgp;
-		builtin_emulators = PIV-II, openpgp, cac;
+		builtin_emulators = PIV-II, openpgp, cac, esteid;
 
 		# additional settings per driver
 		#
@@ -1208,7 +1212,7 @@ app tokend {
 	# debug_file = /Library/Logs/OpenSC.tokend.log
 
 	reader_driver pcsc {
-		transaction_end_action = reset;
+		# transaction_end_action = reset;
 	}
 
 	framework tokend {
