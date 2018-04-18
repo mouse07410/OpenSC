@@ -379,6 +379,9 @@ int sc_reset(sc_card_t *card, int do_cold_reset)
 
 	r = card->reader->ops->reset(card->reader, do_cold_reset);
 	sc_invalidate_cache(card);
+	if (r == SC_SUCCESS) {
+		r = card->ops->card_reader_lock_obtained(card, 1);
+	}
 
 	r2 = sc_mutex_unlock(card->ctx, card->mutex);
 	if (r2 != SC_SUCCESS) {
