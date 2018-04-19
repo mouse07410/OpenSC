@@ -379,7 +379,7 @@ int sc_reset(sc_card_t *card, int do_cold_reset)
 
 	r = card->reader->ops->reset(card->reader, do_cold_reset);
 	sc_invalidate_cache(card);
-	if (r == SC_SUCCESS) {
+	if (r == SC_SUCCESS && card->ops->card_reader_lock_obtained != NULL) {
 		r = card->ops->card_reader_lock_obtained(card, 1);
 	}
 
