@@ -1212,6 +1212,12 @@ app tokend {
 	# debug_file = /Library/Logs/OpenSC.tokend.log
 
 	reader_driver pcsc {
+		# Setting this to "reset" (default is "leave") enforces
+		# logout every time transaction completes, making sure
+		# screensaver will prompt for a PIN during unlock.
+		# However this setting will break Safari and Chrome accessing 
+		# sites protected by CAC or PIV tokens. And it breaks
+		# Keychain Access app, making it unable to unlock the token.
 		# transaction_end_action = reset;
 	}
 
