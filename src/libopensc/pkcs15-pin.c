@@ -306,8 +306,11 @@ sc_pkcs15_verify_pin(struct sc_pkcs15_card *p15card, struct sc_pkcs15_object *pi
 	 * in this case, to avoid error or unnecessary pin prompting on pinpad,
 	 * check if the PIN has been already verified and the access condition
 	 * is still open on card.
+	 *
+	 * But if context specific login we need to use pin pad reader
+	 * and not cache the pin 
 	 */
-	if (pinlen == 0) {
+	if (pinlen == 0 && auth_info->auth_method != SC_AC_CONTEXT_SPECIFIC) {
 	    r = sc_pkcs15_get_pin_info(p15card, pin_obj);
 
 	    if (r == SC_SUCCESS && auth_info->logged_in == SC_PIN_STATE_LOGGED_IN)
@@ -321,7 +324,7 @@ sc_pkcs15_verify_pin(struct sc_pkcs15_card *p15card, struct sc_pkcs15_object *pi
 
 	r = _sc_pkcs15_verify_pin(p15card, pin_obj, pincode, pinlen);
 
-	if (r == SC_SUCCESS)
+	if (r == SC_SUCCESS && auth_info->auth_method != SC_AC_CONTEXT_SPECIFIC)
 		sc_pkcs15_pincache_add(p15card, pin_obj, pincode, pinlen);
 
 	LOG_FUNC_RETURN(ctx, r);
