@@ -1015,7 +1015,7 @@ app default {
 
 		# Enable pkcs11 initialization.
 		# Default: no
-		# pkcs11_enable_InitToken = yes;
+		pkcs11_enable_InitToken = yes;
 
 		# some additional application parameters:
 		# - type (generic, protected) used to distinguish the common access application
