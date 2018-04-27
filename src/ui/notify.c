@@ -380,7 +380,7 @@ static GApplication *application = NULL;
 void sc_notify_init(void)
 {
 	sc_notify_close();
-	application = g_application_new("org.opensc.notify", G_APPLICATION_FLAGS_NONE);
+	application = g_application_new("org.opensc.notify", G_APPLICATION_NON_UNIQUE);
 	if (application) {
 		g_application_register(application, NULL, NULL);
 	}
@@ -398,20 +398,22 @@ static void notify_gio(struct sc_context *ctx,
 		const char *title, const char *text, const char *icon,
 		const char *group)
 {
-	if (application) {
+	if (application
+			&& g_application_get_is_registered(application)
+			&& g_application_get_dbus_connection(application)) {
 		GIcon *gicon = NULL;
-		GNotification *notification = g_notification_new (title);
+		GNotification *notification = g_notification_new(title);
 		if (!notification) {
 			return;
 		}
 
 		if (text) {
-			g_notification_set_body (notification, text);
+			g_notification_set_body(notification, text);
 		}
 		if (icon) {
-			gicon = g_themed_icon_new (icon);
+			gicon = g_themed_icon_new(icon);
 			if (gicon) {
-				g_notification_set_icon (notification, gicon);
+				g_notification_set_icon(notification, gicon);
 			}
 		}
 
@@ -455,10 +457,10 @@ void sc_notify_id(struct sc_context *ctx, struct sc_atr *atr,
 
 	switch (id) {
 		case NOTIFY_CARD_INSERTED:
-			icon = "dialog-information";
+			icon = "contact-new";
 			break;
 		case NOTIFY_CARD_REMOVED:
-			icon = "media-removed";
+			icon = "media-eject";
 			break;
 		case NOTIFY_PIN_GOOD:
 			icon = "changes-allow";
