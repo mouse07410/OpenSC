@@ -84,7 +84,6 @@ fi
 
 if ! test -e ${BUILDPATH}/target/$PREFIX/lib/pkgconfig; then
 	./configure --prefix=$PREFIX \
-		--disable-notify \
 		--sysconfdir=$PREFIX/etc \
 		--enable-cvcdir=$PREFIX/etc/cvc \
 		--enable-x509dir=$PREFIX/etc/x509 \
