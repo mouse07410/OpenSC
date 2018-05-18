@@ -1266,7 +1266,9 @@ int pcsc_add_reader(sc_context_t *ctx,
 
 	ret = _sc_add_reader(ctx, reader);
 
-	refresh_attributes(reader);
+	if (ret == SC_SUCCESS) {
+		refresh_attributes(reader);
+	}
 
 err1:
 	return ret;

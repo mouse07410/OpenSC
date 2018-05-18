@@ -39,9 +39,31 @@
 #include "common/libscdl.h"
 #include "internal.h"
 
+static int ignored_reader(sc_context_t *ctx, sc_reader_t *reader)
+{
+	if (ctx != NULL && reader != NULL && reader->name != NULL) {
+		size_t i;
+		const scconf_list *list;
+
+		for (i = 0; ctx->conf_blocks[i]; i++) {
+			list = scconf_find_list(ctx->conf_blocks[i], "ignored_readers");
+			while (list != NULL) {
+				if (strstr(reader->name, list->data) != NULL) {
+					sc_log(ctx, "Ignoring reader \'%s\' because of \'%s\'\n",
+							reader->name, list->data);
+					return 1;
+				}
+				list = list->next;
+			}
+		}
+	}
+
+	return 0;
+}
+
 int _sc_add_reader(sc_context_t *ctx, sc_reader_t *reader)
 {
-	if (reader == NULL) {
+	if (reader == NULL || ignored_reader(ctx, reader)) {
 		return SC_ERROR_INVALID_ARGUMENTS;
 	}
 	reader->ctx = ctx;
@@ -96,20 +118,23 @@ static const struct _sc_driver_entry internal_card_drivers[] = {
 #endif
 	{ "rutoken",	(void *(*)(void)) sc_get_rutoken_driver },
 	{ "rutoken_ecp",(void *(*)(void)) sc_get_rtecp_driver },
-	{ "westcos",	(void *(*)(void)) sc_get_westcos_driver },
 	{ "myeid",      (void *(*)(void)) sc_get_myeid_driver },
-	{ "sc-hsm",		(void *(*)(void)) sc_get_sc_hsm_driver },
 #if defined(ENABLE_OPENSSL) && defined(ENABLE_SM)
 	{ "dnie",       (void *(*)(void)) sc_get_dnie_driver },
 #endif
 	{ "masktech",	(void *(*)(void)) sc_get_masktech_driver },
+	{ "atrust-acos",(void *(*)(void)) sc_get_atrust_acos_driver },
+	{ "westcos",	(void *(*)(void)) sc_get_westcos_driver },
 
-/* Here should be placed drivers that need some APDU transactions to
- * recognise its cards. */
+/* Here should be placed drivers that need some APDU transactions in the
+ * driver's `match_card()` function. */
+	/* MUSCLE card applet returns 9000 on whatever AID is selected, see
+	 * https://github.com/JavaCardOS/MuscleCard-Applet/blob/master/musclecard/src/com/musclecard/CardEdge/CardEdge.java#L326
+	 * put the muscle driver first to cope with this bug. */
+	{ "muscle",	(void *(*)(void)) sc_get_muscle_driver },
+	{ "sc-hsm",	(void *(*)(void)) sc_get_sc_hsm_driver },
 	{ "mcrd",	(void *(*)(void)) sc_get_mcrd_driver },
 	{ "setcos",	(void *(*)(void)) sc_get_setcos_driver },
-	{ "muscle",	(void *(*)(void)) sc_get_muscle_driver },
-	{ "atrust-acos",(void *(*)(void)) sc_get_atrust_acos_driver },
 	{ "PIV-II",	(void *(*)(void)) sc_get_piv_driver },
 	{ "cac",	(void *(*)(void)) sc_get_cac_driver },
 	{ "itacns",	(void *(*)(void)) sc_get_itacns_driver },
@@ -136,7 +161,6 @@ static const struct _sc_driver_entry old_card_drivers[] = {
 struct _sc_ctx_options {
 	struct _sc_driver_entry cdrv[SC_MAX_CARD_DRIVERS];
 	int ccount;
-	char *forced_card_driver;
 };
 
 
@@ -303,12 +327,10 @@ int sc_ctx_log_to_file(sc_context_t *ctx, const char* filename)
 		ctx->debug_file = NULL;
 	}
 
-	if (ctx->reopen_log_file)   {
-		if (!ctx->debug_filename)   {
-			if (!filename)
-				filename = "stderr";
-			ctx->debug_filename = strdup(filename);
-		}
+	if (!ctx->debug_filename)   {
+		if (!filename)
+			filename = "stderr";
+		ctx->debug_filename = strdup(filename);
 	}
 
 	if (!filename)
@@ -340,12 +362,6 @@ load_parameters(sc_context_t *ctx, scconf_block *block, struct _sc_ctx_options *
 	DWORD expanded_len;
 #endif
 
-#ifdef _WIN32
-	ctx->reopen_log_file = 1;
-#else
-	ctx->reopen_log_file = scconf_get_bool(block, "reopen_debug_file", 0);
-#endif
-
 	debug = scconf_get_int(block, "debug", ctx->debug);
 	if (debug > ctx->debug)
 		ctx->debug = debug;
@@ -364,10 +380,6 @@ load_parameters(sc_context_t *ctx, scconf_block *block, struct _sc_ctx_options *
 		sc_ctx_log_to_file(ctx, NULL);
 	}
 
-	if (scconf_get_bool (block, "paranoid-memory",
-				ctx->flags & SC_CTX_FLAG_PARANOID_MEMORY))
-		ctx->flags |= SC_CTX_FLAG_PARANOID_MEMORY;
-
 	if (scconf_get_bool (block, "disable_popups",
 				ctx->flags & SC_CTX_FLAG_DISABLE_POPUPS))
 		ctx->flags |= SC_CTX_FLAG_DISABLE_POPUPS;
@@ -375,13 +387,6 @@ load_parameters(sc_context_t *ctx, scconf_block *block, struct _sc_ctx_options *
 	if (scconf_get_bool (block, "enable_default_driver",
 				ctx->flags & SC_CTX_FLAG_ENABLE_DEFAULT_DRIVER))
 		ctx->flags |= SC_CTX_FLAG_ENABLE_DEFAULT_DRIVER;
-
-	val = scconf_get_str(block, "force_card_driver", NULL);
-	if (val) {
-		if (opts->forced_card_driver)
-			free(opts->forced_card_driver);
-		opts->forced_card_driver = strdup(val);
-	}
 
 	list = scconf_find_list(block, "card_drivers");
 	if (list != NULL)
@@ -844,16 +849,10 @@ int sc_context_create(sc_context_t **ctx_out, const sc_context_param_t *parm)
 	load_card_drivers(ctx, &opts);
 	load_card_atrs(ctx);
 
-	if (!opts.forced_card_driver) {
-		char *driver = getenv("OPENSC_DRIVER");
-		if(driver) {
-			opts.forced_card_driver = strdup(driver);
-		}
-	}
-	if (opts.forced_card_driver) {
-		if (SC_SUCCESS != sc_set_card_driver(ctx, opts.forced_card_driver))
-			sc_log(ctx, "Warning: Could not load %s.", opts.forced_card_driver);
-		free(opts.forced_card_driver);
+	char *driver = getenv("OPENSC_DRIVER");
+	if (driver) {
+		if (SC_SUCCESS != sc_set_card_driver(ctx, driver))
+			sc_log(ctx, "Warning: Could not load %s.", driver);
 	}
 	del_drvs(&opts);
 	sc_ctx_detect_readers(ctx);

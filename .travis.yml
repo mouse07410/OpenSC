@@ -1,7 +1,7 @@
 language: c
 
 dist: trusty
-osx_image: xcode8.3
+osx_image: xcode9.1
 sudo: require
 
 addons:
@@ -17,6 +17,7 @@ addons:
     - xsltproc
     - gengetopt
     - help2man
+    - libcmocka-dev
   coverity_scan:
     project:
       name: "mouse07410OpenSC"
@@ -57,7 +58,7 @@ before_install:
         brew update;
         brew uninstall libtool;
         brew install libtool;
-        brew install gengetopt help2man;
+        brew install gengetopt help2man cmocka;
     fi
 
 before_script:
