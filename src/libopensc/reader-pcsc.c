@@ -1354,7 +1354,7 @@ static int pcsc_detect_readers(sc_context_t *ctx)
 	}
 
 	/* check if existing readers were returned in the list */
-	for (i=0;i < sc_ctx_get_reader_count(ctx);i++) {
+	for (i = 0; i < sc_ctx_get_reader_count(ctx); i++) {
 		sc_reader_t *reader = sc_ctx_get_reader(ctx, i);
 
 		if (!reader) {
@@ -1368,16 +1368,16 @@ static int pcsc_detect_readers(sc_context_t *ctx)
 				break;
 		}
 
-		if (*reader_name == '\x0')
-			/* existing reader not found */
-			reader->flags |= SC_READER_REMOVED;
-		else {
+		if (*reader_name != '\x0') {
 			/* existing reader found; remove it from the list */
 			char *next_reader_name = reader_name + strlen(reader_name) + 1;
 
 			memmove(reader_name, next_reader_name,
 					(reader_buf + reader_buf_size) - next_reader_name);
 			reader_buf_size -= (next_reader_name - reader_name);
+		} else {
+			/* existing reader not found */
+			reader->flags |= SC_READER_REMOVED;
 		}
 	}
 
