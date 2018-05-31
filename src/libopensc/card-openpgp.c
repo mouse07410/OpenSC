@@ -85,8 +85,11 @@ enum _version {		/* 2-byte BCD-alike encoded version number */
 	OPENPGP_CARD_1_1 = 0x0101,
 	OPENPGP_CARD_2_0 = 0x0200,
 	OPENPGP_CARD_2_1 = 0x0201,
+	OPENPGP_CARD_2_2 = 0x0202,
 	OPENPGP_CARD_3_0 = 0x0300,
 	OPENPGP_CARD_3_1 = 0x0301,
+	OPENPGP_CARD_3_2 = 0x0302,
+	OPENPGP_CARD_3_3 = 0x0303,
 };
 
 enum _access {		/* access flags for the respective DO/file */
@@ -498,6 +501,41 @@ pgp_init(sc_card_t *card)
 	LOG_FUNC_RETURN(card->ctx, SC_SUCCESS);
 }
 
+/**
+ * Internal: get features of the card: capabilities, ...
+ */
+static void
+pgp_parse_hist_bytes(sc_card_t *card, u8 *ctlv, size_t ctlv_len)
+{
+	struct pgp_priv_data *priv = DRVDATA(card);
+	size_t offs;
+
+	for (offs = 0; offs < ctlv_len; offs++) {
+		switch (ctlv[offs]) {
+			case 0x73: /* IS07816-4 hist bytes 3rd function table */
+				if (offs+3 < ctlv_len) {
+					/* bit 0x40 in byte 3 of TL 0x73 means "extended Le/Lc" */
+					if (ctlv[offs+3] & 0x40) {
+						card->caps |= SC_CARD_CAP_APDU_EXT;
+						priv->ext_caps |= EXT_CAP_APDU_EXT;
+					}
+					/* bit 0x80 in byte 3 of TL 0x73 means "Command chaining" */
+					if ((ctlv[offs+3] & 0x40) &&
+					    (priv->bcd_version >= OPENPGP_CARD_3_0)) {
+						priv->ext_caps |= EXT_CAP_CHAINING;
+					}
+				}
+				break;
+			case 0x31:
+				if ((offs + 1 < ctlv_len) &&
+				    (priv->bcd_version >= OPENPGP_CARD_3_0)) {
+					// ToDo ...
+				}
+				break;
+		}
+		offs += ctlv[offs] & 0x0F;
+	}
+}
 
 /**
  * Internal: get features of the card: capabilities, ...
@@ -506,24 +544,25 @@ static int
 pgp_get_card_features(sc_card_t *card)
 {
 	struct pgp_priv_data *priv = DRVDATA(card);
-	unsigned char *hist_bytes = card->atr.value;
-	size_t atr_len = card->atr.len;
+	u8 *hist_bytes = card->reader->atr_info.hist_bytes;
+	size_t hist_bytes_len = card->reader->atr_info.hist_bytes_len;
 	size_t i;
 	pgp_blob_t *blob, *blob6e, *blob73;
 
-	/* parse card capabilities from historical bytes */
-	for (i = 0; (i < atr_len) && (hist_bytes[i] != 0x73); i++)
-		;
-	/* IS07816-4 hist bytes 3rd function table */
-	if ((hist_bytes[i] == 0x73) && (atr_len > i+3)) {
-		/* bit 0x40 in byte 3 of TL 0x73 means "extended Le/Lc" */
-		if (hist_bytes[i+3] & 0x40) {
-			card->caps |= SC_CARD_CAP_APDU_EXT;
-			priv->ext_caps |= EXT_CAP_APDU_EXT;
+	/* parse card capabilities from historical bytes in ATR */
+	if (hist_bytes_len > 0) {
+		/* category indicator 0x00, 0x10 or 0x80 => compact TLV (ISO) */
+		switch (hist_bytes[0]) {
+			case 0x00:
+				pgp_parse_hist_bytes(card, hist_bytes+1, hist_bytes_len-4);
+				break;
+			case 0x80:
+				pgp_parse_hist_bytes(card, hist_bytes+1, hist_bytes_len-1);
+				break;
+			case 0x10:
+				pgp_parse_hist_bytes(card, hist_bytes+2, hist_bytes_len-2);
+				break;
 		}
-		/* bit 0x80 in byte 3 of TL 0x73 means "Command chaining" */
-		if (hist_bytes[i+3] & 0x80)
-			priv->ext_caps |= EXT_CAP_CHAINING;
 	}
 
 	if (priv->bcd_version >= OPENPGP_CARD_2_0) {
@@ -531,20 +570,7 @@ pgp_get_card_features(sc_card_t *card)
 		if ((pgp_get_blob(card, priv->mf, 0x5f52, &blob) >= 0) &&
 		    (blob->data != NULL) && (blob->data[0] == 0x00)) {
 
-			/* find beginning of "interesting" bytes */
-			for (i = 0; (i < blob->len) && (blob->data[i] != 0x73); i++)
-				;
-			/* IS07816-4 hist bytes 3rd function table */
-			if ((blob->data[i] == 0x73) && (blob->len > i+3)) {
-				/* bit 0x40 in byte 3 of TL 0x73 means "extended Le/Lc" */
-				if (blob->data[i+3] & 0x40) {
-					card->caps |= SC_CARD_CAP_APDU_EXT;
-					priv->ext_caps |= EXT_CAP_APDU_EXT;
-				}
-				/* bit 0x80 in byte 3 of TL 0x73 means "Command chaining" */
-				if (blob->data[i+3] & 0x80)
-					priv->ext_caps |= EXT_CAP_CHAINING;
-			}
+			pgp_parse_hist_bytes(card, hist_bytes+1, hist_bytes_len-4);
 
 			/* get card status from historical bytes status indicator */
 			if ((blob->data[0] == 0x00) && (blob->len >= 4))
