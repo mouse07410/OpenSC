@@ -19,15 +19,13 @@ do_subst = $(SED) \
 	   -e 's,[@]VDFORMAT[@],$(VDFORMAT),g' \
 	   -e 's,[@]X509DIR[@],$(X509DIR),g'
 
-HELP2MAN_LOCALE ?= C.UTF-8
-
 EGK_TOOL_BUILT_SOURCES = egk-tool-cmdline.h egk-tool-cmdline.c
 NPA_TOOL_BUILT_SOURCES = npa-tool-cmdline.h npa-tool-cmdline.c
 OPENSC_NOTIFY_BUILT_SOURCES = opensc-notify-cmdline.h opensc-notify-cmdline.c
 OPENSC_ASN1_BUILT_SOURCES = opensc-asn1-cmdline.h opensc-asn1-cmdline.c
 
 MAINTAINERCLEANFILES = $(srcdir)/Makefile.in $(srcdir)/versioninfo-tools.rc $(srcdir)/versioninfo-opensc-notify.rc
-EXTRA_DIST = Makefile.mak versioninfo-tools.rc.in versioninfo-opensc-notify.rc.in npa-tool.ggo.in npa-tool.1 opensc-notify.ggo.in egk-tool.ggo.in egk-tool.1 opensc-asn1.ggo.in opensc-asn1.1 org.opensc.notify.desktop.in exe.manifest
+EXTRA_DIST = Makefile.mak versioninfo-tools.rc.in versioninfo-opensc-notify.rc.in npa-tool.ggo.in opensc-notify.ggo.in egk-tool.ggo.in opensc-asn1.ggo.in org.opensc.notify.desktop.in exe.manifest
 
 noinst_HEADERS = util.h fread_to_eof.h
 noinst_PROGRAMS = sceac-example
@@ -37,10 +35,6 @@ bin_PROGRAMS = opensc-tool opensc-explorer opensc-notify \
 if ENABLE_OPENSSL
 bin_PROGRAMS += cryptoflex-tool pkcs15-init netkey-tool piv-tool \
 	westcos-tool sc-hsm-tool dnie-tool gids-tool npa-tool
-endif
-
-if ENABLE_MAN
-dist_man1_MANS = npa-tool.1 opensc-notify.1 egk-tool.1 opensc-asn1.1
 endif
 
 # compile with $(PTHREAD_CFLAGS) to allow debugging with gdb
@@ -105,16 +99,6 @@ $(NPA_TOOL_BUILT_SOURCES):
 $(abs_builddir)/npa-tool.ggo: npa-tool.ggo.in 
 	$(do_subst) < $(abs_srcdir)/npa-tool.ggo.in > $@
 
-# We only want npa-tool.1 to be generated when it has explicitly been removed.
-npa-tool.1:
-	$(MAKE) npa-tool$(EXEEXT)
-	$(HELP2MAN) \
-		--output=$@ \
-		--no-info \
-		--locale=$(HELP2MAN_LOCALE) \
-		--source='$(PACKAGE_STRING)' \
-		$(builddir)/npa-tool$(EXEEXT)
-
 opensc_notify_SOURCES = opensc-notify.c $(OPENSC_NOTIFY_BUILT_SOURCES)
 opensc_notify_LDADD = $(top_builddir)/src/libopensc/libopensc.la $(OPTIONAL_NOTIFY_LIBS)
 opensc_notify_CFLAGS = -I$(top_srcdir)/src $(OPTIONAL_NOTIFY_CFLAGS)
@@ -132,16 +116,6 @@ $(OPENSC_NOTIFY_BUILT_SOURCES):
 
 $(abs_builddir)/opensc-notify.ggo: opensc-notify.ggo.in 
 	$(do_subst) < $(abs_srcdir)/opensc-notify.ggo.in > $@
-
-# We only want opensc-notify.1 to be generated when it has explicitly been removed.
-opensc-notify.1:
-	$(MAKE) opensc-notify$(EXEEXT)
-	$(HELP2MAN) \
-		--output=$@ \
-		--no-info \
-		--locale=$(HELP2MAN_LOCALE) \
-		--source='$(PACKAGE_STRING)' \
-		$(builddir)/opensc-notify$(EXEEXT)
 
 egk_tool_SOURCES = egk-tool.c $(EGK_TOOL_BUILT_SOURCES)
 egk_tool_LDADD = $(top_builddir)/src/libopensc/libopensc.la $(OPTIONAL_ZLIB_LIBS)
@@ -161,16 +135,6 @@ $(EGK_TOOL_BUILT_SOURCES):
 $(abs_builddir)/egk-tool.ggo: egk-tool.ggo.in 
 	$(do_subst) < $(abs_srcdir)/egk-tool.ggo.in > $@
 
-# We only want egk-tool.1 to be generated when it has explicitly been removed.
-egk-tool.1:
-	$(MAKE) egk-tool$(EXEEXT)
-	$(HELP2MAN) \
-		--output=$@ \
-		--no-info \
-		--locale=$(HELP2MAN_LOCALE) \
-		--source='$(PACKAGE_STRING)' \
-		$(builddir)/egk-tool$(EXEEXT)
-
 opensc_asn1_SOURCES = opensc-asn1.c fread_to_eof.c $(OPENSC_ASN1_BUILT_SOURCES)
 opensc_asn1_LDADD = $(top_builddir)/src/libopensc/libopensc.la $(OPTIONAL_ZLIB_LIBS)
 opensc_asn1_CFLAGS = -I$(top_srcdir)/src $(OPTIONAL_ZLIB_CFLAGS)
@@ -185,16 +149,6 @@ $(OPENSC_ASN1_BUILT_SOURCES):
 
 $(abs_builddir)/opensc-asn1.ggo: opensc-asn1.ggo.in 
 	$(do_subst) < $(abs_srcdir)/opensc-asn1.ggo.in > $@
-
-# We only want opensc-asn1.1 to be generated when it has explicitly been removed.
-opensc-asn1.1:
-	$(MAKE) opensc-asn1$(EXEEXT)
-	$(HELP2MAN) \
-		--output=$@ \
-		--no-info \
-		--locale=$(HELP2MAN_LOCALE) \
-		--source='$(PACKAGE_STRING)' \
-		$(builddir)/opensc-asn1$(EXEEXT)
 
 if WIN32
 opensc_tool_SOURCES += versioninfo-tools.rc

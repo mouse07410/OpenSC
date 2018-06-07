@@ -16,7 +16,6 @@ addons:
     - wine
     - xsltproc
     - gengetopt
-    - help2man
     - libcmocka-dev
   coverity_scan:
     project:
