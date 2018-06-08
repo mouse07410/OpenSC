@@ -88,8 +88,8 @@ static int opt_pin = 0;
 static const char *pin = NULL;
 static int opt_erase = 0;
 static int opt_delkey = 0;
-static int opt_dump_do = 0;
-static u8 do_dump_idx;
+static size_t opt_dump_do = 0;
+static unsigned int do_dump_idx[200];	/* large enough and checked on input */
 
 static const char *app_name = "openpgp-tool";
 
@@ -131,7 +131,7 @@ static const char *option_help[] = {
 	"Verify PIN (CHV1, CHV2, CHV3...)",
 	"PIN string",
 	"Delete key (1, 2, 3 or all)",
-/* d */ "Dump private data object number <arg> (i.e. PRIVATE-DO-<arg>)",
+/* d */ "Dump private data object number <arg> (i.e. DO <arg>)",
 };
 
 static const struct ef_name_map openpgp_data[] = {
@@ -247,6 +247,8 @@ static void display_data(const struct ef_name_map *mapping, char *value)
 static int decode_options(int argc, char **argv)
 {
 	int c;
+	char *endptr;
+	unsigned long val;
 
 	while ((c = getopt_long(argc, argv,"r:x:CUG:L:EhwvVd:", options, (int *) 0)) != EOF) {
 		switch (c) {
@@ -316,10 +318,19 @@ static int decode_options(int argc, char **argv)
 				key_id = optarg[0] - '0';
 			else                              /* Arg string is 'all' */
 				key_id = 'a';
+			actions++;
 			break;
 		case 'd':
-			do_dump_idx = optarg[0] - '0';
-			opt_dump_do++;
+			endptr = NULL;
+			val = strtoul(optarg, &endptr, 16);
+			if (endptr == NULL || endptr == optarg || *endptr != '\0') {
+				printf("Unable to parse DO identifier\n");
+				return 1;
+			}
+			if (opt_dump_do < sizeof(do_dump_idx) / sizeof(*do_dump_idx)) {
+				do_dump_idx[opt_dump_do] = (unsigned int) (val | 0x100);
+				opt_dump_do++;
+			}
 			actions++;
 			break;
 		default:
@@ -380,46 +391,54 @@ static int do_userinfo(sc_card_t *card)
 
 static int do_dump_do(sc_card_t *card, unsigned int tag)
 {
-	int r, tmp;
-	FILE *fp;
+	int r;
+	size_t length;
+	unsigned char buffer[254];	// Private DO are specified up to 254 bytes
 
-	// Private DO are specified up to 254 bytes
-	unsigned char buffer[254];
 	memset(buffer, '\0', sizeof(buffer));
+
+	if (tag < 0x101 || tag > 0x104) {
+		printf("Illegal DO identifier\n");
+		return 1;
+	}
 
 	r = sc_get_data(card, tag, buffer, sizeof(buffer));
 	if (r < 0) {
 		printf("Failed to get data object: %s\n", sc_strerror(r));
-		if(SC_ERROR_SECURITY_STATUS_NOT_SATISFIED == r) {
+		if (SC_ERROR_SECURITY_STATUS_NOT_SATISFIED == r) {
 			printf("Make sure the 'verify' and 'pin' parameters are correct.\n");
 		}
 		return r;
 	}
+	length = (size_t) r;	/* r is guaranteed to be non-negative */
 
-	if(opt_raw) {
-		r = 0;
-		#ifndef _WIN32
+	if (opt_raw) {
+		int tmp;
+		FILE *fp;
+
+#ifndef _WIN32
 		tmp = dup(fileno(stdout));
-		#else
+#else
 		tmp = _dup(_fileno(stdout));
-		#endif
+#endif
 		if (tmp < 0)
 			return EXIT_FAILURE;
 		fp = freopen(NULL, "wb", stdout);
 		if (fp) {
-			r = (int)fwrite(buffer, sizeof(char), sizeof(buffer), fp);
+			r = (int) fwrite(buffer, sizeof(char), length, fp);
 		}
-		#ifndef _WIN32
+#ifndef _WIN32
 		dup2(tmp, fileno(stdout));
-		#else
+#else
 		_dup2(tmp, _fileno(stdout));
-		#endif
+#endif
 		clearerr(stdout);
 		close(tmp);
-		if (sizeof(buffer) != r)
+
+		if (length != (size_t) r)	/* fail on write errors */
 			return EXIT_FAILURE;
 	} else {
-		util_hex_dump_asc(stdout, buffer, sizeof(buffer), -1);
+		util_hex_dump_asc(stdout, buffer, length, -1);
 	}
 
 	return EXIT_SUCCESS;
@@ -640,7 +659,11 @@ int main(int argc, char **argv)
 	}
 
 	if (opt_dump_do) {
-		exit_status |= do_dump_do(card, 0x0100 + do_dump_idx);
+		size_t n;
+
+		for (n = 0; n < opt_dump_do; n++) {
+			exit_status |= do_dump_do(card, do_dump_idx[n]);
+		}
 	}
 
 	if (opt_genkey)
