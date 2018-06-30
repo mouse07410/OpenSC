@@ -2121,21 +2121,27 @@ iasecc_pin_get_policy (struct sc_card *card, struct sc_pin_cmd_data *data)
 
 	if (card->cache.valid && card->cache.current_df)   {
 		sc_file_dup(&save_current_df, card->cache.current_df);
-		if (save_current_df == NULL)
-			LOG_TEST_RET(ctx, SC_ERROR_OUT_OF_MEMORY, "Cannot duplicate current DF file");
+		if (save_current_df == NULL) {
+			rv = SC_ERROR_OUT_OF_MEMORY;
+			sc_log(ctx, "Cannot duplicate current DF file");
+			goto err;
+		}
 	}
 
 	if (card->cache.valid && card->cache.current_ef)   {
 		sc_file_dup(&save_current_ef, card->cache.current_ef);
-		if (save_current_ef == NULL)
-			LOG_TEST_RET(ctx, SC_ERROR_OUT_OF_MEMORY, "Cannot duplicate current EF file");
+		if (save_current_ef == NULL) {
+			rv = SC_ERROR_OUT_OF_MEMORY;
+			sc_log(ctx, "Cannot duplicate current EF file");
+			goto err;
+		}
 	}
 
 	if (!(data->pin_reference & IASECC_OBJECT_REF_LOCAL) && card->cache.valid && card->cache.current_df) {
 		sc_format_path("3F00", &path);
 		path.type = SC_PATH_TYPE_FILE_ID;
 		rv = iasecc_select_file(card, &path, NULL);
-		LOG_TEST_RET(ctx, rv, "Unable to select MF");
+		LOG_TEST_GOTO_ERR(ctx, rv, "Unable to select MF");
 	}
 
 	memset(&sdo, 0, sizeof(sdo));
@@ -2146,10 +2152,13 @@ iasecc_pin_get_policy (struct sc_card *card, struct sc_pin_cmd_data *data)
 	sc_log(ctx, "iasecc_pin_get_policy() reference %i", sdo.sdo_ref);
 
 	rv = iasecc_sdo_get_data(card, &sdo);
-	LOG_TEST_RET(ctx, rv, "Cannot get SDO PIN data");
+	LOG_TEST_GOTO_ERR(ctx, rv, "Cannot get SDO PIN data");
 
-	if (sdo.docp.acls_contact.size == 0)
-		LOG_TEST_RET(ctx, SC_ERROR_INVALID_DATA, "Extremely strange ... there is no ACLs");
+	if (sdo.docp.acls_contact.size == 0) {
+		rv = SC_ERROR_INVALID_DATA;
+		sc_log(ctx, "Extremely strange ... there is no ACLs");
+		goto err;
+	}
 
 	sc_log(ctx,
 	       "iasecc_pin_get_policy() sdo.docp.size.size %"SC_FORMAT_LEN_SIZE_T"u",
@@ -2177,13 +2186,13 @@ iasecc_pin_get_policy (struct sc_card *card, struct sc_pin_cmd_data *data)
 			se.reference = acl->key_ref;
 
 			rv = iasecc_se_get_info(card, &se);
-			LOG_TEST_RET(ctx, rv, "SDO get data error");
+			LOG_TEST_GOTO_ERR(ctx, rv, "SDO get data error");
 		}
 
 		if (scb & IASECC_SCB_METHOD_USER_AUTH)   {
 			rv = iasecc_se_get_crt_by_usage(card, &se,
 					IASECC_CRT_TAG_AT, IASECC_UQB_AT_USER_PASSWORD, &acl->crts[crt_num]);
-			LOG_TEST_RET(ctx, rv, "no authentication template for 'USER PASSWORD'");
+			LOG_TEST_GOTO_ERR(ctx, rv, "no authentication template for 'USER PASSWORD'");
 			sc_log(ctx, "iasecc_pin_get_policy() scb:0x%X; sdo_ref:[%i,%i,...]",
 					scb, acl->crts[crt_num].refs[0], acl->crts[crt_num].refs[1]);
 			crt_num++;
@@ -2227,16 +2236,18 @@ iasecc_pin_get_policy (struct sc_card *card, struct sc_pin_cmd_data *data)
 	if (save_current_df)   {
 		sc_log(ctx, "iasecc_pin_get_policy() restore current DF");
 		rv = iasecc_select_file(card, &save_current_df->path, NULL);
-		LOG_TEST_RET(ctx, rv, "Cannot return to saved DF");
-		sc_file_free(save_current_df);
+		LOG_TEST_GOTO_ERR(ctx, rv, "Cannot return to saved DF");
 	}
 
 	if (save_current_ef)   {
 		sc_log(ctx, "iasecc_pin_get_policy() restore current EF");
 		rv = iasecc_select_file(card, &save_current_ef->path, NULL);
-		LOG_TEST_RET(ctx, rv, "Cannot return to saved EF");
-		sc_file_free(save_current_ef);
+		LOG_TEST_GOTO_ERR(ctx, rv, "Cannot return to saved EF");
 	}
+
+err:
+	sc_file_free(save_current_df);
+	sc_file_free(save_current_ef);
 
 	LOG_FUNC_RETURN(ctx, rv);
 }

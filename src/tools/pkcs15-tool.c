@@ -829,7 +829,7 @@ static int read_public_key(void)
 out:
 	if (cert)
 		sc_pkcs15_free_certificate(cert);
-	else if (pubkey)
+	else
 		sc_pkcs15_free_pubkey(pubkey);
 
 	return r;
@@ -1202,7 +1202,7 @@ static int read_ssh_key(void)
 		fclose(outf);
 	if (cert)
 		sc_pkcs15_free_certificate(cert);
-	else if (pubkey)
+	else
 		sc_pkcs15_free_pubkey(pubkey);
 	return 0;
 fail:
@@ -1212,7 +1212,7 @@ fail2:
 		fclose(outf);
 	if (cert)
 		sc_pkcs15_free_certificate(cert);
-	else if (pubkey)
+	else
 		sc_pkcs15_free_pubkey(pubkey);
 	return SC_ERROR_OUT_OF_MEMORY;
 }
