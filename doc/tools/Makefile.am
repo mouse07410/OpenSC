@@ -3,6 +3,7 @@ MAINTAINERCLEANFILES = $(srcdir)/Makefile.in
 EXTRA_DIST = completion-template
 
 TESTS = test-manpage.sh
+dist_noinst_SCRIPTS = test-manpage.sh
 
 dist_noinst_DATA = $(wildcard $(srcdir)/*.xml)
 if ENABLE_DOC
@@ -15,7 +16,6 @@ man5_MANS = $(patsubst $(srcdir)/%.xml, %, $(wildcard $(srcdir)/*.5.xml))
 endif
 
 completion_DATA = $(patsubst $(srcdir)/%.1.xml, %, $(wildcard $(srcdir)/*.1.xml))
-completiondir = $(sysconfdir)/bash_completion.d
 
 tools.html: $(srcdir)/tools.xml $(wildcard $(srcdir)/*.1.xml) $(wildcard $(srcdir)/*.5.xml)
 	$(XSLTPROC) --nonet --path "$(srcdir)/..:$(xslstylesheetsdir)/html" --xinclude -o $@ html.xsl $<
