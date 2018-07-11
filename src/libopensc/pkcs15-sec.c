@@ -314,7 +314,7 @@ int sc_pkcs15_compute_signature(struct sc_pkcs15_card *p15card,
 	sc_algorithm_info_t *alg_info;
 	const struct sc_pkcs15_prkey_info *prkey = (const struct sc_pkcs15_prkey_info *) obj->data;
 	u8 buf[1024], *tmp;
-	size_t modlen, tmpoutlen;
+	size_t modlen;
 	unsigned long pad_flags = 0, sec_flags = 0;
 
 	LOG_FUNC_CALLED(ctx);
