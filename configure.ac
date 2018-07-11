@@ -270,6 +270,13 @@ AC_ARG_WITH(
 )
 
 AC_ARG_WITH(
+	[completiondir],
+	[AS_HELP_STRING([--with-completiondir=PATH],[Directory of Bash completion @<:@detect@:>@])],
+	[completiondir="${withval}"],
+	[completiondir="detect"]
+)
+
+AC_ARG_WITH(
 	[pcsc-provider],
 	[AS_HELP_STRING([--with-pcsc-provider=PATH],[Path to system pcsc provider @<:@system default@:>@])],
 	,
@@ -527,20 +534,6 @@ AC_CHECK_HEADER([cmocka.h],, [have_cmocka="no"],
 #include <setjmp.h>
 ])
 
-if test "${enable_tests}" = "detect"; then
-	if test "${have_cmocka}" = "yes"; then
-		enable_tests="yes"
-	else
-		enable_tests="no"
-	fi
-fi
-
-if test "${enable_tests}" = "yes"; then
-	if test "${have_cmocka}" != "yes"; then
-		AC_MSG_ERROR([Tests required, but cmocka is not available])
-	fi
-fi
-
 AC_ARG_VAR([ZLIB_CFLAGS], [C compiler flags for zlib])
 AC_ARG_VAR([ZLIB_LIBS], [linker flags for zlib])
 if test -z "${ZLIB_LIBS}"; then
@@ -665,6 +658,23 @@ if test "${enable_openssl}" = "yes"; then
 else
 	OPENSSL_CFLAGS=""
 	OPENSSL_LIBS=""
+fi
+
+if test "${enable_tests}" = "detect"; then
+	if test "${have_cmocka}" = "yes" -a "${have_openssl}" = "yes"; then
+		enable_tests="yes"
+	else
+		enable_tests="no"
+	fi
+fi
+
+if test "${enable_tests}" = "yes"; then
+	if test "${have_cmocka}" != "yes"; then
+		AC_MSG_ERROR([Tests required, but cmocka is not available])
+	fi
+	if test "${have_openssl}" != "yes"; then
+		AC_MSG_ERROR([Tests required, but openssl is not available])
+	fi
 fi
 
 
@@ -839,9 +849,13 @@ if test "${enable_cryptotokenkit}" = "yes"; then
 	fi
 	AC_DEFINE([ENABLE_CRYPTOTOKENKIT], [1], [Define if CryptoTokenKit is to be enabled])
 fi
-PKG_CHECK_MODULES([BASH_COMPLETION], [bash-completion >= 2.0],
-	[completiondir="`pkg-config --variable=completionsdir bash-completion`"],
-	[completiondir="${sysconfdir}/bash_completion.d"])
+
+if test "${completiondir}" = "detect"; then
+	echo completion ${completiondir}
+	PKG_CHECK_MODULES([BASH_COMPLETION], [bash-completion >= 2.0],
+		[completiondir="`pkg-config --variable=completionsdir bash-completion`"],
+		[completiondir="${sysconfdir}/bash_completion.d"])
+fi
 AC_SUBST([completiondir])
 
 
@@ -1098,6 +1112,7 @@ Product URL:             ${OPENSC_VS_FF_PRODUCT_URL}
 
 User binaries:           $(eval eval eval echo "${bindir}")
 Configuration files:     $(eval eval eval echo "${sysconfdir}")
+Bash completion:         ${completiondir}
 XSL stylesheets:         ${xslstylesheetsdir}
 
 man support:             ${enable_man}

@@ -420,12 +420,16 @@ int sc_pkcs15_compute_signature(struct sc_pkcs15_card *p15card,
 
 	/* add the padding bytes (if necessary) */
 	if (pad_flags != 0) {
-		size_t tmplen = sizeof(buf);
+		if (flags & SC_ALGORITHM_RSA_PAD_PSS) {
+			// TODO PSS padding
+		} else {
+			size_t tmplen = sizeof(buf);
 
-		r = sc_pkcs1_encode(ctx, pad_flags, tmp, inlen, tmp, &tmplen, modlen);
-		SC_TEST_RET(ctx, SC_LOG_DEBUG_NORMAL, r, "Unable to add padding");
+			r = sc_pkcs1_encode(ctx, pad_flags, tmp, inlen, tmp, &tmplen, modlen);
+			SC_TEST_RET(ctx, SC_LOG_DEBUG_NORMAL, r, "Unable to add padding");
 
-		inlen = tmplen;
+			inlen = tmplen;
+		}
 	}
 	else if ( senv.algorithm == SC_ALGORITHM_RSA &&
 			(flags & SC_ALGORITHM_RSA_PADS) == SC_ALGORITHM_RSA_PAD_NONE) {
@@ -455,10 +459,9 @@ int sc_pkcs15_compute_signature(struct sc_pkcs15_card *p15card,
 
 	/* Some cards may return RSA signature as integer without leading zero bytes */
 	/* Already know outlen >= modlen and r >= 0 */
-	tmpoutlen = r;
-		if (obj->type == SC_PKCS15_TYPE_PRKEY_RSA && tmpoutlen < modlen) {
-		memmove(out + modlen - tmpoutlen, out, tmpoutlen);
-		memset(out, 0, modlen - tmpoutlen);
+	if (obj->type == SC_PKCS15_TYPE_PRKEY_RSA && (unsigned)r < modlen) {
+		memmove(out + modlen - r, out, r);
+		memset(out, 0, modlen - r);
 		r = modlen;
 	}
 

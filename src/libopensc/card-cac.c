@@ -1254,15 +1254,18 @@ static int cac_get_properties(sc_card_t *card, cac_properties_t *prop)
 
 		default:
 			/* ignore tags we don't understand */
-			sc_debug(card->ctx, SC_LOG_DEBUG_VERBOSE,
-			    "TAG: Unknown (0x%02x)",tag );
+			sc_log(card->ctx, "TAG: Unknown (0x%02x), len=%"
+			    SC_FORMAT_LEN_SIZE_T"u", tag, len);
 			break;
 		}
 	}
 	free(rbuf);
 	/* sanity */
 	if (i != prop->num_objects)
-		return SC_ERROR_INVALID_DATA;
+		sc_log(card->ctx, "The announced number of objects (%u) "
+		    "did not match reality (%"SC_FORMAT_LEN_SIZE_T"u)",
+		    prop->num_objects, i);
+	prop->num_objects = i;
 
 	return SC_SUCCESS;
 }
@@ -1518,7 +1521,8 @@ static int cac_parse_aid(sc_card_t *card, cac_private_data_t *priv, u8 *aid, int
 	SC_FUNC_CALLED(card->ctx, SC_LOG_DEBUG_VERBOSE);
 
 	/* Search for PKI applets (7 B). Ignore generic objects for now */
-	if (aid_len != 7 || memcmp(aid, CAC_1_RID "\x01", 6) != 0)
+	if (aid_len != 7 || (memcmp(aid, CAC_1_RID "\x01", 6) != 0
+	    && memcmp(aid, CAC_1_RID "\x00", 6) != 0))
 		return SC_SUCCESS;
 
 	sc_mem_clear(&new_object.path, sizeof(sc_path_t));
@@ -1538,22 +1542,26 @@ static int cac_parse_aid(sc_card_t *card, cac_private_data_t *priv, u8 *aid, int
 		if (priv->cert_next >= MAX_CAC_SLOTS)
 			return SC_SUCCESS;
 
+		sc_debug(card->ctx, SC_LOG_DEBUG_VERBOSE,
+		    "ACA: pki_object found, cert_next=%d (%s), privkey=%d",
+		    priv->cert_next, cac_labels[priv->cert_next],
+		    prop.objects[i].privatekey);
+
 		/* If the private key is not initialized, we can safely
-		 * ignore this object here
+		 * ignore this object here, but increase the pointer to follow
+		 * the certificate labels
 		 */
-		if (!prop.objects[i].privatekey)
+		if (!prop.objects[i].privatekey) {
+			priv->cert_next++;
 			continue;
+		}
 
 		/* OID here has always 2B */
 		memcpy(new_object.path.value, &prop.objects[i].oid, 2);
 		new_object.path.len = 2;
 		new_object.path.type = SC_PATH_TYPE_FILE_ID;
-
 		new_object.name = cac_labels[priv->cert_next];
 		new_object.fd = priv->cert_next+1;
-		sc_debug(card->ctx, SC_LOG_DEBUG_VERBOSE,
-		    "ACA: pki_object found, cert_next=%d (%s),",
-		    priv->cert_next, new_object.name);
 		cac_add_object_to_list(&priv->pki_list, &new_object);
 		priv->cert_next++;
 	}
@@ -1776,9 +1784,8 @@ static int cac_parse_ACA_service(sc_card_t *card, cac_private_data_t *priv,
 		switch (tag) {
 		case CAC_TAG_APPLET_FAMILY:
 			if (len != 5) {
-				sc_debug(card->ctx, SC_LOG_DEBUG_VERBOSE,
-				    "TAG: Applet Information = (bad length %"
-				    SC_FORMAT_LEN_SIZE_T"u)", len);
+				sc_log(card->ctx, "TAG: Applet Information: "
+				    "bad length %"SC_FORMAT_LEN_SIZE_T"u", len);
 				break;
 			}
 			sc_debug(card->ctx, SC_LOG_DEBUG_VERBOSE,
@@ -1789,23 +1796,23 @@ static int cac_parse_ACA_service(sc_card_t *card, cac_private_data_t *priv,
 			break;
 		case CAC_TAG_NUMBER_APPLETS:
 			if (len != 1) {
-				sc_debug(card->ctx, SC_LOG_DEBUG_VERBOSE,
-				    "TAG: Num applets = (bad length %"SC_FORMAT_LEN_SIZE_T"u)",
-				    len);
+				sc_log(card->ctx, "TAG: Num applets: "
+				    "bad length %"SC_FORMAT_LEN_SIZE_T"u", len);
 				break;
 			}
 			sc_debug(card->ctx, SC_LOG_DEBUG_VERBOSE,
 			    "TAG: Num applets = %hhd", *val);
 			break;
 		case CAC_TAG_APPLET_ENTRY:
-			sc_debug(card->ctx, SC_LOG_DEBUG_VERBOSE,
-			    "TAG: Applet Entry");
 			/* Make sure we match the outer length */
 			if (len < 3 || val[2] != len - 3) {
-				sc_debug(card->ctx, SC_LOG_DEBUG_VERBOSE,
-				    "bad length of internal buffer");
+				sc_log(card->ctx, "TAG: Applet Entry: "
+				    "bad length (%"SC_FORMAT_LEN_SIZE_T
+				    "u) or length of internal buffer", len);
 				break;
 			}
+			sc_debug_hex(card->ctx, SC_LOG_DEBUG_VERBOSE,
+			    "TAG: Applet Entry: AID", &val[3], val[2]);
 			/* This is SimpleTLV prefixed with applet ID (1B) */
 			r = cac_parse_aid(card, priv, &val[3], val[2]);
 			if (r < 0)

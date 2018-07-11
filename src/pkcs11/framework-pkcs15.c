@@ -3680,6 +3680,58 @@ pkcs15_prkey_get_attribute(struct sc_pkcs11_session *session,
 }
 
 
+
+static CK_RV
+pkcs15_prkey_check_pss_param(CK_MECHANISM_PTR pMechanism, CK_ULONG hlen)
+{
+	CK_RSA_PKCS_PSS_PARAMS *pss_param;
+
+	if (pMechanism->pParameter == NULL)
+		return CKR_OK;				// Support applications that don't provide CK_RSA_PKCS_PSS_PARAMS
+
+	if (pMechanism->ulParameterLen != sizeof(CK_RSA_PKCS_PSS_PARAMS))
+		return CKR_MECHANISM_PARAM_INVALID;
+
+	pss_param = (CK_RSA_PKCS_PSS_PARAMS *)pMechanism->pParameter;
+
+	// Hash parameter must match mechanisms or length of data supplied for CKM_RSA_PKCS_PSS
+	switch(pss_param->hashAlg) {
+	case CKM_SHA_1:
+		if (hlen != 20)
+			return CKR_MECHANISM_PARAM_INVALID;
+		break;
+	case CKM_SHA256:
+		if (hlen != 32)
+			return CKR_MECHANISM_PARAM_INVALID;
+		break;
+	default:
+		return CKR_MECHANISM_PARAM_INVALID;
+	}
+
+	// SmartCards typically only support MGFs based on the same hash as the
+	// message digest
+	switch(pss_param->mgf) {
+	case CKG_MGF1_SHA1:
+		if (hlen != 20)
+			return CKR_MECHANISM_PARAM_INVALID;
+		break;
+	case CKG_MGF1_SHA256:
+		if (hlen != 32)
+			return CKR_MECHANISM_PARAM_INVALID;
+		break;
+	default:
+		return CKR_MECHANISM_PARAM_INVALID;
+	}
+
+	// SmartCards typically support only a salt length equal to the hash length
+	if (pss_param->sLen != hlen)
+		return CKR_MECHANISM_PARAM_INVALID;
+
+	return CKR_OK;
+}
+
+
+
 static CK_RV
 pkcs15_prkey_sign(struct sc_pkcs11_session *session, void *obj,
 			CK_MECHANISM_PTR pMechanism, CK_BYTE_PTR pData,
@@ -3727,6 +3779,30 @@ pkcs15_prkey_sign(struct sc_pkcs11_session *session, void *obj,
 		break;
 	case CKM_SHA512_RSA_PKCS:
 		flags = SC_ALGORITHM_RSA_PAD_PKCS1 | SC_ALGORITHM_RSA_HASH_SHA512;
+		break;
+	case CKM_RSA_PKCS_PSS:
+		rv = pkcs15_prkey_check_pss_param(pMechanism, (int)ulDataLen);
+
+		if (rv != CKR_OK)
+			return rv;
+
+		flags = SC_ALGORITHM_RSA_PAD_PSS | SC_ALGORITHM_RSA_HASH_NONE;
+		break;
+	case CKM_SHA1_RSA_PKCS_PSS:
+		rv = pkcs15_prkey_check_pss_param(pMechanism, 20);
+
+		if (rv != CKR_OK)
+			return rv;
+
+		flags = SC_ALGORITHM_RSA_PAD_PSS | SC_ALGORITHM_RSA_HASH_SHA1;
+		break;
+	case CKM_SHA256_RSA_PKCS_PSS:
+		rv = pkcs15_prkey_check_pss_param(pMechanism, 32);
+
+		if (rv != CKR_OK)
+			return rv;
+
+		flags = SC_ALGORITHM_RSA_PAD_PSS | SC_ALGORITHM_RSA_HASH_SHA256;
 		break;
 	case CKM_RIPEMD160_RSA_PKCS:
 		flags = SC_ALGORITHM_RSA_PAD_PKCS1 | SC_ALGORITHM_RSA_HASH_RIPEMD160;
@@ -4994,6 +5070,28 @@ register_mechanisms(struct sc_pkcs11_card *p11card)
 	}
 
 	/* TODO support other padding mechanisms */
+
+	if (rsa_flags & SC_ALGORITHM_RSA_PAD_PSS) {
+		CK_FLAGS old_flags = mech_info.flags;		// PSS is not available for decryption
+		mech_info.flags &= ~(CKF_DECRYPT|CKF_VERIFY);
+
+		mt = sc_pkcs11_new_fw_mechanism(CKM_RSA_PKCS_PSS, &mech_info, CKK_RSA, NULL, NULL);
+		rc = sc_pkcs11_register_mechanism(p11card, mt);
+		if (rc != CKR_OK)
+			return rc;
+
+		if (rsa_flags & SC_ALGORITHM_RSA_HASH_SHA1) {
+			rc = sc_pkcs11_register_sign_and_hash_mechanism(p11card, CKM_SHA1_RSA_PKCS_PSS, CKM_SHA_1, mt);
+			if (rc != CKR_OK)
+				return rc;
+		}
+		if (rsa_flags & SC_ALGORITHM_RSA_HASH_SHA256) {
+			rc = sc_pkcs11_register_sign_and_hash_mechanism(p11card, CKM_SHA256_RSA_PKCS_PSS, CKM_SHA256, mt);
+			if (rc != CKR_OK)
+				return rc;
+		}
+		mech_info.flags = old_flags;
+	}
 
 	if (rsa_flags & SC_ALGORITHM_ONBOARD_KEY_GEN) {
 		mech_info.flags = CKF_GENERATE_KEY_PAIR;
