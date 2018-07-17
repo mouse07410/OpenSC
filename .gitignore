@@ -49,7 +49,6 @@ tags
 *.gz
 *.bz2
 *.[0-9]
-*.html
 *.gif
 *.css
 *.out
@@ -77,9 +76,13 @@ doc/tools/pkcs15-tool
 doc/tools/sc-hsm-tool
 doc/tools/westcos-tool
 doc/tools/dnie-tool
+doc/tools/egk-tool
+doc/tools/npa-tool
+doc/tools/opensc-asn1
+doc/tools/opensc-notify
+doc/files/opensc.conf.5.xml
 
-etc/opensc.conf.win
-etc/opensc.conf
+etc/opensc.conf.example
 src/common/compat_getopt_main
 src/minidriver/opensc-minidriver.inf
 src/tools/cardos-tool

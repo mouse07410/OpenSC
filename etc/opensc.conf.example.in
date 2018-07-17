@@ -294,8 +294,8 @@ app default {
 		#
 		# md_read_only: Mark card as read/only card in Minidriver/BaseCSP interface (Default: false)
 		# md_supports_X509_enrollment: Indicate X509 enrollment support at Minidriver/BaseCSP interface (Default: false)
-		# md_guid_as_id: Use the GUID generated for the key as id in the PKCS#15 structure (Default: false - auto generated)
-		# md_guid_as_label: Use the GUID generated for the key as label in the PKCS#15 structure (Default: false - no label set)
+		# md_guid_as_id: Use the GUID generated for the key as id in the PKCS#15 structure (Default: false, i.e. auto generated)
+		# md_guid_as_label: Use the GUID generated for the key as label in the PKCS#15 structure (Default: false, i.e. no label set)
 		# md_supports_container_key_gen: Card allows generating key pairs on the card (Default: false)
 		# md_supports_container_key_import: Card allows importing private keys (Default: false)
 		#
@@ -829,8 +829,8 @@ app default {
 		# name of external SM module
 		# module_name = @DEFAULT_SM_MODULE@;
 		# directory with external SM module
-		# Default: defined by windows register
-		@DEFAULT_SM_MODULE_PATH@
+		# Default: @DEFAULT_SM_MODULE_PATH@
+		# module_path = @DEFAULT_SM_MODULE_PATH@;
 
 		# specific data to tune the module initialization
 		# module_data = "Here can be your SM module init data";
@@ -853,7 +853,7 @@ app default {
 
 	secure_messaging local_gemalto_iam  {
 		module_name = @DEFAULT_SM_MODULE@;
-		@DEFAULT_SM_MODULE_PATH@
+		# module_path = @DEFAULT_SM_MODULE_PATH@;
 		# module_data = "";
 		type = acl;	     # transmit, acl
 
@@ -872,7 +872,7 @@ app default {
 
 	secure_messaging local_amos  {
 		module_name = @DEFAULT_SM_MODULE@;
-		@DEFAULT_SM_MODULE_PATH@
+		# module_path = @DEFAULT_SM_MODULE_PATH@;
 		# module_data = "";
 		mode = acl;
 		ifd_serial = "11:22:33:44:55:66:77:88";
@@ -882,7 +882,7 @@ app default {
 
 	secure_messaging local_amos_eid  {
 		module_name = @DEFAULT_SM_MODULE@;
-		@DEFAULT_SM_MODULE_PATH@
+		# module_path = @DEFAULT_SM_MODULE_PATH@;
 		# module_data = "";
 		mode = acl;
 		ifd_serial = "11:22:33:44:55:66:77:88";
@@ -892,7 +892,7 @@ app default {
 
 	secure_messaging local_adele  {
 		module_name = @DEFAULT_SM_MODULE@;
-		@DEFAULT_SM_MODULE_PATH@
+		# module_path = @DEFAULT_SM_MODULE_PATH@;
 		# module_data = "";
 		type = acl;	     # transmit, acl
 
@@ -922,11 +922,10 @@ app default {
 		# Whether to use the cache files in the user's
 		# home directory.
 		#
-		# At the moment you have to 'teach' the card
-		# to the system by running command: pkcs15-tool -L
+		# Note: If caching is done by a system process, caching may be placed
+		# inaccessible from the user account. Use a global caching directory if
+		# you wish to share the cached information.
 		#
-		# WARNING: Caching shouldn't be used in setuid root
-		# applications.
 		# Default: false
 		# use_file_caching = true;
 		#
@@ -1036,15 +1035,6 @@ app opensc-pkcs11 {
 
 		# (max_virtual_slots/slots_per_card) limits the number of readers
 		# that can be used on the system. Default is then 16/4=4 readers.
-
-		# Normally, the pkcs11 module will create
-		# the full number of slots defined above by
-		# num_slots. If there are fewer pins/keys on
-		# the card, the remaining keys will be empty
-		# (and you will be able to create new objects
-		# within them).
-		# Default: true
-		# hide_empty_tokens = false;
 
 		# By default, the OpenSC PKCS#11 module will not lock your card
 		# once you authenticate to the card via C_Login.
