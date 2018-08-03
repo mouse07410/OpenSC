@@ -89,7 +89,7 @@
 #define COOLKEY_INS_COMPUTE_CRYPT              0x36
 #define COOLKEY_INS_COMPUTE_ECC_KEY_AGREEMENT  0x37
 #define COOLKEY_INS_COMPUTE_ECC_SIGNATURE      0x38
-#define COOLKEY_INS_GET_RANDOM                 0x73
+#define COOLKEY_INS_GET_RANDOM                 0x72
 #define COOLKEY_INS_READ_OBJECT                0x56
 #define COOLKEY_INS_WRITE_OBJECT               0x54
 #define COOLKEY_INS_LOGOUT                     0x61
@@ -1196,7 +1196,7 @@ static int coolkey_read_binary(sc_card_t *card, unsigned int idx,
 {
 	coolkey_private_data_t * priv = COOLKEY_DATA(card);
 	int r = 0, len;
-	u8 *data = NULL;;
+	u8 *data = NULL;
 
 	SC_FUNC_CALLED(card->ctx, SC_LOG_DEBUG_VERBOSE);
 	if (idx > priv->obj->length) {
