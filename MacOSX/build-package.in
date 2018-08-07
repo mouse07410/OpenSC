@@ -93,6 +93,7 @@ if ! test -e ${BUILDPATH}/target/$PREFIX/lib/pkgconfig; then
 		--enable-strict \
 		--disable-assert \
 		--disable-silent-rules \
+		--with-pkcs11-provider=$PREFIX/lib/opensc-pkcs11.so \
 		--enable-sm # TODO: remove this (must be sensible default in master)
 
 	# always make clean
