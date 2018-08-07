@@ -12,9 +12,9 @@
 SIGNING_IDENTITY=10D48618E61527C275C70AD5725E3DD15E62B515
 
 if test -z "$ENABLE_CRYPTOTOKENKIT"; then
-	export MACOSX_DEPLOYMENT_TARGET="10.10"
-else
 	export MACOSX_DEPLOYMENT_TARGET="10.12"
+else
+	export MACOSX_DEPLOYMENT_TARGET="10.13"
 fi
 
 set -ex
@@ -92,13 +92,14 @@ if ! test -e ${BUILDPATH}/target/$PREFIX/lib/pkgconfig; then
 		--enable-static \
 		--enable-strict \
 		--disable-assert \
+		--disable-silent-rules \
 		--enable-sm # TODO: remove this (must be sensible default in master)
 
 	# always make clean
 	make clean
 
 	# compile
-	make -j 4
+	make V=1 -j 4
 
 	# clean target from previous runs
 	rm -rf target ${BUILDPATH}/target

@@ -20,6 +20,13 @@
 
 #include "config.h"
 
+#if 0
+#ifdef DEFAULT_PKCS11_PROVIDER
+#undef DEFAULT_PKCS11_PROVIDER
+#endif /* DEFAULT_PKCS11_PROVIDER */
+#define DEFAULT_PKCS11_PROVIDER "/Library/OpenSC/lib/opensc-pkcs11.so"
+#endif
+
 #include <errno.h>
 #include <fcntl.h>
 #include <stdio.h>
