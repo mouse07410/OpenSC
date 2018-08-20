@@ -95,7 +95,7 @@ if ! test -e ${BUILDPATH}/target/$PREFIX/lib/pkgconfig; then
 		--disable-silent-rules \
 		--with-pkcs11-provider=$PREFIX/lib/opensc-pkcs11.so \
 		--enable-sm # TODO: remove this (must be sensible default in master)
-		#--with-xsl-stylesheetsdir=/opt/local/share/xsl/docbook-xsl-nons \
+		#--with-xsl-stylesheetsdir=/opt/local/share/xsl/docbook-xsl-nons 
 		# the above line breaks CI, but is helpful in Macports builds. Act accordingly.
 
 	# always make clean
@@ -129,6 +129,7 @@ if ! test -e OpenSC.tokend; then
 fi
 
 # Create the symlink to OpenSC sources
+mkdir -p OpenSC.tokend/build
 test -L OpenSC.tokend/build/opensc-src || ln -sf ${BUILDPATH}/src OpenSC.tokend/build/opensc-src
 
 # Build and copy OpenSC.tokend
