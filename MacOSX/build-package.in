@@ -58,7 +58,7 @@ if ! pkg-config libcrypto --atleast-version=1.0.1; then
 	# The following lines are needed to pass the "local" OpenSSL installation location (headers and libraries)
 	# to the Xcode (xcodebuild) builder on MacOS. 
 	export OPENSSL_INCLUDE="$BUILDPATH/openssl_bin/$PREFIX/include"
-	export OPENSSL_LIB="-L$BUILDPATH/openssl_bin/$PREFIX/lib -lssl -lcrypto"
+	#export OPENSSL_LIBS="-L$BUILDPATH/openssl_bin/$PREFIX/lib -lssl -lcrypto"
 	export OPENSSL_LOCAL="true"
 fi
 
