@@ -615,7 +615,7 @@ iasecc_init(struct sc_card *card)
 			LOG_TEST_RET(ctx, rv, "Select EF.ATR AID failed");
 		}
 
-		rv = iasecc_get_serialnr(card, NULL);
+		iasecc_get_serialnr(card, NULL);
 	}
 
 #ifdef ENABLE_SM
@@ -623,10 +623,8 @@ iasecc_init(struct sc_card *card)
 	card->sm_ctx.ops.update_binary = _iasecc_sm_update_binary;
 #endif
 
-	if (!rv) {
+	if (!rv)
 		sc_log(ctx, "EF.ATR(aid:'%s')", sc_dump_hex(card->ef_atr->aid.value, card->ef_atr->aid.len));
-		rv = SC_ERROR_INVALID_CARD;
-	}
 	LOG_FUNC_RETURN(ctx, rv);
 }
 
@@ -1329,6 +1327,29 @@ iasecc_create_file(struct sc_card *card, struct sc_file *file)
 	LOG_TEST_RET(ctx, rv, "Cannot select newly created file");
 
 	LOG_FUNC_RETURN(ctx, rv);
+}
+
+static int
+iasecc_get_challenge(struct sc_card *card, u8 * rnd, size_t len)
+{
+	/* As IAS/ECC cannot handle other data length than 0x08 */
+	u8 rbuf[8];
+	size_t out_len;
+	int r;
+
+	LOG_FUNC_CALLED(card->ctx);
+
+	r = iso_ops->get_challenge(card, rbuf, sizeof rbuf);
+	LOG_TEST_RET(card->ctx, r, "GET CHALLENGE cmd failed");
+
+	if (len < (size_t) r) {
+		out_len = len;
+	} else {
+		out_len = (size_t) r;
+	}
+	memcpy(rnd, rbuf, out_len);
+
+	LOG_FUNC_RETURN(card->ctx, (int) out_len);
 }
 
 
@@ -3561,7 +3582,7 @@ sc_get_driver(void)
 	/*	update_record: Untested	*/
 	iasecc_ops.select_file = iasecc_select_file;
 	/*	get_response: Untested	*/
-	/*	get_challenge: ISO7816 implementation works	*/
+	iasecc_ops.get_challenge = iasecc_get_challenge;
 	iasecc_ops.logout = iasecc_logout;
 	/*	restore_security_env	*/
 	iasecc_ops.set_security_env = iasecc_set_security_env;
