@@ -37,7 +37,7 @@ matrix:
   include:
     - compiler: clang
       os: osx
-      env: DO_PUSH_ARTIFACT=yes
+      #env: DO_PUSH_ARTIFACT=yes
     - compiler: gcc
       os: osx
     - compiler: clang
