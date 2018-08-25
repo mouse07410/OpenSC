@@ -61,6 +61,10 @@ if ! pkg-config libcrypto --atleast-version=1.0.1; then
 	export OPENSSL_INCLUDE="$BUILDPATH/openssl_bin/$PREFIX/include"
 	export OPENSSL_LIBS="-L$BUILDPATH/openssl_bin/$PREFIX/lib -lcrypto"
 	export OPENSSL_LOCAL="true"
+else
+	export OPENSSL_CFLAGS="`pkg-config --static --cflags libcrypto`"
+	export OPENSSL_LIBS="`pkg-config --static --libs libcrypto`"
+	export OPENSSL_LOCAL="false"
 fi
 
 
