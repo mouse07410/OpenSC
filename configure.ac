@@ -7,7 +7,7 @@ define([PRODUCT_TARNAME], [opensc])
 define([PRODUCT_BUGREPORT], [https://github.com/mouse07410/OpenSC/issues])
 define([PRODUCT_URL], [https://github.com/mouse07410/OpenSC])
 define([PACKAGE_VERSION_MAJOR], [0])
-define([PACKAGE_VERSION_MINOR], [18])
+define([PACKAGE_VERSION_MINOR], [19])
 define([PACKAGE_VERSION_FIX], [0])
 define([PACKAGE_SUFFIX], [])
 
