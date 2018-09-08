@@ -16,19 +16,18 @@
 	<refsynopsisdiv>
 		<cmdsynopsis>
 			<command>pkcs11-tool</command>
-			<arg choice="opt"><replaceable class="option">OPTIONS</replaceable></arg>
+			<arg choice="opt">
+				<replaceable class="option">OPTIONS</replaceable>
+			</arg>
 		</cmdsynopsis>
 	</refsynopsisdiv>
 
 	<refsect1>
 		<title>Description</title>
-		<para>
-			The <command>pkcs11-tool</command> utility is used to manage the
-			data objects on smart cards and similar PKCS #11 security tokens.
-			Users can list and read PINs, keys and certificates stored on the
-			token. User PIN authentication is performed for those operations
-			that require it.
-		</para>
+		<para> The <command>pkcs11-tool</command> utility is used to manage the data objects on
+			smart cards and similar PKCS #11 security tokens. Users can list and read PINs, keys and
+			certificates stored on the token. User PIN authentication is performed for those
+			operations that require it. </para>
 	</refsect1>
 
 	<refsect1>
@@ -37,523 +36,635 @@
 			<variablelist>
 				<varlistentry>
 					<term>
-						<option>--attr-from</option> <replaceable>filename</replaceable>
+						<option>--attr-from</option>
+						<replaceable>filename</replaceable>
 					</term>
-					<listitem><para>Extract information from <replaceable>filename</replaceable>
-					(DER-encoded certificate file) and create the corresponding
-					attributes when writing an object to the token. Example: the
-					certificate subject name is used to create the CKA_SUBJECT
-					attribute.</para></listitem>
+					<listitem>
+						<para>Extract information from <replaceable>filename</replaceable>
+							(DER-encoded certificate file) and create the corresponding attributes
+							when writing an object to the token. Example: the certificate subject
+							name is used to create the CKA_SUBJECT attribute.</para>
+					</listitem>
 				</varlistentry>
 
 				<varlistentry>
 					<term>
-						<option>--change-pin</option>,
-						<option>-c</option>
+						<option>--change-pin</option>, <option>-c</option>
 					</term>
-					<listitem><para>Change the user PIN on the token</para></listitem>
+					<listitem>
+						<para>Change the user PIN on the token</para>
+					</listitem>
 				</varlistentry>
 
 				<varlistentry>
 					<term>
 						<option>--unlock-pin</option>
 					</term>
-					<listitem><para>Unlock User PIN (without <option>--login</option>
-					unlock in logged in session; otherwise <option>--login-type</option>
-					has to be 'context-specific').</para></listitem>
-				</varlistentry>
-
-				<varlistentry>
-					<term>
-						<option>--hash</option>,
-						<option>-h</option>
-					</term>
-					<listitem><para>Hash some data.</para></listitem>
-				</varlistentry>
-
-				<varlistentry>
-					<term>
-						<option>--hash-algorithm</option> <replaceable>mechanism</replaceable>
-					</term>
 					<listitem>
-						<para>
-		  					Specify hash algorithm used with RSA-PKCS-PSS signature or RSA-OAEP decryption.
-          					Allowed values are "SHA-1", "SHA256", "SHA384", "SHA512", and some tokens may 
-          					also allow "SHA224". Default is "SHA-1".
-						</para>
-						<para> 
-							Note that the input to RSA-PKCS-PSS has to be of the size equal to
-							the specified hash algorithm. E.g., for SHA256 the signature input must
-							be exactly 32 bytes long (for mechanisms SHA256-RSA-PKCS-PSS there is no
-							such restriction). For RSA-OAEP, the plaintext input size mLen must be
-							at most keyLen - 2 - 2*hashLen. For example, for RSA 3072-bit key and
-							SHA384, the longest plaintext to encrypt with RSA-OAEP is (with all
-							sizes in bytes): 384 - 2 - 2*48 = 286, aka 286 bytes. 
-						</para>
+						<para>Unlock User PIN (without <option>--login</option> unlock in logged in
+							session; otherwise <option>--login-type</option> has to be
+							'context-specific').</para>
 					</listitem>
 				</varlistentry>
 
 				<varlistentry>
 					<term>
-						<option>--id</option> <replaceable>id</replaceable>,
-						<option>-d</option> <replaceable>id</replaceable>
+						<option>--hash</option>, <option>-h</option>
 					</term>
-					<listitem><para>Specify the id of the object to operate on.</para></listitem>
+					<listitem>
+						<para>Hash some data.</para>
+					</listitem>
+				</varlistentry>
+
+				<varlistentry>
+					<term>
+						<option>--hash-algorithm</option>
+						<replaceable>mechanism</replaceable>
+					</term>
+					<listitem>
+						<para> Specify hash algorithm used with RSA-PKCS-PSS signature or RSA-OAEP
+							decryption. Allowed values are "SHA-1", "SHA256", "SHA384", "SHA512",
+							and some tokens may also allow "SHA224". Default is "SHA-1". </para>
+						<para> Note that the input to RSA-PKCS-PSS has to be of the size equal to
+							the specified hash algorithm. E.g., for SHA256 the signature input must
+							be exactly 32 bytes long (for mechanisms SHA256-RSA-PKCS-PSS there is no
+							such restriction). For RSA-OAEP, the plaintext input size mLen must be
+							at most keyLen - 2 - 2*hashLen. For example, for RSA 3072-bit key and
+							SHA384, the longest plaintext to encrypt with RSA-OAEP is (with all
+							sizes in bytes): 384 - 2 - 2*48 = 286, aka 286 bytes. </para>
+					</listitem>
+				</varlistentry>
+
+				<varlistentry>
+					<term>
+						<option>--id</option>
+						<replaceable>id</replaceable>, <option>-d</option>
+						<replaceable>id</replaceable>
+					</term>
+					<listitem>
+						<para>Specify the id of the object to operate on.</para>
+					</listitem>
 				</varlistentry>
 
 				<varlistentry>
 					<term>
 						<option>--init-pin</option>
 					</term>
-					<listitem><para>Initializes the user PIN. This option
-					differs from <option>--change-pin</option> in that it sets the user PIN
-					for the first time. Once set, the user PIN can be changed
-					using <option>--change-pin</option>.</para></listitem>
+					<listitem>
+						<para>Initializes the user PIN. This option differs from
+								<option>--change-pin</option> in that it sets the user PIN for the
+							first time. Once set, the user PIN can be changed using
+								<option>--change-pin</option>.</para>
+					</listitem>
 				</varlistentry>
 
 				<varlistentry>
 					<term>
 						<option>--init-token</option>
 					</term>
-					<listitem><para>Initialize a token: set the token label as
-					well as a Security Officer PIN (the label must be specified
-					using <option>--label</option>).</para></listitem>
+					<listitem>
+						<para>Initialize a token: set the token label as well as a Security Officer
+							PIN (the label must be specified using <option>--label</option>).</para>
+					</listitem>
 				</varlistentry>
 
 				<varlistentry>
 					<term>
-						<option>--input-file</option> <replaceable>filename</replaceable>,
-						<option>-i</option> <replaceable>filename</replaceable>
+						<option>--input-file</option>
+						<replaceable>filename</replaceable>, <option>-i</option>
+						<replaceable>filename</replaceable>
 					</term>
-					<listitem><para>Specify the path to a file for input.</para></listitem>
+					<listitem>
+						<para>Specify the path to a file for input.</para>
+					</listitem>
 				</varlistentry>
 
 				<varlistentry>
 					<term>
-						<option>--keypairgen</option>,
-						<option>-k</option>
+						<option>--keypairgen</option>, <option>-k</option>
 					</term>
-					<listitem><para>Generate a new key pair (public and private pair.)</para></listitem>
+					<listitem>
+						<para>Generate a new key pair (public and private pair.)</para>
+					</listitem>
 				</varlistentry>
 				<varlistentry>
 					<term>
 						<option>--keygen</option>
 					</term>
-					<listitem><para>Generate a new key.</para></listitem>
+					<listitem>
+						<para>Generate a new key.</para>
+					</listitem>
 				</varlistentry>
 
 				<varlistentry>
 					<term>
-						<option>--key-type</option> <replaceable>specification</replaceable>
+						<option>--key-type</option>
+						<replaceable>specification</replaceable>
 					</term>
-					<listitem><para>Specify the type and length of the key to create, for example rsa:1024 or EC:prime256v1.</para></listitem>
+					<listitem>
+						<para>Specify the type and length of the key to create, for example rsa:1024
+							or EC:prime256v1.</para>
+					</listitem>
 				</varlistentry>
 
 				<varlistentry>
 					<term>
 						<option>--usage-sign</option>
 					</term>
-					<listitem><para>Specify 'sign' key usage flag (sets SIGN in privkey, sets VERIFY in pubkey).</para></listitem>
+					<listitem>
+						<para>Specify 'sign' key usage flag (sets SIGN in privkey, sets VERIFY in
+							pubkey).</para>
+					</listitem>
 				</varlistentry>
 
 				<varlistentry>
 					<term>
 						<option>--usage-decrypt</option>
 					</term>
-					<listitem><para>Specify 'decrypt' key usage flag (RSA only, set DECRYPT privkey, ENCRYPT in pubkey).</para></listitem>
+					<listitem>
+						<para>Specify 'decrypt' key usage flag (RSA only, set DECRYPT privkey,
+							ENCRYPT in pubkey).</para>
+					</listitem>
 				</varlistentry>
 
 				<varlistentry>
 					<term>
 						<option>--usage-derive</option>
 					</term>
-					<listitem><para>Specify 'derive' key usage flag (EC only).</para></listitem>
+					<listitem>
+						<para>Specify 'derive' key usage flag (EC only).</para>
+					</listitem>
 				</varlistentry>
 
 				<varlistentry>
 					<term>
-						<option>--label</option> <replaceable>name</replaceable>,
-						<option>-a</option> <replaceable>name</replaceable>
+						<option>--label</option>
+						<replaceable>name</replaceable>, <option>-a</option>
+						<replaceable>name</replaceable>
 					</term>
-					<listitem><para>Specify the name of the object to operate on
-					(or the token label when <option>--init-token</option>
-					is used).</para></listitem>
+					<listitem>
+						<para>Specify the name of the object to operate on (or the token label when
+								<option>--init-token</option> is used).</para>
+					</listitem>
 				</varlistentry>
 
 				<varlistentry>
 					<term>
-						<option>--list-mechanisms</option>,
-						<option>-M</option>
+						<option>--list-mechanisms</option>, <option>-M</option>
 					</term>
-					<listitem><para>Display a list of mechanisms supported by the token.</para></listitem>
+					<listitem>
+						<para>Display a list of mechanisms supported by the token.</para>
+					</listitem>
 				</varlistentry>
 
 				<varlistentry>
 					<term>
-						<option>--list-objects</option>,
-						<option>-O</option>
+						<option>--list-objects</option>, <option>-O</option>
 					</term>
-					<listitem><para>Display a list of objects.</para></listitem>
+					<listitem>
+						<para>Display a list of objects.</para>
+					</listitem>
 				</varlistentry>
 
 				<varlistentry>
 					<term>
-						<option>--list-slots</option>,
-						<option>-L</option>
+						<option>--list-slots</option>, <option>-L</option>
 					</term>
-					<listitem><para>Display a list of available slots on the token.</para></listitem>
+					<listitem>
+						<para>Display a list of available slots on the token.</para>
+					</listitem>
 				</varlistentry>
 
 				<varlistentry>
 					<term>
-						<option>--list-token-slots</option>,
-						<option>-T</option>
+						<option>--list-token-slots</option>, <option>-T</option>
 					</term>
-					<listitem><para>List slots with tokens.</para></listitem>
+					<listitem>
+						<para>List slots with tokens.</para>
+					</listitem>
 				</varlistentry>
 
 				<varlistentry>
 					<term>
-						<option>--login</option>,
-						<option>-l</option>
+						<option>--login</option>, <option>-l</option>
 					</term>
-					<listitem><para>Authenticate to the token before performing
-					other operations. This option is not needed if a PIN is
-					provided on the command line.</para></listitem>
+					<listitem>
+						<para>Authenticate to the token before performing other operations. This
+							option is not needed if a PIN is provided on the command line.</para>
+					</listitem>
 				</varlistentry>
 
 				<varlistentry>
 					<term>
 						<option>--login-type</option>
 					</term>
-					<listitem><para>Specify login type ('so', 'user', 'context-specific';
-					default:'user').</para></listitem>
+					<listitem>
+						<para>Specify login type ('so', 'user', 'context-specific';
+							default:'user').</para>
+					</listitem>
 				</varlistentry>
 
 				<varlistentry>
 					<term>
-						<option>--mechanism</option> <replaceable>mechanism</replaceable>,
-						<option>-m</option> <replaceable>mechanism</replaceable>
+						<option>--mechanism</option>
+						<replaceable>mechanism</replaceable>, <option>-m</option>
+						<replaceable>mechanism</replaceable>
 					</term>
-					<listitem><para>Use the specified <replaceable>mechanism</replaceable>
-					for token operations. See <option>-M</option> for a list
-					of mechanisms supported by your token. The mechanism can also be specified in
-					hexadecimal, e.g., <replaceable>0x80001234</replaceable>.</para></listitem>
+					<listitem>
+						<para>Use the specified <replaceable>mechanism</replaceable> for token
+							operations. See <option>-M</option> for a list of mechanisms supported
+							by your token. The mechanism can also be specified in hexadecimal, e.g.,
+								<replaceable>0x80001234</replaceable>.</para>
+					</listitem>
 				</varlistentry>
 
 				<varlistentry>
 					<term>
-						<option>--mgf</option> <replaceable>function</replaceable>
+						<option>--mgf</option>
+						<replaceable>function</replaceable>
 					</term>
-					<listitem><para>Use the specified Message Generation
-					Function (MGF) <replaceable>function</replaceable>
-					for RSA-PKCS-PSS signatures or RSA-OAEP decryptions. Supported arguments are MGF1-SHA1
-					to MGF1-SHA512 if supported by the driver.
-					The default is based on the hash selection.
-					</para></listitem>
+					<listitem>
+						<para>Use the specified Message Generation Function (MGF)
+								<replaceable>function</replaceable> for RSA-PKCS-PSS signatures or
+							RSA-OAEP decryptions. Supported arguments are MGF1-SHA1 to MGF1-SHA512
+							if supported by the driver. The default is based on the hash selection.
+						</para>
+					</listitem>
 				</varlistentry>
 
 				<varlistentry>
 					<term>
-						<option>--module</option> <replaceable>mod</replaceable>
+						<option>--module</option>
+						<replaceable>mod</replaceable>
 					</term>
-					<listitem><para>Specify a PKCS#11 module (or library) to
-					load.</para></listitem>
+					<listitem>
+						<para>Specify a PKCS#11 module (or library) to load.</para>
+					</listitem>
 				</varlistentry>
 
 				<varlistentry>
 					<term>
-						<option>--moz-cert</option> <replaceable>filename</replaceable>,
-						<option>-z</option> <replaceable>filename</replaceable>
+						<option>--moz-cert</option>
+						<replaceable>filename</replaceable>, <option>-z</option>
+						<replaceable>filename</replaceable>
 					</term>
-					<listitem><para>Test a Mozilla-like keypair generation
-					and certificate request. Specify the <replaceable>filename</replaceable>
-					to the certificate file.</para></listitem>
+					<listitem>
+						<para>Test a Mozilla-like keypair generation and certificate request.
+							Specify the <replaceable>filename</replaceable> to the certificate
+							file.</para>
+					</listitem>
 				</varlistentry>
 
 				<varlistentry>
 					<term>
-						<option>--output-file</option> <replaceable>filename</replaceable>,
-						<option>-o</option> <replaceable>filename</replaceable>
+						<option>--output-file</option>
+						<replaceable>filename</replaceable>, <option>-o</option>
+						<replaceable>filename</replaceable>
 					</term>
-					<listitem><para>Specify the path to a file for output.</para></listitem>
+					<listitem>
+						<para>Specify the path to a file for output.</para>
+					</listitem>
 				</varlistentry>
 
 				<varlistentry>
 					<term>
-						<option>--pin</option> <replaceable>pin</replaceable>,
-						<option>-p</option> <replaceable>pin</replaceable>
+						<option>--pin</option>
+						<replaceable>pin</replaceable>, <option>-p</option>
+						<replaceable>pin</replaceable>
 					</term>
-					<listitem><para>Use the given <replaceable>pin</replaceable> for
-					token operations. If set to
-					env:<replaceable>VARIABLE</replaceable>, the value of the
-					environment variable <replaceable>VARIABLE</replaceable> is
-					used. WARNING: Be careful using this option
-					as other users may be able to read the command line from
-					the system or if it is embedded in a script. If set to
-					env:<replaceable>VARIABLE</replaceable>, the value of the
-					environment variable <replaceable>VARIABLE</replaceable> is
-					used.</para>
-					<para>This option will also set
-					the <option>--login</option> option.</para></listitem>
+					<listitem>
+						<para>Use the given <replaceable>pin</replaceable> for token operations. If
+							set to env:<replaceable>VARIABLE</replaceable>, the value of the
+							environment variable <replaceable>VARIABLE</replaceable> is used.
+							WARNING: Be careful using this option as other users may be able to read
+							the command line from the system or if it is embedded in a script. If
+							set to env:<replaceable>VARIABLE</replaceable>, the value of the
+							environment variable <replaceable>VARIABLE</replaceable> is used.</para>
+						<para>This option will also set the <option>--login</option> option.</para>
+					</listitem>
 				</varlistentry>
 
 				<varlistentry>
 					<term>
-						<option>--puk</option> <replaceable>puk</replaceable>
+						<option>--puk</option>
+						<replaceable>puk</replaceable>
 					</term>
-					<listitem><para>Supply User PUK on the command line.</para></listitem>
+					<listitem>
+						<para>Supply User PUK on the command line.</para>
+					</listitem>
 				</varlistentry>
 
 				<varlistentry>
 					<term>
-						<option>--new-pin</option> <replaceable>pin</replaceable>
+						<option>--new-pin</option>
+						<replaceable>pin</replaceable>
 					</term>
-					<listitem><para>Supply new User PIN on the command line.</para></listitem>
+					<listitem>
+						<para>Supply new User PIN on the command line.</para>
+					</listitem>
 				</varlistentry>
 
 				<varlistentry>
 					<term>
 						<option>--sensitive</option>
 					</term>
-					<listitem><para>Set the CKA_SENSITIVE attribute (object cannot be revealed in plaintext).</para></listitem>
+					<listitem>
+						<para>Set the CKA_SENSITIVE attribute (object cannot be revealed in
+							plaintext).</para>
+					</listitem>
 				</varlistentry>
 
 				<varlistentry>
 					<term>
-						<option>--set-id</option> <replaceable>id</replaceable>,
-						<option>-e</option> <replaceable>id</replaceable>
+						<option>--set-id</option>
+						<replaceable>id</replaceable>, <option>-e</option>
+						<replaceable>id</replaceable>
 					</term>
-					<listitem><para>Set the CKA_ID of the object.</para></listitem>
+					<listitem>
+						<para>Set the CKA_ID of the object.</para>
+					</listitem>
 				</varlistentry>
 
 				<varlistentry>
 					<term>
-						<option>--show-info</option>,
-						<option>-I</option>
+						<option>--show-info</option>, <option>-I</option>
 					</term>
-					<listitem><para>Display general token information.</para></listitem>
+					<listitem>
+						<para>Display general token information.</para>
+					</listitem>
 				</varlistentry>
 
 				<varlistentry>
 					<term>
-						<option>--sign</option>,
-						<option>-s</option>
+						<option>--sign</option>, <option>-s</option>
 					</term>
-					<listitem><para>Sign some data.</para></listitem>
+					<listitem>
+						<para>Sign some data.</para>
+					</listitem>
 				</varlistentry>
 
 				<varlistentry>
 					<term>
-						<option>--decrypt</option>,
-					</term>
-					<listitem><para>Decrypt some data.</para></listitem>
+						<option>--decrypt</option>, </term>
+					<listitem>
+						<para>Decrypt some data.</para>
+					</listitem>
 				</varlistentry>
 
 				<varlistentry>
 					<term>
-						<option>--derive</option>,
-					</term>
-					<listitem><para>Derive a secret key using another key and some data.</para></listitem>
+						<option>--derive</option>, </term>
+					<listitem>
+						<para>Derive a secret key using another key and some data.</para>
+					</listitem>
 				</varlistentry>
 
 				<varlistentry>
 					<term>
-						<option>--derive-pass-der</option>,
-					</term>
-					<listitem><para>Derive ECDHpass DER encoded pubkey for compatibility with some PKCS#11 implementations</para></listitem>
+						<option>--derive-pass-der</option>, </term>
+					<listitem>
+						<para>Derive ECDHpass DER encoded pubkey for compatibility with some PKCS#11
+							implementations</para>
+					</listitem>
 				</varlistentry>
 
 				<varlistentry>
 					<term>
-						<option>--salt-len</option> <replaceable>bytes</replaceable>
+						<option>--salt-len</option>
+						<replaceable>bytes</replaceable>
 					</term>
-					<listitem><para>Specify how many bytes of salt should
-					be used in RSA-PSS signatures. Accepts two special values:
-					"-1" means salt length equals to digest length,
-					"-2" means use maximum permissible length.
-					Default is digest length (-1).</para></listitem>
+					<listitem>
+						<para>Specify how many bytes of salt should be used in RSA-PSS signatures.
+							Accepts two special values: "-1" means salt length equals to digest
+							length, "-2" means use maximum permissible length. Default is digest
+							length (-1).</para>
+					</listitem>
 				</varlistentry>
 
 				<varlistentry>
 					<term>
-						<option>--slot</option> <replaceable>id</replaceable>
+						<option>--slot</option>
+						<replaceable>id</replaceable>
 					</term>
-					<listitem><para>Specify the id of the slot to use.</para></listitem>
+					<listitem>
+						<para>Specify the id of the slot to use.</para>
+					</listitem>
 				</varlistentry>
 
 				<varlistentry>
 					<term>
-						<option>--slot-description</option> <replaceable>description</replaceable>
+						<option>--slot-description</option>
+						<replaceable>description</replaceable>
 					</term>
-					<listitem><para>Specify the description of the slot to use.</para></listitem>
+					<listitem>
+						<para>Specify the description of the slot to use.</para>
+					</listitem>
 				</varlistentry>
 
 				<varlistentry>
 					<term>
-						<option>--slot-index</option> <replaceable>index</replaceable>
+						<option>--slot-index</option>
+						<replaceable>index</replaceable>
 					</term>
-					<listitem><para>Specify the index of the slot to use.</para></listitem>
+					<listitem>
+						<para>Specify the index of the slot to use.</para>
+					</listitem>
 				</varlistentry>
 
 				<varlistentry>
 					<term>
-						<option>--token-label</option> <replaceable>label</replaceable>
+						<option>--token-label</option>
+						<replaceable>label</replaceable>
 					</term>
-					<listitem><para>Specify the label of token.
-					Will be used the first slot, that has the inserted token with this
-					label.</para></listitem>
+					<listitem>
+						<para>Specify the label of token. Will be used the first slot, that has the
+							inserted token with this label.</para>
+					</listitem>
 				</varlistentry>
 
 				<varlistentry>
 					<term>
-						<option>--so-pin</option> <replaceable>pin</replaceable>
+						<option>--so-pin</option>
+						<replaceable>pin</replaceable>
 					</term>
-					<listitem><para>Use the given <replaceable>pin</replaceable> as the
-					Security Officer PIN for some token operations (token
-					initialization, user PIN initialization, etc). If set to
-					env:<replaceable>VARIABLE</replaceable>, the value of the
-					environment variable <replaceable>VARIABLE</replaceable> is
-					used. The same warning as <option>--pin</option> also
-					applies here.</para></listitem>
+					<listitem>
+						<para>Use the given <replaceable>pin</replaceable> as the Security Officer
+							PIN for some token operations (token initialization, user PIN
+							initialization, etc). If set to env:<replaceable>VARIABLE</replaceable>,
+							the value of the environment variable
+								<replaceable>VARIABLE</replaceable> is used. The same warning as
+								<option>--pin</option> also applies here.</para>
+					</listitem>
 				</varlistentry>
 
 				<varlistentry>
 					<term>
-						<option>--test</option>,
-						<option>-t</option>
+						<option>--test</option>, <option>-t</option>
 					</term>
-					<listitem><para>Perform some tests on the token. This
-					option is most useful when used with either <option>--login</option>
-					or <option>--pin</option>.</para></listitem>
+					<listitem>
+						<para>Perform some tests on the token. This option is most useful when used
+							with either <option>--login</option> or <option>--pin</option>.</para>
+					</listitem>
 				</varlistentry>
 
 				<varlistentry>
 					<term>
 						<option>--test-hotplug</option>
 					</term>
-					<listitem><para>Test hotplug capabilities (C_GetSlotList +
-					C_WaitForSlotEvent).</para></listitem>
+					<listitem>
+						<para>Test hotplug capabilities (C_GetSlotList + C_WaitForSlotEvent).</para>
+					</listitem>
 				</varlistentry>
 
 				<varlistentry>
 					<term>
 						<option>--private</option>
 					</term>
-					<listitem><para>Set the CKA_PRIVATE attribute (object is only
-					viewable after a login).</para></listitem>
+					<listitem>
+						<para>Set the CKA_PRIVATE attribute (object is only viewable after a
+							login).</para>
+					</listitem>
 				</varlistentry>
 
 				<varlistentry>
 					<term>
 						<option>--test-ec</option>
 					</term>
-					<listitem><para>Test EC (best used with the <option>--login</option>
-					or <option>--pin</option> option).</para></listitem>
+					<listitem>
+						<para>Test EC (best used with the <option>--login</option> or
+								<option>--pin</option> option).</para>
+					</listitem>
 				</varlistentry>
 
 				<varlistentry>
 					<term>
 						<option>--test-fork</option>
 					</term>
-					<listitem><para>Test forking and calling C_Initialize() in the
-					child.</para></listitem>
+					<listitem>
+						<para>Test forking and calling C_Initialize() in the child.</para>
+					</listitem>
 				</varlistentry>
 
 				<varlistentry>
 					<term>
-						<option>--type</option> <replaceable>type</replaceable>,
-						<option>-y</option> <replaceable>type</replaceable>
+						<option>--type</option>
+						<replaceable>type</replaceable>, <option>-y</option>
+						<replaceable>type</replaceable>
 					</term>
-					<listitem><para>Specify the type of object to operate on.
-					Examples are <literal>cert</literal>, <literal>privkey</literal>
-					and <literal>pubkey</literal>.</para></listitem>
+					<listitem>
+						<para>Specify the type of object to operate on. Examples are
+								<literal>cert</literal>, <literal>privkey</literal> and
+								<literal>pubkey</literal>.</para>
+					</listitem>
 				</varlistentry>
 
 				<varlistentry>
 					<term>
 						<option>--verbose</option>, <option>-v</option>
 					</term>
-					<listitem><para>Cause <command>pkcs11-tool</command> to be
-					more verbose.</para><para>NB! This does not affect
-					OpenSC debugging level! To set OpenSC PKCS#11 module into debug
-					mode, set the <varname>OPENSC_DEBUG</varname> environment variable to a
-					non-zero number.</para></listitem>
+					<listitem>
+						<para>Cause <command>pkcs11-tool</command> to be more verbose.</para>
+						<para>NB! This does not affect OpenSC debugging level! To set OpenSC PKCS#11
+							module into debug mode, set the <varname>OPENSC_DEBUG</varname>
+							environment variable to a non-zero number.</para>
+					</listitem>
 				</varlistentry>
 
 				<varlistentry>
 					<term>
-						<option>--read-object</option>,
-						<option>-r</option>
+						<option>--read-object</option>, <option>-r</option>
 					</term>
-					<listitem><para>Get object's CKA_VALUE attribute (use with
-					<option>--type</option>).</para></listitem>
+					<listitem>
+						<para>Get object's CKA_VALUE attribute (use with
+							<option>--type</option>).</para>
+					</listitem>
 				</varlistentry>
 
 				<varlistentry>
 					<term>
-						<option>--delete-object</option>,
-						<option>-b</option>
+						<option>--delete-object</option>, <option>-b</option>
 					</term>
-					<listitem><para>Delete an object.</para></listitem>
+					<listitem>
+						<para>Delete an object.</para>
+					</listitem>
 				</varlistentry>
 
 				<varlistentry>
 					<term>
-						<option>--application-label</option> <replaceable>label</replaceable>
+						<option>--application-label</option>
+						<replaceable>label</replaceable>
 					</term>
-					<listitem><para>Specify the application label of the data object (use with
-					<option>--type</option> data).</para></listitem>
+					<listitem>
+						<para>Specify the application label of the data object (use with
+								<option>--type</option> data).</para>
+					</listitem>
 				</varlistentry>
 
 				<varlistentry>
 					<term>
-						<option>--application-id</option> <replaceable>id</replaceable>
+						<option>--application-id</option>
+						<replaceable>id</replaceable>
 					</term>
-					<listitem><para>Specify the application ID of the data object (use with
-					<option>--type</option> data).</para></listitem>
+					<listitem>
+						<para>Specify the application ID of the data object (use with
+								<option>--type</option> data).</para>
+					</listitem>
 				</varlistentry>
 
 				<varlistentry>
 					<term>
-						<option>--issuer</option> <replaceable>data</replaceable>
+						<option>--issuer</option>
+						<replaceable>data</replaceable>
 					</term>
-					<listitem><para>Specify the issuer in hexadecimal format (use with
-					<option>--type</option> cert).</para></listitem>
+					<listitem>
+						<para>Specify the issuer in hexadecimal format (use with
+								<option>--type</option> cert).</para>
+					</listitem>
 				</varlistentry>
 
 				<varlistentry>
 					<term>
-						<option>--subject</option> <replaceable>data</replaceable>
+						<option>--subject</option>
+						<replaceable>data</replaceable>
 					</term>
-					<listitem><para>Specify the subject in hexadecimal format (use with
-					<option>--type</option> cert/privkey/pubkey).</para></listitem>
+					<listitem>
+						<para>Specify the subject in hexadecimal format (use with
+								<option>--type</option> cert/privkey/pubkey).</para>
+					</listitem>
 				</varlistentry>
 
 				<varlistentry>
 					<term>
-						<option>--signature-format</option> <replaceable>format</replaceable>
+						<option>--signature-format</option>
+						<replaceable>format</replaceable>
 					</term>
-					<listitem><para>Format for ECDSA signature: 'rs' (default),
-					'sequence', 'openssl'.</para></listitem>
+					<listitem>
+						<para>Format for ECDSA signature: 'rs' (default), 'sequence',
+							'openssl'.</para>
+					</listitem>
 				</varlistentry>
 
 				<varlistentry>
 					<term>
-						<option>--write-object</option> <replaceable>filename</replaceable>,
-						<option>-w</option> <replaceable>filename</replaceable>
+						<option>--write-object</option>
+						<replaceable>filename</replaceable>, <option>-w</option>
+						<replaceable>filename</replaceable>
 					</term>
-					<listitem><para>Write a key or certificate object to the token.
-					<replaceable>filename</replaceable> points to the DER-encoded certificate or key file.
-                                        </para></listitem>
+					<listitem>
+						<para>Write a key or certificate object to the token.
+								<replaceable>filename</replaceable> points to the DER-encoded
+							certificate or key file. </para>
+					</listitem>
 				</varlistentry>
 
 				<varlistentry>
 					<term>
-						<option>--generate-random</option> <replaceable>num</replaceable>
+						<option>--generate-random</option>
+						<replaceable>num</replaceable>
 					</term>
-					<listitem><para>Get <replaceable>num</replaceable> bytes of random data.
-                                        </para></listitem>
+					<listitem>
+						<para>Get <replaceable>num</replaceable> bytes of random data. </para>
+					</listitem>
 				</varlistentry>
 
 			</variablelist>
@@ -562,29 +673,22 @@
 
 	<refsect1>
 		<title>Examples</title>
-		<para>
-			To list all certificates on the smart card:
-				<programlisting>pkcs11-tool --list-objects --type cert</programlisting>
-
-			To read the certificate with ID <replaceable>KEY_ID</replaceable>
-			in DER format from smart card:
-				<programlisting>pkcs11-tool --read-object  --id KEY_ID --type cert --outfile cert.der</programlisting>
-
-			To convert the certificate in DER format to PEM format, use OpenSSL
-			tools:
-				<programlisting>openssl x509 -inform DER -in cert.der -outform PEM > cert.pem</programlisting>
-
-			To sign some data stored in file <replaceable>data</replaceable>
-			using the private key with ID <replaceable>ID</replaceable> and
-			using the RSA-PKCS mechanism:
-				<programlisting>pkcs11-tool --sign --id ID --mechanism RSA-PKCS --input-file data --output-file data.sig</programlisting>
+		<para> To list all certificates on the smart card:
+			<programlisting>pkcs11-tool --list-objects --type cert</programlisting> To read the
+			certificate with ID <replaceable>KEY_ID</replaceable> in DER format from smart card:
+			<programlisting>pkcs11-tool --read-object  --id KEY_ID --type cert --outfile cert.der</programlisting>
+			To convert the certificate in DER format to PEM format, use OpenSSL tools:
+			<programlisting>openssl x509 -inform DER -in cert.der -outform PEM > cert.pem</programlisting>
+			To sign some data stored in file <replaceable>data</replaceable> using the private key
+			with ID <replaceable>ID</replaceable> and using the RSA-PKCS mechanism:
+			<programlisting>pkcs11-tool --sign --id ID --mechanism RSA-PKCS --input-file data --output-file data.sig</programlisting>
 		</para>
 	</refsect1>
 
 	<refsect1>
 		<title>Authors</title>
-		<para><command>pkcs11-tool</command> was written by
-		Olaf Kirch <email>okir@suse.de</email>.</para>
+		<para><command>pkcs11-tool</command> was written by Olaf Kirch
+			<email>okir@suse.de</email>.</para>
 	</refsect1>
 
 </refentry>
