@@ -1045,6 +1045,8 @@ pkcs15_init_slot(struct sc_pkcs15_card *p15card, struct sc_pkcs11_slot *slot,
 	struct pkcs15_slot_data *fw_data;
 	struct sc_pkcs15_auth_info *pin_info = NULL;
 	char label[(sizeof auth->label) + 10];
+	int write_protected;
+	scconf_block *atrblock;
 
 	sc_log(context, "Called");
 	pkcs15_init_token_info(p15card, &slot->token_info);
@@ -1057,6 +1059,19 @@ pkcs15_init_slot(struct sc_pkcs15_card *p15card, struct sc_pkcs11_slot *slot,
 
 	if (p15card->card->caps & SC_CARD_CAP_RNG && p15card->card->ops->get_challenge != NULL)
 		slot->token_info.flags |= CKF_RNG;
+
+	if (p15card->tokeninfo && p15card->tokeninfo->flags & SC_PKCS15_TOKEN_READONLY) {
+		write_protected = 1;
+	} else {
+		write_protected = 0;
+	}
+	atrblock = _sc_match_atr_block(p15card->card->ctx, NULL, &p15card->card->atr);
+	if (atrblock) {
+		write_protected = scconf_get_bool(atrblock, "read_only", write_protected);
+	}
+	if (write_protected) {
+		slot->token_info.flags |= CKF_WRITE_PROTECTED;
+	}
 
 	slot->fw_data = fw_data = calloc(1, sizeof(*fw_data));
 	if (!fw_data) {
@@ -5017,10 +5032,6 @@ register_mechanisms(struct sc_pkcs11_card *p11card)
 		 */
 		if (!(rsa_flags & SC_ALGORITHM_RSA_HASHES)) {
 			rsa_flags |= SC_ALGORITHM_RSA_HASHES;
-#if OPENSSL_VERSION_NUMBER <  0x00908000L
-		/* turn off hashes not in openssl 0.9.8 */
-			rsa_flags &= ~(SC_ALGORITHM_RSA_HASH_SHA256 | SC_ALGORITHM_RSA_HASH_SHA384 | SC_ALGORITHM_RSA_HASH_SHA512 | SC_ALGORITHM_RSA_HASH_SHA224);
-#endif
 		}
 #endif
 

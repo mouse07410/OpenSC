@@ -292,7 +292,7 @@ app default {
 
 		# Context: minidriver
 		#
-		# md_read_only: Mark card as read/only card in Minidriver/BaseCSP interface (Default: false)
+		# read_only: Mark card as read/only card in Minidriver/BaseCSP interface (Default: false)
 		# md_supports_X509_enrollment: Indicate X509 enrollment support at Minidriver/BaseCSP interface (Default: false)
 		# md_guid_as_id: Use the GUID generated for the key as id in the PKCS#15 structure (Default: false, i.e. auto generated)
 		# md_guid_as_label: Use the GUID generated for the key as label in the PKCS#15 structure (Default: false, i.e. no label set)
@@ -417,7 +417,7 @@ app default {
 		name = "Gemalto MultiApp IAS/ECC v1.0.1";
 		secure_messaging = local_gemalto_iam;
 		# secure_messaging = local_adele;
-		md_read_only = false;
+		read_only = false;
 		md_supports_X509_enrollment = true;
 	}
 	card_atr 3B:7F:96:00:00:00:31:B8:64:40:70:14:10:73:94:01:80:82:90:00 {
@@ -425,7 +425,7 @@ app default {
 		driver = "iasecc";
 		name = "Gemalto MultiApp IAS/ECC v1.0.1";
 		secure_messaging = local_gemalto_iam;
-		md_read_only = false;
+		read_only = false;
 		md_supports_X509_enrollment = true;
 	}
 	#card_atr 3B:DD:18:00:81:31:FE:45:80:F9:A0:00:00:00:77:01:08:00:07:90:00:FE {
@@ -444,7 +444,7 @@ app default {
 	#	type = 25005;
 	#	driver = "iasecc";
 	#	name = "Morpho MI IAS/ECC v1.0.1";
-	#	md_read_only = false;
+	#	read_only = false;
 	#	md_supports_X509_enrollment = true;
 	#	secure_messaging = local_morpho_mi;
 	#}
@@ -452,7 +452,7 @@ app default {
 		type = 25004;
 		driver = "iasecc";
 		name = "Amos IAS/ECC v1.0.1";
-		md_read_only = false;
+		read_only = false;
 		md_supports_X509_enrollment = true;
 		secure_messaging = local_amos;
 	}
@@ -460,7 +460,7 @@ app default {
 		type = 25004;
 		driver = "iasecc";
 		name = "Amos IAS/ECC v1.0.1";
-		md_read_only = false;
+		read_only = false;
 		md_supports_X509_enrollment = true;
 		secure_messaging = local_amos_eid;
 	}
@@ -468,7 +468,7 @@ app default {
 	# SmartCard-HSM with contact-based interface or USB-Stick
 	card_atr 3B:FE:18:00:00:81:31:FE:45:80:31:81:54:48:53:4D:31:73:80:21:40:81:07:FA {
 		driver = "sc-hsm";
-		md_read_only = false;
+		read_only = false;
 		md_supports_X509_enrollment = true;
 		md_supports_container_key_gen = true;
 		md_guid_as_label = true;
@@ -477,7 +477,7 @@ app default {
 	# SmartCard-HSM with contact-less interface
 	card_atr 3B:8E:80:01:80:31:81:54:48:53:4D:31:73:80:21:40:81:07:18 {
 		driver = "sc-hsm";
-		md_read_only = false;
+		read_only = false;
 		md_supports_X509_enrollment = true;
 		md_supports_container_key_gen = true;
 		md_guid_as_label = true;
@@ -486,7 +486,7 @@ app default {
 	# SmartCard-HSM with fingerprint sensor and PIN pad
 	card_atr 3B:80:80:01:01 {
 		force_protocol = "t1";
-		md_read_only = false;
+		read_only = true;
 		md_supports_X509_enrollment = true;
 		md_supports_container_key_gen = true;
 		md_guid_as_label = true;
@@ -510,7 +510,7 @@ app default {
 		atrmask = "FF:FF:FF:FF:FF:FF:FF:FF:00";
 		driver = "sc-hsm";
 		force_protocol = "t1";
-		md_read_only = false;
+		read_only = true;
 		md_supports_X509_enrollment = true;
 		md_supports_container_key_gen = true;
 		md_guid_as_label = true;
@@ -533,7 +533,7 @@ app default {
 		atrmask = "FF:FF:FF:FF:FF:FF:FF:FF:00:00";
 		driver = "sc-hsm";
 		force_protocol = "t1";
-		md_read_only = false;
+		read_only = true;
 		md_supports_X509_enrollment = true;
 		md_supports_container_key_gen = true;
 		md_guid_as_label = true;
@@ -556,7 +556,7 @@ app default {
 		atrmask = "FF:FF:FF:FF:FF:FF:FF:FF:00:00:00";
 		driver = "sc-hsm";
 		force_protocol = "t1";
-		md_read_only = false;
+		read_only = true;
 		md_supports_X509_enrollment = true;
 		md_supports_container_key_gen = true;
 		md_guid_as_label = true;
@@ -579,7 +579,7 @@ app default {
 		atrmask = "FF:FF:FF:FF:FF:FF:FF:FF:00:00:00:00";
 		driver = "sc-hsm";
 		force_protocol = "t1";
-		md_read_only = false;
+		read_only = true;
 		md_supports_X509_enrollment = true;
 		md_supports_container_key_gen = true;
 		md_guid_as_label = true;
@@ -602,7 +602,7 @@ app default {
 		atrmask = "FF:FF:FF:FF:FF:FF:FF:FF:00:00:00:00:00";
 		driver = "sc-hsm";
 		force_protocol = "t1";
-		md_read_only = false;
+		read_only = true;
 		md_supports_X509_enrollment = true;
 		md_supports_container_key_gen = true;
 		md_guid_as_label = true;
@@ -625,7 +625,7 @@ app default {
 		atrmask = "FF:FF:FF:FF:FF:FF:FF:FF:00:00:00:00:00:00";
 		driver = "sc-hsm";
 		force_protocol = "t1";
-		md_read_only = false;
+		read_only = true;
 		md_supports_X509_enrollment = true;
 		md_supports_container_key_gen = true;
 		md_guid_as_label = true;
@@ -648,7 +648,7 @@ app default {
 		atrmask = "FF:FF:FF:FF:FF:FF:FF:FF:00:00:00:00:00:00:00";
 		driver = "sc-hsm";
 		force_protocol = "t1";
-		md_read_only = false;
+		read_only = true;
 		md_supports_X509_enrollment = true;
 		md_supports_container_key_gen = true;
 		md_guid_as_label = true;
@@ -671,7 +671,7 @@ app default {
 		atrmask = "FF:FF:FF:FF:FF:FF:FF:FF:00:00:00:00:00:00:00:00";
 		driver = "sc-hsm";
 		force_protocol = "t1";
-		md_read_only = false;
+		read_only = true;
 		md_supports_X509_enrollment = true;
 		md_supports_container_key_gen = true;
 		md_guid_as_label = true;
@@ -694,7 +694,7 @@ app default {
 		atrmask = "FF:FF:FF:FF:FF:FF:FF:FF:00:00:00:00:00:00:00:00:00";
 		driver = "sc-hsm";
 		force_protocol = "t1";
-		md_read_only = false;
+		read_only = true;
 		md_supports_X509_enrollment = true;
 		md_supports_container_key_gen = true;
 		md_guid_as_label = true;
@@ -718,7 +718,7 @@ app default {
 		atrmask = "FF:FF:FF:FF:FF:FF:FF:FF:00:00:00:00:00:00:00:00:00:00";
 		driver = "sc-hsm";
 		force_protocol = "t1";
-		md_read_only = false;
+		read_only = true;
 		md_supports_X509_enrollment = true;
 		md_supports_container_key_gen = true;
 		md_guid_as_label = true;
@@ -742,7 +742,7 @@ app default {
 		atrmask = "FF:FF:FF:FF:FF:FF:FF:FF:00:00:00:00:00:00:00:00:00:00:00";
 		driver = "sc-hsm";
 		force_protocol = "t1";
-		md_read_only = false;
+		read_only = true;
 		md_supports_X509_enrollment = true;
 		md_supports_container_key_gen = true;
 		md_guid_as_label = true;
@@ -766,7 +766,7 @@ app default {
 		atrmask = "FF:FF:FF:FF:FF:FF:FF:FF:00:00:00:00:00:00:00:00:00:00:00:00";
 		driver = "sc-hsm";
 		force_protocol = "t1";
-		md_read_only = false;
+		read_only = true;
 		md_supports_X509_enrollment = true;
 		md_supports_container_key_gen = true;
 		md_guid_as_label = true;
