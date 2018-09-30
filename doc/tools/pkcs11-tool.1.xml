@@ -572,7 +572,15 @@
 
 				<varlistentry>
 					<term>
-						<option>--read-object</option>, <option>-r</option>
+						<option>--verify</option>,
+					</term>
+					<listitem><para>Verify signature of some data.</para></listitem>
+				</varlistentry>
+
+				<varlistentry>
+					<term>
+						<option>--read-object</option>,
+						<option>-r</option>
 					</term>
 					<listitem>
 						<para>Get object's CKA_VALUE attribute (use with
@@ -635,8 +643,14 @@
 
 				<varlistentry>
 					<term>
-						<option>--signature-format</option>
-						<replaceable>format</replaceable>
+						<option>--signature-file</option> <replaceable>filename</replaceable>
+					</term>
+					<listitem><para>The path to the signature file for signature verification</para></listitem>
+				</varlistentry>
+
+				<varlistentry>
+					<term>
+						<option>--signature-format</option> <replaceable>format</replaceable>
 					</term>
 					<listitem>
 						<para>Format for ECDSA signature: 'rs' (default), 'sequence',
@@ -673,15 +687,22 @@
 
 	<refsect1>
 		<title>Examples</title>
-		<para> To list all certificates on the smart card:
-			<programlisting>pkcs11-tool --list-objects --type cert</programlisting> To read the
-			certificate with ID <replaceable>KEY_ID</replaceable> in DER format from smart card:
-			<programlisting>pkcs11-tool --read-object  --id KEY_ID --type cert --outfile cert.der</programlisting>
-			To convert the certificate in DER format to PEM format, use OpenSSL tools:
-			<programlisting>openssl x509 -inform DER -in cert.der -outform PEM > cert.pem</programlisting>
-			To sign some data stored in file <replaceable>data</replaceable> using the private key
-			with ID <replaceable>ID</replaceable> and using the RSA-PKCS mechanism:
-			<programlisting>pkcs11-tool --sign --id ID --mechanism RSA-PKCS --input-file data --output-file data.sig</programlisting>
+		<para>
+			To list all certificates on the smart card:
+				<programlisting>pkcs11-tool --list-objects --type cert</programlisting>
+
+			To read the certificate with ID <replaceable>KEY_ID</replaceable>
+			in DER format from smart card:
+				<programlisting>pkcs11-tool --read-object  --id KEY_ID --type cert --output-file cert.der</programlisting>
+
+			To convert the certificate in DER format to PEM format, use OpenSSL
+			tools:
+				<programlisting>openssl x509 -inform DER -in cert.der -outform PEM > cert.pem</programlisting>
+
+			To sign some data stored in file <replaceable>data</replaceable>
+			using the private key with ID <replaceable>ID</replaceable> and
+			using the RSA-PKCS mechanism:
+				<programlisting>pkcs11-tool --sign --id ID --mechanism RSA-PKCS --input-file data --output-file data.sig</programlisting>
 		</para>
 	</refsect1>
 
