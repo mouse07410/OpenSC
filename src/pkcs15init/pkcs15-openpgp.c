@@ -128,15 +128,16 @@ static int openpgp_store_key(sc_profile_t *profile, sc_pkcs15_card_t *p15card,
 	}
 
 	memset(&key_info, 0, sizeof(sc_cardctl_openpgp_keystore_info_t));
-	key_info.keytype = kinfo->id.value[0];
-	key_info.e = rsa->exponent.data;
-	key_info.e_len = rsa->exponent.len;
-	key_info.p = rsa->p.data;
-	key_info.p_len = rsa->p.len;
-	key_info.q = rsa->q.data;
-	key_info.q_len = rsa->q.len;
-	key_info.n = rsa->modulus.data;
-	key_info.n_len = rsa->modulus.len;
+	key_info.key_id = kinfo->id.value[0];
+	key_info.algorithm = SC_OPENPGP_KEYALGO_RSA;
+	key_info.rsa.e = rsa->exponent.data;
+	key_info.rsa.e_len = rsa->exponent.len;
+	key_info.rsa.p = rsa->p.data;
+	key_info.rsa.p_len = rsa->p.len;
+	key_info.rsa.q = rsa->q.data;
+	key_info.rsa.q_len = rsa->q.len;
+	key_info.rsa.n = rsa->modulus.data;
+	key_info.rsa.n_len = rsa->modulus.len;
 	r = sc_card_ctl(card, SC_CARDCTL_OPENPGP_STORE_KEY, &key_info);
 
 	LOG_FUNC_RETURN(card->ctx, r);
@@ -169,27 +170,33 @@ static int openpgp_generate_key(sc_profile_t *profile, sc_pkcs15_card_t *p15card
 		/* Default key is authentication key. We choose this because the common use
 		 * is to generate from PKCS#11 (Firefox/Thunderbird) */
 		sc_log(ctx, "Authentication key is to be generated.");
-		key_info.keytype = 3;
+		key_info.key_id = 3;
 	}
-	if (!key_info.keytype && (kid->len > 1 || kid->value[0] > 3)) {
+	if (!key_info.key_id && (kid->len > 1 || kid->value[0] > 3)) {
 		sc_log(ctx, "Key ID must be 1, 2 or 3!");
 		LOG_FUNC_RETURN(ctx, SC_ERROR_INVALID_ARGUMENTS);
 	}
 
-	if (!key_info.keytype)
-		key_info.keytype = kid->value[0];
+	if (!key_info.key_id)
+		key_info.key_id = kid->value[0];
+
+	if (obj->type != SC_PKCS15_TYPE_PRKEY_RSA) {
+		sc_debug(card->ctx, SC_LOG_DEBUG_NORMAL, "only RSA is currently supported");
+		return SC_ERROR_NOT_SUPPORTED;
+	}
 
 	/* Prepare buffer */
-	key_info.modulus_len = required->modulus_length;
-	key_info.modulus = calloc(required->modulus_length >> 3, 1);
-	if (key_info.modulus == NULL)
+	key_info.algorithm = SC_OPENPGP_KEYALGO_RSA;
+	key_info.rsa.modulus_len = required->modulus_length;
+	key_info.rsa.modulus = calloc(required->modulus_length >> 3, 1);
+	if (key_info.rsa.modulus == NULL)
 		LOG_FUNC_RETURN(ctx, SC_ERROR_NOT_ENOUGH_MEMORY);
 
 	/* The OpenPGP supports only 32-bit exponent. */
-	key_info.exponent_len = 32;
-	key_info.exponent = calloc(key_info.exponent_len>>3, 1); /* 1/8 */
-	if (key_info.exponent == NULL) {
-		free(key_info.modulus);
+	key_info.rsa.exponent_len = 32;
+	key_info.rsa.exponent = calloc(key_info.rsa.exponent_len>>3, 1); /* 1/8 */
+	if (key_info.rsa.exponent == NULL) {
+		free(key_info.rsa.modulus);
 		LOG_FUNC_RETURN(ctx, SC_ERROR_NOT_ENOUGH_MEMORY);
 	}
 
@@ -197,25 +204,27 @@ static int openpgp_generate_key(sc_profile_t *profile, sc_pkcs15_card_t *p15card
 	if (r < 0)
 		goto out;
 
+	pubkey->algorithm = SC_ALGORITHM_RSA;
+
 	sc_log(ctx, "Set output modulus info");
-	pubkey->u.rsa.modulus.len = key_info.modulus_len;
-	pubkey->u.rsa.modulus.data = calloc(key_info.modulus_len, 1);
+	pubkey->u.rsa.modulus.len = key_info.rsa.modulus_len;
+	pubkey->u.rsa.modulus.data = calloc(key_info.rsa.modulus_len, 1);
 	if (pubkey->u.rsa.modulus.data == NULL)
 		goto out;
-	memcpy(pubkey->u.rsa.modulus.data, key_info.modulus, key_info.modulus_len);
+	memcpy(pubkey->u.rsa.modulus.data, key_info.rsa.modulus, key_info.rsa.modulus_len);
 
 	sc_log(ctx, "Set output exponent info");
-	pubkey->u.rsa.exponent.len = key_info.exponent_len;
-	pubkey->u.rsa.exponent.data = calloc(key_info.exponent_len>>3, 1); /* 1/8 */
+	pubkey->u.rsa.exponent.len = key_info.rsa.exponent_len;
+	pubkey->u.rsa.exponent.data = calloc(key_info.rsa.exponent_len>>3, 1); /* 1/8 */
 	if (pubkey->u.rsa.exponent.data == NULL)
 		goto out;
-	memcpy(pubkey->u.rsa.exponent.data, key_info.exponent, key_info.exponent_len>>3); /* 1/8 */
+	memcpy(pubkey->u.rsa.exponent.data, key_info.rsa.exponent, key_info.rsa.exponent_len>>3); /* 1/8 */
 
 out:
-	if (key_info.modulus)
-		free(key_info.modulus);
-	if (key_info.exponent)
-		free(key_info.exponent);
+	if (key_info.rsa.modulus)
+		free(key_info.rsa.modulus);
+	if (key_info.rsa.exponent)
+		free(key_info.rsa.exponent);
 	LOG_FUNC_RETURN(ctx, r);
 }
 
