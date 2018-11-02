@@ -836,7 +836,7 @@ int sc_context_create(sc_context_t **ctx_out, const sc_context_param_t *parm)
 #ifdef ENABLE_OPENSSL
 	if (!CRYPTO_secure_malloc_initialized()) {
 		/* XXX What's a reasonable amount of secure heap? */
-		CRYPTO_secure_malloc_init(65532, 32);
+		CRYPTO_secure_malloc_init(262144, 32);
 	}
 #endif
 
