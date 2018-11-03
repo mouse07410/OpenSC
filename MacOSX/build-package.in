@@ -11,8 +11,13 @@
 # When using CryptoTokenKit, code signing is required
 SIGNING_IDENTITY=10D48618E61527C275C70AD5725E3DD15E62B515
 
+DEVELOPER_DIR="/Applications/Xcode-9.4.1.app"
+env DEVELOPER_DIR="/Applications/Xcode-9.4.1.app"
+export DEVELOPER_DIR="/Applications/Xcode-9.4.1.app"
+DEVDIR=${DEVELOPER_DIR}
+
 if test -z "$ENABLE_CRYPTOTOKENKIT"; then
-	export MACOSX_DEPLOYMENT_TARGET="10.12"
+	export MACOSX_DEPLOYMENT_TARGET="10.13"
 else
 	export MACOSX_DEPLOYMENT_TARGET="10.13"
 fi
@@ -22,7 +27,8 @@ test -x ./configure || ./bootstrap
 BUILDPATH=${PWD}
 
 # Locate the latest OSX SDK
-SDK_PATH=$(xcrun --sdk macosx --show-sdk-path)
+#SDK_PATH=$(xcrun --sdk macosx --show-sdk-path)
+SDK_PATH="/Applications/Xcode-9.4.1.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX10.13.sdk"
 
 # Set SDK path
 export CFLAGS="$CFLAGS -isysroot $SDK_PATH -arch x86_64"
@@ -138,7 +144,7 @@ mkdir -p OpenSC.tokend/build
 test -L OpenSC.tokend/build/opensc-src || ln -sf ${BUILDPATH}/src OpenSC.tokend/build/opensc-src
 
 # Build and copy OpenSC.tokend
-xcodebuild -target OpenSC -configuration Deployment -project OpenSC.tokend/Tokend.xcodeproj install DSTROOT=${BUILDPATH}/target
+DEVELOPER_DIR="${DEVDIR}" /usr/bin/xcodebuild -target OpenSC -configuration Deployment -project OpenSC.tokend/Tokend.xcodeproj install DSTROOT=${BUILDPATH}/target
 
 #if ! test -e $BUILDPATH/target/Library/Security/tokend/OpenSC.tokend/Contents/Resources/Applications/terminal-notifier.app; then
 	#if ! test -e terminal-notifier-1.7.1.zip; then
@@ -154,7 +160,7 @@ xcodebuild -target OpenSC -configuration Deployment -project OpenSC.tokend/Token
 if ! test -e NotificationProxy; then
 	git clone http://github.com/frankmorgner/NotificationProxy.git
 fi
-xcodebuild -target NotificationProxy -configuration Release -project NotificationProxy/NotificationProxy.xcodeproj install DSTROOT=$BUILDPATH/target/Library/Security/tokend/OpenSC.tokend/Contents/Resources/
+DEVELOPER_DIR="${DEVDIR}" xcodebuild -target NotificationProxy -configuration Release -project NotificationProxy/NotificationProxy.xcodeproj install DSTROOT=$BUILDPATH/target/Library/Security/tokend/OpenSC.tokend/Contents/Resources/
 mkdir -p "$BUILDPATH/target/Applications"
 osacompile -o "$BUILDPATH/target/Applications/OpenSC Notify.app" "MacOSX/OpenSC_Notify.applescript"
 
