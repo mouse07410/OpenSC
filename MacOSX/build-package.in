@@ -16,19 +16,48 @@ env DEVELOPER_DIR="/Applications/Xcode-9.4.1.app"
 export DEVELOPER_DIR="/Applications/Xcode-9.4.1.app"
 DEVDIR=${DEVELOPER_DIR}
 
-if test -z "$ENABLE_CRYPTOTOKENKIT"; then
-	export MACOSX_DEPLOYMENT_TARGET="10.13"
+# Determine version of the available SDK, and force Xcode-9.4.1 if
+# what we have is 10.14 (aka Xcode-10.x)
+SDK_VER=$(xcrun --show-sdk-version)
+arrSDK_VER=(${SDK_VER//./ })
+
+if [ "${arrSDK_VER[0]" \< "10" ]; then
+    old="yes"
+elif [ "${arrSDK_VER[0]" == "10" -a "${arrSDK_VER[1]" \< "14" ]; then
+    old="yes"
 else
-	export MACOSX_DEPLOYMENT_TARGET="10.13"
+    old="no"
 fi
+
+echo "Determined the default SDK ${SDK_VER}, old=${old}"
+if [ "${old}" == "yes" ]; then
+    echo "Will use the default SDK"
+else
+    echo "Will force build with Xcode-9.4.1, or fail if it's not installed"
+fi
+
+# In any case, we are building for 10.13 or newer
+export MACOSX_DEPLOYMENT_TARGET="10.13"
 
 set -ex
 test -x ./configure || ./bootstrap
 BUILDPATH=${PWD}
 
-# Locate the latest OSX SDK
-#SDK_PATH=$(xcrun --sdk macosx --show-sdk-path)
-SDK_PATH="/Applications/Xcode-9.4.1.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX10.13.sdk"
+# Locate the appropriate OSX SDK
+if [ "${old} = "yes" ]; then
+   # We can use whatever SDK is the current default
+   SDK_PATH=$(xcrun --sdk macosx --show-sdk-path)
+   DEVELOPER_DIR="/Applications/Xcode.app"
+   env DEVELOPER_DIR="/Applications/Xcode.app"
+   export DEVELOPER_DIR="/Applications/Xcode.app"
+else
+   # We cannot use Xcode-10.x or newer, so have to downgrade to the older SDK from Xcode-9.x
+   SDK_PATH="/Applications/Xcode-9.4.1.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX10.13.sdk"
+   DEVELOPER_DIR="/Applications/Xcode-9.4.1.app"
+   env DEVELOPER_DIR="/Applications/Xcode-9.4.1.app"
+   export DEVELOPER_DIR="/Applications/Xcode-9.4.1.app"
+fi
+DEVDIR=${DEVELOPER_DIR}
 
 # Set SDK path
 export CFLAGS="$CFLAGS -isysroot $SDK_PATH -arch x86_64"
