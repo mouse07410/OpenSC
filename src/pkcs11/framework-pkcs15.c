@@ -396,8 +396,6 @@ pkcs15_init_token_info(struct sc_pkcs15_card *p15card, CK_TOKEN_INFO_PTR pToken)
 	scconf_block *conf_block = NULL;
 	char *model = NULL;
 
-	strcpy_bp(pToken->manufacturerID, p15card->tokeninfo->manufacturer_id, 32);
-
 	conf_block = sc_get_conf_block(p15card->card->ctx, "framework", "pkcs15", 1);
 	if (conf_block && p15card->file_app)   {
 		scconf_block **blocks = NULL;
@@ -420,19 +418,23 @@ pkcs15_init_token_info(struct sc_pkcs15_card *p15card, CK_TOKEN_INFO_PTR pToken)
 	else
 		strcpy_bp(pToken->model, "PKCS#15", sizeof(pToken->model));
 
-	/* Take the last 16 chars of the serial number (if the are more than 16).
-	 * _Assuming_ that the serial number is a Big Endian counter, this
-	 * will assure that the serial within each type of card will be
-	 * unique in pkcs11 (at least for the first 8^16 cards :-) */
-	if (p15card->tokeninfo->serial_number != NULL) {
-		size_t sn_start = strlen(p15card->tokeninfo->serial_number);
+	if (p15card->tokeninfo) {
+		strcpy_bp(pToken->manufacturerID, p15card->tokeninfo->manufacturer_id, 32);
 
-		if (sn_start <= 16)
-			sn_start = 0;
-        else
-            sn_start -= 16;
+		/* Take the last 16 chars of the serial number (if the are more than 16).
+		 * _Assuming_ that the serial number is a Big Endian counter, this
+		 * will assure that the serial within each type of card will be
+		 * unique in pkcs11 (at least for the first 8^16 cards :-) */
+		if (p15card->tokeninfo->serial_number != NULL) {
+			size_t sn_start = strlen(p15card->tokeninfo->serial_number);
 
-		strcpy_bp(pToken->serialNumber, p15card->tokeninfo->serial_number + sn_start, 16);
+			if (sn_start <= 16)
+				sn_start = 0;
+			else
+				sn_start -= 16;
+
+			strcpy_bp(pToken->serialNumber, p15card->tokeninfo->serial_number + sn_start, 16);
+		}
 	}
 
 	pToken->ulMaxSessionCount = CK_EFFECTIVELY_INFINITE;
@@ -4923,7 +4925,7 @@ pkcs15_skey_wrap(struct sc_pkcs11_session *session, void *obj,
 			CK_BYTE_PTR pData, CK_ULONG_PTR pulDataLen)
 
 {
-	struct	sc_pkcs11_card *p11card = session->slot->p11card;
+	struct	sc_pkcs11_card *p11card;
 	struct	pkcs15_fw_data *fw_data = NULL;
 	struct	pkcs15_skey_object *skey = (struct pkcs15_skey_object *) obj;
 	struct	pkcs15_skey_object *targetKeyObj = (struct pkcs15_skey_object *) targetKey;
@@ -4931,15 +4933,16 @@ pkcs15_skey_wrap(struct sc_pkcs11_session *session, void *obj,
 
 	sc_log(context, "Initializing wrapping with a secret key.");
 
-	fw_data = (struct pkcs15_fw_data *) p11card->fws_data[session->slot->fw_data_idx];
-
-	if (!fw_data)
-		return sc_to_cryptoki_error(SC_ERROR_INTERNAL, "C_WrapKey");
-
 	if (session == NULL || pMechanism == NULL || obj == NULL || targetKey == NULL) {
 		sc_log(context, "One or more of mandatory arguments were NULL.");
 		return CKR_ARGUMENTS_BAD;
 	}
+
+	p11card = session->slot->p11card;
+	fw_data = (struct pkcs15_fw_data *) p11card->fws_data[session->slot->fw_data_idx];
+
+	if (!fw_data)
+		return sc_to_cryptoki_error(SC_ERROR_INTERNAL, "C_WrapKey");
 
 	/* Verify that the key supports wrapping */
 	if (skey && !(skey->info->usage & SC_PKCS15_PRKEY_USAGE_WRAP))
