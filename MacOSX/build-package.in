@@ -35,24 +35,26 @@ fi
 
 echo "Determined the default SDK ${SDK_VER}, old=${old}"
 
-# Locate the appropriate OSX SDK
+# Locate the appropriate OSX SDK to build OpenSC.tokend (OpenSC itself is built with OK the current Xcode)
 if [ "${old}" = "yes" ]; then
 	# We can use whatever SDK is the current default
-	DEVELOPER_DIR="/Applications/Xcode.app"
-	env DEVELOPER_DIR="/Applications/Xcode.app"
-	export DEVELOPER_DIR="/Applications/Xcode.app"
+	TOKEND_SDK_PATH="${SDK_PATH}"
+	TOKEND_DEVELOPER_DIR="/Applications/Xcode.app"
+	env TOKEND_DEVELOPER_DIR="/Applications/Xcode.app"
+	export TOKEND_DEVELOPER_DIR="/Applications/Xcode.app"
 else
 	# We cannot use Xcode-10.x or newer, so have to downgrade to the older SDK from Xcode-9.x
-	SDK_PATH="/Applications/Xcode-9.4.1.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX10.13.sdk"
-	DEVELOPER_DIR="/Applications/Xcode-9.4.1.app"
-	env DEVELOPER_DIR="/Applications/Xcode-9.4.1.app"
-	export DEVELOPER_DIR="/Applications/Xcode-9.4.1.app"
+	TOKEND_SDK_PATH="/Applications/Xcode-9.4.1.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX10.13.sdk"
+	TOKEND_DEVELOPER_DIR="/Applications/Xcode-9.4.1.app"
+	env TOKEND_DEVELOPER_DIR="/Applications/Xcode-9.4.1.app"
+	export TOKEND_DEVELOPER_DIR="/Applications/Xcode-9.4.1.app"
 fi
-DEVDIR=${DEVELOPER_DIR}
+DEVDIR=${TOKEND_DEVELOPER_DIR}
 
 echo "Using SDK ${SDK_VER} at ${DEVDIR}"
 
 # Set SDK path
+TOKEND_CFLAGS="$CFLAGS"
 export CFLAGS="$CFLAGS -isysroot $SDK_PATH -arch x86_64"
 
 export SED=/usr/bin/sed
@@ -167,6 +169,8 @@ mkdir -p OpenSC.tokend/build
 test -L OpenSC.tokend/build/opensc-src || ln -sf ${BUILDPATH}/src OpenSC.tokend/build/opensc-src
 
 # Build and copy OpenSC.tokend
+SDK_PATH=${TOKEND_SDK_PATH}
+export CFLAGS="${TOKEND_CFLAGS} -isysroot $SDK_PATH -arch x86_64"
 DEVELOPER_DIR="${DEVDIR}" /usr/bin/xcodebuild -target OpenSC -configuration Deployment -project OpenSC.tokend/Tokend.xcodeproj install DSTROOT=${BUILDPATH}/target
 
 #if ! test -e $BUILDPATH/target/Library/Security/tokend/OpenSC.tokend/Contents/Resources/Applications/terminal-notifier.app; then
