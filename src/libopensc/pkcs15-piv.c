@@ -1167,7 +1167,8 @@ sc_debug(card->ctx, SC_LOG_DEBUG_NORMAL, "DEE Adding pin %d label=%s",i, label);
 					prkey_info.usage |= ckis[i].priv_usage;
 					/* If retired key and non gov cert has NONREPUDIATION, treat as user_consent */
 					if (i >= 4 && (ckis[i].priv_usage & SC_PKCS15_PRKEY_USAGE_NONREPUDIATION)) {
-						prkey_obj.user_consent = 1;
+						//prkey_obj.user_consent = 1;
+						prkey_obj.user_consent = 0; /* don't bother, let the card enforce it */
 					}
 				} else {
 					prkey_info.usage |= prkeys[i].usage_rsa;
@@ -1180,7 +1181,8 @@ sc_debug(card->ctx, SC_LOG_DEBUG_NORMAL, "DEE Adding pin %d label=%s",i, label);
 					prkey_info.usage  |= ckis[i].priv_usage;
 					/* If retired key and non gov cert has NONREPUDIATION, treat as user_consent */
 					if (i >= 4 && (ckis[i].priv_usage & SC_PKCS15_PRKEY_USAGE_NONREPUDIATION)) {
-						prkey_obj.user_consent = 1;
+						//prkey_obj.user_consent = 1;
+						prkey_obj.user_consent = 0; /* let the card enforce it if it wants */
 					}
 				} else {
 					prkey_info.usage  |= prkeys[i].usage_ec;

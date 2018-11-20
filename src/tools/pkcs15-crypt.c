@@ -330,7 +330,7 @@ static int get_key(unsigned int usage, sc_pkcs15_object_t **result)
 		}
 
 		/* Pin already verified previously */
-		if (pin == prev_pin && key->user_consent == 0)
+		if (pin == prev_pin)
 			return 0;
 
 		pincode = get_pin(pin);
