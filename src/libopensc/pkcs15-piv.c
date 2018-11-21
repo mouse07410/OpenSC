@@ -1167,13 +1167,13 @@ sc_debug(card->ctx, SC_LOG_DEBUG_NORMAL, "DEE Adding pin %d label=%s",i, label);
 					prkey_info.usage |= ckis[i].priv_usage;
 					/* If retired key and non gov cert has NONREPUDIATION, treat as user_consent */
 					if (i >= 4 && (ckis[i].priv_usage & SC_PKCS15_PRKEY_USAGE_NONREPUDIATION)) {
-						//prkey_obj.user_consent = 1;
-						prkey_obj.user_consent = 0; /* don't bother, let the card enforce it */
+						prkey_obj.user_consent = 1;
 					}
 				} else {
 					prkey_info.usage |= prkeys[i].usage_rsa;
 				}
 				prkey_info.modulus_length= ckis[i].pubkey_len;
+				prkey_obj.user_consent = 0; /****** stop enforcing ALWAYS_AUTH in software******/
 				r = sc_pkcs15emu_add_rsa_prkey(p15card, &prkey_obj, &prkey_info);
 				break;
 			case SC_ALGORITHM_EC:
@@ -1181,8 +1181,7 @@ sc_debug(card->ctx, SC_LOG_DEBUG_NORMAL, "DEE Adding pin %d label=%s",i, label);
 					prkey_info.usage  |= ckis[i].priv_usage;
 					/* If retired key and non gov cert has NONREPUDIATION, treat as user_consent */
 					if (i >= 4 && (ckis[i].priv_usage & SC_PKCS15_PRKEY_USAGE_NONREPUDIATION)) {
-						//prkey_obj.user_consent = 1;
-						prkey_obj.user_consent = 0; /* let the card enforce it if it wants */
+						prkey_obj.user_consent = 1;
 					}
 				} else {
 					prkey_info.usage  |= prkeys[i].usage_ec;
@@ -1190,6 +1189,7 @@ sc_debug(card->ctx, SC_LOG_DEBUG_NORMAL, "DEE Adding pin %d label=%s",i, label);
 				prkey_info.field_length = ckis[i].pubkey_len;
 				sc_debug(card->ctx, SC_LOG_DEBUG_NORMAL, "DEE added key_alg %2.2x prkey_obj.flags %8.8x",
 					 ckis[i].key_alg, prkey_obj.flags);
+				prkey_obj.user_consent = 0; /* don't bother, let the card enforce it */
 				r = sc_pkcs15emu_add_ec_prkey(p15card, &prkey_obj, &prkey_info);
 				break;
 			default:
