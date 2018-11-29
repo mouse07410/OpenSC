@@ -1060,6 +1060,7 @@ AC_CONFIG_FILES([
 	doc/tools/Makefile
 	doc/files/Makefile
 	etc/Makefile
+	tests/Makefile
 	src/Makefile
 	src/common/Makefile
 	src/ui/Makefile
