@@ -1091,11 +1091,18 @@ pkcs15_init_slot(struct sc_pkcs15_card *p15card, struct sc_pkcs11_slot *slot,
 			pin_info = NULL;
 		}
 		else   {
-			if (auth->label[0] && strncmp(auth->label, "PIN", 4) != 0)
+			if (auth->label[0] && strncmp(auth->label, "PIN", 4) != 0) {
+				/* Trim tokeninfo->label to make right parenthesis visible */
+				char tokeninfo_label[sizeof label];
+				int len;
+				snprintf(tokeninfo_label, sizeof(tokeninfo_label), "%s", p15card->tokeninfo->label);
+				for (len = strlen(tokeninfo_label) - 1; len >= 0 && tokeninfo_label[len] == ' '; len--) {
+					tokeninfo_label[len] = 0;
+				}
 				snprintf(label, sizeof(label), "%.*s (%s)",
 					(int) sizeof(auth->label), auth->label,
-					p15card->tokeninfo->label);
-			else
+					tokeninfo_label);
+			} else
 				/* The PIN label is empty or says just non-useful "PIN" */
 				snprintf(label, sizeof(label), "%s", p15card->tokeninfo->label);
 			slot->token_info.flags |= CKF_LOGIN_REQUIRED;
@@ -1140,6 +1147,11 @@ pkcs15_create_slot(struct sc_pkcs11_card *p11card, struct pkcs15_fw_data *fw_dat
 	/* Fill in the slot/token info from pkcs15 data */
 	if (fw_data)
 		pkcs15_init_slot(fw_data->p15_card, slot, auth, app_info);
+	else {
+		/* Token is not initialized, announce pinpad capability nevertheless */
+		if (slot->reader->capabilities & SC_READER_CAP_PIN_PAD)
+			slot->token_info.flags |= CKF_PROTECTED_AUTHENTICATION_PATH;
+	}
 
 	*out = slot;
 	return CKR_OK;
@@ -2153,6 +2165,9 @@ pkcs15_create_private_key(struct sc_pkcs11_slot *slot, struct sc_profile *profil
 		case CKA_OPENSC_NON_REPUDIATION:
 			args.usage |= pkcs15_check_bool_cka(attr, SC_PKCS15_PRKEY_USAGE_NONREPUDIATION);
 			break;
+		case CKA_ALWAYS_AUTHENTICATE:
+			args.user_consent = (int) (pkcs15_check_bool_cka(attr, 1));
+			break;
 		default:
 			/* ignore unknown attrs, or flag error? */
 			continue;
@@ -2318,7 +2333,10 @@ pkcs15_create_secret_key(struct sc_pkcs11_slot *slot, struct sc_profile *profile
 			break;
 		case CKA_EXTRACTABLE:
 			if (pkcs15_check_bool_cka(attr, 1))
-					args.access_flags |= SC_PKCS15_PRKEY_ACCESS_EXTRACTABLE;
+				args.access_flags |= SC_PKCS15_PRKEY_ACCESS_EXTRACTABLE;
+			break;
+		case CKA_OPENSC_ALWAYS_AUTH_ANY_OBJECT:
+			args.user_consent = (int) (pkcs15_check_bool_cka(attr, 1));
 			break;
 		default:
 			/* ignore unknown attrs, or flag error? */
@@ -2931,6 +2949,7 @@ pkcs15_gen_keypair(struct sc_pkcs11_slot *slot, CK_MECHANISM_PTR pMechanism,
 	char		priv_label[SC_PKCS15_MAX_LABEL_SIZE];
 	int		rc;
 	CK_RV rv = CKR_OK;
+	CK_BBOOL always_auth = CK_FALSE;
 
 	sc_log(context, "Keypair generation, mech = 0x%0lx",
 		   pMechanism->mechanism);
@@ -3045,6 +3064,12 @@ pkcs15_gen_keypair(struct sc_pkcs11_slot *slot, CK_MECHANISM_PTR pMechanism,
 	if (rv != CKR_OK)
 		goto kpgen_done;
 	pub_args.x509_usage = keygen_args.prkey_args.x509_usage;
+
+	len = sizeof(always_auth);
+	rv = attr_find(pPrivTpl, ulPrivCnt, CKA_ALWAYS_AUTHENTICATE, &always_auth, &len);
+	if (rv == CKR_OK && always_auth == CK_TRUE) {
+		keygen_args.prkey_args.user_consent = 1;
+	}
 
 	/* 3.a Try on-card key pair generation */
 
@@ -3657,7 +3682,7 @@ pkcs15_prkey_get_attribute(struct sc_pkcs11_session *session,
 		break;
     case CKA_ALWAYS_AUTHENTICATE:
 		check_attribute_buffer(attr, sizeof(CK_BBOOL));
-		*(CK_BBOOL*)attr->pValue = prkey->prv_p15obj->user_consent;
+		*(CK_BBOOL*)attr->pValue = prkey->prv_p15obj->user_consent >= 1 ? CK_TRUE : CK_FALSE;
 		break;
 	case CKA_PRIVATE:
 		check_attribute_buffer(attr, sizeof(CK_BBOOL));
@@ -4831,6 +4856,10 @@ pkcs15_skey_get_attribute(struct sc_pkcs11_session *session,
 		*(CK_BBOOL*)attr->pValue = (((skey->base.p15_object->flags & SC_PKCS15_PRKEY_ACCESS_EXTRACTABLE) == SC_PKCS15_PRKEY_ACCESS_EXTRACTABLE)
 					&& (skey->base.p15_object->flags & SC_PKCS15_PRKEY_ACCESS_NEVEREXTRACTABLE) == 0
 					&& (skey->base.p15_object->flags & SC_PKCS15_PRKEY_ACCESS_ALWAYSSENSITIVE) == 0) ? CK_TRUE : CK_FALSE;
+		break;
+	case CKA_OPENSC_ALWAYS_AUTH_ANY_OBJECT:
+		check_attribute_buffer(attr, sizeof(CK_BBOOL));
+		*(CK_BBOOL*)attr->pValue = skey->base.p15_object->user_consent >= 1 ? CK_TRUE : CK_FALSE;
 		break;
 	case CKA_VALUE_LEN:
 		check_attribute_buffer(attr, sizeof(CK_ULONG));
