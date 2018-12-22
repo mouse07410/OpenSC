@@ -123,7 +123,7 @@ enum _access {		/* access flags for the respective DO/file */
 	WRITE_MASK   = 0x1F00
 };
 
-enum _ext_caps {	/* extended capabilities/features */
+enum _ext_caps {	/* extended capabilities/features: bit flags */
 	EXT_CAP_ALG_ATTR_CHANGEABLE = 0x0004,
 	EXT_CAP_PRIVATE_DO          = 0x0008,
 	EXT_CAP_C4_CHANGEABLE       = 0x0010,
@@ -133,7 +133,7 @@ enum _ext_caps {	/* extended capabilities/features */
 	EXT_CAP_LCS                 = 0x0100,
 	EXT_CAP_CHAINING            = 0x1000,
 	EXT_CAP_APDU_EXT            = 0x2000,
-	EXT_CAP_MSE                 = 0x3000
+	EXT_CAP_MSE                 = 0x4000
 };
 
 enum _card_state {
@@ -633,8 +633,7 @@ pgp_parse_hist_bytes(sc_card_t *card, u8 *ctlv, size_t ctlv_len)
 			priv->ext_caps |= EXT_CAP_APDU_EXT;
 		}
 		/* bit 0x80 in byte 3 of TL 0x73 means "Command chaining" */
-		if ((ptr[2] & 0x80) &&
-		    (priv->bcd_version >= OPENPGP_CARD_3_0)) {
+		if (ptr[2] & 0x80) {
 			priv->ext_caps |= EXT_CAP_CHAINING;
 		}
 	}
@@ -710,17 +709,6 @@ pgp_get_card_features(sc_card_t *card)
 					pgp_parse_hist_bytes(card, hist_bytes+2, hist_bytes_len-2);
 				}
 				break;
-			default:
-				/* Something else is non-standard according to
-				 * ISO7816-4 section 8 - Historical bytes,
-				 * but used by Yubico, which should have all
-				 * the needed capabilities*/
-				if (hist_bytes_len >= 7 &&
-					memcmp(hist_bytes, "Yubikey", 7) == 0) {
-					card->caps |= SC_CARD_CAP_APDU_EXT;
-					priv->ext_caps |= EXT_CAP_APDU_EXT
-						| EXT_CAP_CHAINING;
-				}
 		}
 	}
 
@@ -732,8 +720,8 @@ pgp_get_card_features(sc_card_t *card)
 		if ((pgp_get_blob(card, priv->mf, 0x5f52, &blob) >= 0) &&
 		    (blob->data != NULL) && (blob->data[0] == 0x00)) {
 
-			if (hist_bytes_len > 4) {
-				pgp_parse_hist_bytes(card, hist_bytes+1, hist_bytes_len-4);
+			if (blob->len > 4) {
+				pgp_parse_hist_bytes(card, blob->data+1, blob->len-4);
 			}
 
 			/* get card status from historical bytes status indicator */
