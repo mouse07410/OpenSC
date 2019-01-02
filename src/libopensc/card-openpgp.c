@@ -1882,6 +1882,28 @@ pgp_pin_cmd(sc_card_t *card, struct sc_pin_cmd_data *data, int *tries_left)
 		LOG_TEST_RET(card->ctx, SC_ERROR_INVALID_ARGUMENTS,
 					 "key-id should be 1, 2, 3.");
 	}
+
+	/* emulate SC_PIN_CMD_GET_INFO command for cards not supporting it */
+	if (data->cmd == SC_PIN_CMD_GET_INFO && (card->caps & SC_CARD_CAP_ISO7816_PIN_INFO) == 0) {
+		u8 c4data[10];
+		int r;
+
+		r = sc_get_data(card, 0x00c4, c4data, sizeof(c4data));
+		LOG_TEST_RET(card->ctx, r, "reading CHV status bytes failed");
+
+		if (r != 7)
+			LOG_TEST_RET(card->ctx, SC_ERROR_OBJECT_NOT_VALID,
+				"CHV status bytes have unexpected length");
+
+                data->pin1.tries_left = c4data[4 + (data->pin_reference & 0x0F)];
+                data->pin1.max_tries = 3;
+                data->pin1.logged_in = SC_PIN_STATE_UNKNOWN;
+		if (tries_left != NULL)
+			*tries_left = data->pin1.tries_left;
+
+                LOG_FUNC_RETURN(card->ctx, SC_SUCCESS);
+	}
+
 	LOG_FUNC_RETURN(card->ctx, iso_ops->pin_cmd(card, data, tries_left));
 }
 
@@ -2530,7 +2552,7 @@ pgp_gen_key(sc_card_t *card, sc_cardctl_openpgp_keygen_info_t *key_info)
 	sc_apdu_t apdu;
 	/* temporary variables to hold APDU params */
 	u8 apdu_case;
-	u8 *apdu_data;
+	u8 apdu_data[2] = { 0x00, 0x00 };
 	size_t apdu_le;
 	size_t resplen = 0;
 	int r = SC_SUCCESS;
@@ -2541,18 +2563,15 @@ pgp_gen_key(sc_card_t *card, sc_cardctl_openpgp_keygen_info_t *key_info)
 	if (key_info->algorithm != SC_OPENPGP_KEYALGO_RSA)
 		LOG_FUNC_RETURN(card->ctx, SC_ERROR_NOT_SUPPORTED);
 
-	/* FIXME the compilers don't assure that the buffers set here as
-	 * apdu_data are present until the end of the function */
 	/* set Control Reference Template for key */
 	if (key_info->key_id == SC_OPENPGP_KEY_SIGN)
-		apdu_data = (unsigned char *) "\xb6";
-		/* as a string, apdu_data will end with '\0' (B6 00) */
+		ushort2bebytes(apdu_data, DO_SIGN);
 	else if (key_info->key_id == SC_OPENPGP_KEY_ENCR)
-		apdu_data = (unsigned char *) "\xb8";
+		ushort2bebytes(apdu_data, DO_ENCR);
 	else if (key_info->key_id == SC_OPENPGP_KEY_AUTH)
-		apdu_data = (unsigned char *) "\xa4";
+		ushort2bebytes(apdu_data, DO_AUTH);
 	else {
-		sc_log(card->ctx, "Unknown key type %X.", key_info->key_id);
+		sc_log(card->ctx, "Unknown key id %X.", key_info->key_id);
 		LOG_FUNC_RETURN(card->ctx, SC_ERROR_INVALID_ARGUMENTS);
 	}
 
@@ -2588,8 +2607,8 @@ pgp_gen_key(sc_card_t *card, sc_cardctl_openpgp_keygen_info_t *key_info)
 	/* prepare APDU */
 	sc_format_apdu(card, &apdu, apdu_case, 0x47, 0x80, 0);
 	apdu.data = apdu_data;
-	apdu.datalen = 2;  /* Data = B600 */
-	apdu.lc = 2;
+	apdu.datalen = sizeof(apdu_data);
+	apdu.lc = sizeof(apdu_data);
 	apdu.le = apdu_le;
 
 	/* buffer to receive response */
@@ -2819,21 +2838,20 @@ pgp_build_extended_header_list(sc_card_t *card, sc_cardctl_openpgp_keystore_info
 		LOG_TEST_GOTO_ERR(ctx, SC_ERROR_NOT_ENOUGH_MEMORY, "Not enough memory.");
 
 	switch (key_info->key_id) {
-	case SC_OPENPGP_KEY_SIGN:
-		data[0] = 0xB6;
-		break;
-	case SC_OPENPGP_KEY_ENCR:
-		data[0] = 0xB8;
-		break;
-	case SC_OPENPGP_KEY_AUTH:
-		data[0] = 0xA4;
-		break;
-	default:
-		sc_log(ctx, "Unknown key type %d.", key_info->key_id);
-		r = SC_ERROR_INVALID_ARGUMENTS;
-		goto err;
+		case SC_OPENPGP_KEY_SIGN:
+			ushort2bebytes(data, DO_SIGN);
+			break;
+		case SC_OPENPGP_KEY_ENCR:
+			ushort2bebytes(data, DO_ENCR);
+			break;
+		case SC_OPENPGP_KEY_AUTH:
+			ushort2bebytes(data, DO_AUTH);
+			break;
+		default:
+			sc_log(ctx, "Unknown key id %d.", key_info->key_id);
+			LOG_TEST_GOTO_ERR(ctx, SC_ERROR_INVALID_ARGUMENTS, "Invalid key id");
 	}
-	memcpy(data + 2, tlv_7f48, tlvlen_7f48);
+	memcpy(data + 2,               tlv_7f48, tlvlen_7f48);
 	memcpy(data + 2 + tlvlen_7f48, tlv_5f48, tlvlen_5f48);
 	r = pgp_build_tlv(ctx, 0x4D, data, len, &tlvblock, &tlvlen);
 	LOG_TEST_GOTO_ERR(ctx, r, "Cannot build TLV for Extended Header list");
@@ -3067,7 +3085,7 @@ gnuk_delete_key(sc_card_t *card, u8 key_id)
 {
 	sc_context_t *ctx = card->ctx;
 	int r = SC_SUCCESS;
-	char *data = NULL;
+	u8 data[4] = { 0x4D, 0x02, 0x00, 0x00 };
 
 	LOG_FUNC_CALLED(ctx);
 
@@ -3088,14 +3106,14 @@ gnuk_delete_key(sc_card_t *card, u8 key_id)
 	/* rewrite Extended Header List */
 	sc_log(ctx, "Rewrite Extended Header List");
 
-	if (key_id == 1)
-		data = "\x4D\x02\xB6";
-	else if (key_id == 2)
-		data = "\x4D\x02\xB8";
-	else if (key_id == 3)
-		data = "\x4D\x02\xA4";
+	if (key_id == SC_OPENPGP_KEY_SIGN)
+		ushort2bebytes(data+2, DO_SIGN);
+	else if (key_id == SC_OPENPGP_KEY_ENCR)
+		ushort2bebytes(data+2, DO_ENCR);
+	else if (key_id == SC_OPENPGP_KEY_AUTH)
+		ushort2bebytes(data+2, DO_AUTH);
 
-	r = pgp_put_data(card, 0x4D, (const u8 *)data, strlen((const char *)data) + 1);
+	r = pgp_put_data(card, 0x4D, data, sizeof(data));
 
 	LOG_FUNC_RETURN(ctx, r);
 }
