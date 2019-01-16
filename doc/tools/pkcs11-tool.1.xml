@@ -565,6 +565,11 @@
 								<literal>cert</literal>, <literal>privkey</literal> and
 								<literal>pubkey</literal>.</para>
 					</listitem>
+					<listitem><para>Specify the type of object to operate on.
+					Valid value are <literal>cert</literal>, <literal>privkey</literal>,
+					<literal>pubkey</literal>, <literal>secrkey</literal> 
+					and <literal>data</literal>.</para></listitem>
+>>>>>>> upstream/master
 				</varlistentry>
 
 				<varlistentry>
