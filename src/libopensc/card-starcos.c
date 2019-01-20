@@ -400,7 +400,7 @@ static int process_fcp_v3_4(sc_context_t *ctx, sc_file_t *file,
 			file->record_length = (tag[2] << 8) + tag[3];
 			file->record_count = tag[4];
 			sc_log(ctx, 
-				"  rec_len: %d  rec_cnt: %d\n\n",
+				"  rec_len: %"SC_FORMAT_LEN_SIZE_T"u  rec_cnt: %"SC_FORMAT_LEN_SIZE_T"u\n\n",
 				file->record_length, file->record_count);
 		}
 	}
@@ -697,8 +697,7 @@ static int starcos_select_file(sc_card_t *card,
 			SC_FUNC_RETURN(card->ctx, SC_LOG_DEBUG_VERBOSE, SC_ERROR_INVALID_ARGUMENTS);
 
 		if (card->type != SC_CARD_TYPE_STARCOS_V3_4
-				|| card->type == SC_CARD_TYPE_STARCOS_V3_5
-				|| (pathlen == 0 && card->cache.current_path.type != SC_PATH_TYPE_DF_NAME)) {
+				|| card->type == SC_CARD_TYPE_STARCOS_V3_5) {
 			/* unify path (the first FID should be MF) */
 			if (path[0] != 0x3f || path[1] != 0x00)
 			{
