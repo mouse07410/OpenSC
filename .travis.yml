@@ -9,12 +9,6 @@ matrix:
     - compiler: clang
       os: osx
       env: DO_PUSH_ARTIFACT=yes
-    - compiler: gcc
-      os: linux
-      env:
-        - DO_SIMULATION=yes
-        - ENABLE_DOC=--enable-doc
-      sudo: true
     - env:
         - HOST=x86_64-w64-mingw32
         - DO_PUSH_ARTIFACT=yes
@@ -24,10 +18,12 @@ matrix:
     - env: DO_COVERITY_SCAN=yes
 
   allow_failures:
-    - os: linux
+    - compiler: gcc
+      os: linux
       env:
         - DO_SIMULATION=yes
         - ENABLE_DOC=yes
+      sudo: true
 
 env:
   global:
