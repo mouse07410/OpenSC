@@ -1110,7 +1110,13 @@ static int generate_pwd_shares(sc_card_t *card, char **pwd, int *pwdlen, int pas
 	// Allocate data buffer for the generated shares
 	shares = malloc(password_shares_total * sizeof(secret_share_t));
 
-	createShares(secret, password_shares_threshold, password_shares_total, prime, shares);
+	if (!shares || 0 > createShares(secret, password_shares_threshold, password_shares_total, prime, shares)) {
+		printf("Error generating Shares. Please try again.");
+		OPENSSL_cleanse(*pwd, *pwdlen);
+		free(*pwd);
+		free(shares);
+		return -1;
+	}
 
 	sp = shares;
 	for (i = 0; i < password_shares_total; i++) {
@@ -1266,35 +1272,20 @@ static size_t determineLength(const u8 *tlv, size_t buflen)
  */
 static int wrap_with_tag(u8 tag, u8 *indata, size_t inlen, u8 **outdata, size_t *outlen)
 {
-	int nlc = 0;
-	u8 *ptr;
+	int r = sc_asn1_put_tag(tag, indata, inlen, NULL, 0, NULL);
+	if (r < 0)
+		return r;
+	if (r == 0)
+		return SC_ERROR_INVALID_ASN1_OBJECT;
 
-	if (inlen > 127) {
-		do	{
-			nlc++;
-		} while (inlen >= (unsigned)(1 << (nlc << 3)));
-	}
-
-	*outlen = 2 + nlc + inlen;
-	ptr = malloc(*outlen);
+	u8 *ptr = calloc(r, sizeof *ptr);
 	if (ptr == NULL) {
 		return SC_ERROR_OUT_OF_MEMORY;
 	}
-
 	*outdata = ptr;
-	*ptr++ = tag;
+	*outlen = r;
 
-	if (nlc) {
-		*ptr++ = 0x80 | nlc;
-		while (nlc--) {
-			*ptr++ = (inlen >> (nlc << 3)) & 0xFF;
-		}
-	} else {
-		*ptr++ = inlen & 0x7F;
-	}
-
-	memcpy(ptr, indata, inlen);
-	return SC_SUCCESS;
+	return sc_asn1_put_tag(tag, indata, inlen, *outdata, *outlen, NULL);
 }
 
 

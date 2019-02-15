@@ -177,7 +177,6 @@ static int cac_read_binary(sc_card_t *card, unsigned int idx,
 #endif
 		if (r)
 			goto done;
-		cert_ptr = val;
 	} else if (cert_len > 0) {
 		priv->cache_buf = malloc(cert_len);
 		if (priv->cache_buf == NULL) {
@@ -191,7 +190,8 @@ static int cac_read_binary(sc_card_t *card, unsigned int idx,
 	/* OK we've read the data, now copy the required portion out to the callers buffer */
 	priv->cached = 1;
 	len = MIN(count, priv->cache_buf_len-idx);
-	memcpy(buf, &priv->cache_buf[idx], len);
+	if (len && priv->cache_buf)
+		memcpy(buf, &priv->cache_buf[idx], len);
 	r = len;
 done:
 	if (val)

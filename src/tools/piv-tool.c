@@ -262,7 +262,7 @@ static int admin_mode(const char* admin_info)
 	size_t buflen = 2;
 
 
-	if (strlen(admin_info) == 7 &&
+	if (admin_info && strlen(admin_info) == 7 &&
 			(admin_info[0] == 'A' || admin_info[0] == 'M') &&
 			admin_info[1] == ':' &&
 			(sc_hex_to_bin(admin_info+2, opts+1, &buflen) == 0) &&
@@ -383,6 +383,10 @@ static int gen_key(const char * key_info)
 		x = BN_bin2bn(keydata.ecpoint + 1, i, NULL);
 		y = BN_bin2bn(keydata.ecpoint + 1 + i, i, NULL) ;
 		r = EC_POINT_set_affine_coordinates_GFp(ecgroup, ecpoint, x, y, NULL);
+		if (r == 0) {
+			fprintf(stderr, "EC_POINT_set_affine_coordinates_GFp failed\n");
+			return -1;
+		}
 		eckey = EC_KEY_new();
 		r = EC_KEY_set_group(eckey, ecgroup);
 		if (r == 0) {

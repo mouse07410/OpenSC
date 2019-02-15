@@ -490,6 +490,7 @@ static int do_ls(int argc, char **argv)
 	u8 buf[256], *cur = buf;
 	int r, count;
 
+	memset(buf, 0, sizeof buf);
 	r = sc_lock(card);
 	if (r == SC_SUCCESS)
 		r = sc_list_files(card, buf, sizeof(buf));
@@ -2104,7 +2105,7 @@ int main(int argc, char *argv[])
 	int r, c, long_optind = 0, err = 0;
 	sc_context_param_t ctx_param;
 	int lcycle = SC_CARDCTRL_LIFECYCLE_ADMIN;
-	FILE *script = stdin;
+	FILE *script;
 
 	printf("OpenSC Explorer version %s\n", sc_get_version());
 
