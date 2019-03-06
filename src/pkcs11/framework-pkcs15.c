@@ -1443,8 +1443,8 @@ pkcs15_create_tokens(struct sc_pkcs11_card *p11card, struct sc_app_info *app_inf
 	struct sc_pkcs15_object *auth_user_pin = NULL, *auth_sign_pin = NULL;
 	struct sc_pkcs11_slot *slot = NULL, *sign_slot = NULL;
 	unsigned int cs_flags = sc_pkcs11_conf.create_slots_flags;
-	CK_RV rv;
-	int rc, i, idx;
+	CK_RV rv = 0;
+	int rc=-1, i=0, idx=0;
 
 	if (p11card) {
 		sc_log(context, "create PKCS#15 tokens; fws:%p,%p,%p", p11card->fws_data[0], p11card->fws_data[1], p11card->fws_data[2]);
