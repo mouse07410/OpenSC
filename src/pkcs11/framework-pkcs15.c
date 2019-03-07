@@ -1757,7 +1757,7 @@ pkcs15_logout(struct sc_pkcs11_slot *slot)
 	struct sc_pkcs11_card *p11card = slot->p11card;
 	struct pkcs15_fw_data *fw_data = NULL;
 	CK_RV ret = CKR_OK;
-	int rc;
+	int rc = -1;
 
 	if (!p11card)
 		return CKR_TOKEN_NOT_RECOGNIZED;
