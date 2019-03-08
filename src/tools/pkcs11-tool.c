@@ -4328,17 +4328,26 @@ static int test_digest(CK_SESSION_HANDLE session)
 		CKM_MD5,
 		CKM_SHA_1,
 		CKM_RIPEMD160,
+		CKM_SHA256,
+		CKM_SHA384,
+		CKM_SHA512,
 		0xffffff
 	};
 	unsigned char  *digests[] = {
 		(unsigned char *) "\x7a\x08\xb0\x7e\x84\x64\x17\x03\xe5\xf2\xc8\x36\xaa\x59\xa1\x70",
 		(unsigned char *) "\x29\xb0\xe7\x87\x82\x71\x64\x5f\xff\xb7\xee\xc7\xdb\x4a\x74\x73\xa1\xc0\x0b\xc1",
-		(unsigned char *) "\xda\x79\xa5\x8f\xb8\x83\x3d\x61\xf6\x32\x16\x17\xe3\xfd\xf0\x56\x26\x5f\xb7\xcd"
+		(unsigned char *) "\xda\x79\xa5\x8f\xb8\x83\x3d\x61\xf6\x32\x16\x17\xe3\xfd\xf0\x56\x26\x5f\xb7\xcd",
+		(unsigned char *) "\x7a\x08\xb0\x7e\x84\x64\x17\x03\xe5\xf2\xc8\x36\xaa\x59\xa1\x70\x7a\x08\xb0\x7e\x84\x64\x17\x03\xe5\xf2\xc8\x36\xaa\x59\xa1\x70",
+		(unsigned char *) "\x7a\x08\xb0\x7e\x84\x64\x17\x03\xe5\xf2\xc8\x36\xaa\x59\xa1\x70\x7a\x08\xb0\x7e\x84\x64\x17\x03\xe5\xf2\xc8\x36\xaa\x59\xa1\x70\x7a\x08\xb0\x7e\x84\x64\x17\x03\xe5\xf2\xc8\x36\xaa\x59\xa1\x70",
+		(unsigned char *) "\x7a\x08\xb0\x7e\x84\x64\x17\x03\xe5\xf2\xc8\x36\xaa\x59\xa1\x70\x7a\x08\xb0\x7e\x84\x64\x17\x03\xe5\xf2\xc8\x36\xaa\x59\xa1\x70\x7a\x08\xb0\x7e\x84\x64\x17\x03\xe5\xf2\xc8\x36\xaa\x59\xa1\x70\x7a\x08\xb0\x7e\x84\x64\x17\x03\xe5\xf2\xc8\x36\xaa\x59\xa1\x70",
 	};
 	CK_ULONG        digestLens[] = {
 		16,
 		20,
-		20
+		20,
+		32,
+		48,
+		64
 	};
 
 	rv = p11->C_GetSessionInfo(session, &sessionInfo);
@@ -4579,6 +4588,8 @@ static int sign_verify_openssl(CK_SESSION_HANDLE session,
 		EVP_md5(),
 		EVP_ripemd160(),
 		EVP_sha256(),
+		EVP_sha384(),
+		EVP_sha512()
 	};
 #endif
 
@@ -4683,6 +4694,8 @@ static int test_signature(CK_SESSION_HANDLE sess)
 		verifyData,
 		verifyData,
 		verifyData,
+		verifyData,
+		verifyData
 	};
 	CK_ULONG        dataLens[] = {
 		0,		/* should be modulus length, is done further on */
@@ -4691,6 +4704,8 @@ static int test_signature(CK_SESSION_HANDLE sess)
 		sizeof(verifyData),
 		sizeof(verifyData),
 		sizeof(verifyData),
+		sizeof(verifyData),
+		sizeof(verifyData)
 	};
 
 	rv = p11->C_GetSessionInfo(sess, &sessionInfo);
@@ -4949,6 +4964,9 @@ static int sign_verify(CK_SESSION_HANDLE session,
 		(unsigned char *) "\x30\x21\x30\x09\x06\x05\x2b\x0e\x03\x02\x1a\x05\x00\x04\x14\x29\xb0\xe7\x87\x82\x71\x64\x5f\xff\xb7\xee\xc7\xdb\x4a\x74\x73\xa1\xc0\x0b\xc1",
 		buf,
 		buf,
+		buf,
+		buf,
+		buf,
 		buf
 	};
 	int data_lens[] = {
@@ -4956,11 +4974,14 @@ static int sign_verify(CK_SESSION_HANDLE session,
 		35,
 		234,
 		345,
-		456
+		456,
+		511,
+		511,
+		511
 	};
 	unsigned char signat[512];
 	CK_ULONG signat_len;
-	int j, errors = 0;
+	int j = 0, errors = 0;
 
 	memcpy(buf, "\x00\x01\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\x00", 11);
 
@@ -5096,7 +5117,7 @@ static int wrap_unwrap(CK_SESSION_HANDLE session,
 	int		key_len = 0;
 	unsigned char	iv[32], ciphered[1024], cleartext[1024];
 	int		ciphered_len = 0, cleartext_len = 0, len = 0;
-	CK_MECHANISM	mech = 0;
+	CK_MECHANISM	mech;
 	CK_ULONG	key_type = CKM_DES_CBC;
 	CK_ULONG key_len_ul = 0;
 	CK_ATTRIBUTE	key_template = { CKA_KEY_TYPE, &key_type, sizeof(key_type) };
@@ -5264,7 +5285,7 @@ static int encrypt_decrypt(CK_SESSION_HANDLE session,
 	EVP_PKEY       *pkey = 0;
 	unsigned char	orig_data[] = {'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', '\0'};
 	unsigned char	encrypted[512], data[512];
-	CK_MECHANISM	mech = 0;
+	CK_MECHANISM	mech;
 	CK_ULONG	encrypted_len = 0, data_len = 0;
 	int             failed = 0;
 	CK_RV           rv = 0;
@@ -5854,8 +5875,8 @@ static void test_fork(void)
 static void generate_random(CK_SESSION_HANDLE session)
 {
 	CK_RV rv;
-	CK_BYTE *buf;
-	FILE *out;
+	CK_BYTE *buf = NULL;
+	FILE *out = NULL;
 
 	buf = malloc(opt_random_bytes);
 	if (!buf)
