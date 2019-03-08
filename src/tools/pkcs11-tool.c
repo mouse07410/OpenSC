@@ -4665,6 +4665,8 @@ static int test_signature(CK_SESSION_HANDLE sess)
 		CKM_MD5_RSA_PKCS,
 		CKM_RIPEMD160_RSA_PKCS,
 		CKM_SHA256_RSA_PKCS,
+		CKM_SHA384_RSA_PKCS,
+		CKM_SHA512_RSA_PKCS,
 		0xffffff
 	};
 	size_t mechTypes_num = sizeof(mechTypes)/sizeof(CK_MECHANISM_TYPE);
@@ -4935,6 +4937,9 @@ static int sign_verify(CK_SESSION_HANDLE session,
 		CKM_SHA1_RSA_PKCS,
 		CKM_MD5_RSA_PKCS,
 		CKM_RIPEMD160_RSA_PKCS,
+		CKM_SHA256_RSA_PKCS,
+		CKM_SHA384_RSA_PKCS,
+		CKM_SHA512_RSA_PKCS,
 		0xffffff
 	};
 	CK_MECHANISM_TYPE *mech_type;
@@ -5010,7 +5015,7 @@ static int test_verify(CK_SESSION_HANDLE sess)
 	CK_OBJECT_HANDLE priv_key, pub_key;
 	CK_MECHANISM_TYPE first_mech_type;
 	CK_SESSION_INFO sessionInfo;
-	CK_RV rv;
+	CK_RV rv = 0;
 
 	rv = p11->C_GetSessionInfo(sess, &sessionInfo);
 	if (rv != CKR_OK)
@@ -5084,16 +5089,16 @@ static int wrap_unwrap(CK_SESSION_HANDLE session,
 	    const EVP_CIPHER *algo, CK_OBJECT_HANDLE privKeyObject)
 {
 	CK_OBJECT_HANDLE cipherKeyObject;
-	CK_RV           rv;
-	EVP_PKEY       *pkey;
-	EVP_CIPHER_CTX	* seal_ctx;
+	CK_RV           rv = 0;
+	EVP_PKEY       *pkey = NULL;
+	EVP_CIPHER_CTX	* seal_ctx = NULL;
 	unsigned char	keybuf[512], *key = keybuf;
-	int		key_len;
+	int		key_len = 0;
 	unsigned char	iv[32], ciphered[1024], cleartext[1024];
-	int		ciphered_len, cleartext_len, len;
-	CK_MECHANISM	mech;
+	int		ciphered_len = 0, cleartext_len = 0, len = 0;
+	CK_MECHANISM	mech = 0;
 	CK_ULONG	key_type = CKM_DES_CBC;
-	CK_ULONG key_len_ul;
+	CK_ULONG key_len_ul = 0;
 	CK_ATTRIBUTE	key_template = { CKA_KEY_TYPE, &key_type, sizeof(key_type) };
 
 	pkey = get_public_key(session, privKeyObject);
@@ -5201,12 +5206,12 @@ static int wrap_unwrap(CK_SESSION_HANDLE session,
 static int test_unwrap(CK_SESSION_HANDLE sess)
 {
 	int             errors = 0;
-	CK_RV           rv;
+	CK_RV           rv = 0;
 	CK_OBJECT_HANDLE privKeyObject;
 	CK_MECHANISM_TYPE firstMechType;
 	CK_SESSION_INFO sessionInfo;
-	CK_ULONG        j;
-	char 		*label;
+	CK_ULONG        j = 0;
+	char 		*label = NULL;
 
 	rv = p11->C_GetSessionInfo(sess, &sessionInfo);
 	if (rv != CKR_OK)
@@ -5256,13 +5261,13 @@ static int encrypt_decrypt(CK_SESSION_HANDLE session,
 		CK_MECHANISM_TYPE mech_type,
 		CK_OBJECT_HANDLE privKeyObject)
 {
-	EVP_PKEY       *pkey;
+	EVP_PKEY       *pkey = 0;
 	unsigned char	orig_data[] = {'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', '\0'};
 	unsigned char	encrypted[512], data[512];
-	CK_MECHANISM	mech;
-	CK_ULONG	encrypted_len, data_len;
-	int             failed;
-	CK_RV           rv;
+	CK_MECHANISM	mech = 0;
+	CK_ULONG	encrypted_len = 0, data_len = 0;
+	int             failed = 0;
+	CK_RV           rv = 0;
 
 	printf("    %s: ", p11_mechanism_to_name(mech_type));
 
@@ -5331,15 +5336,15 @@ static int encrypt_decrypt(CK_SESSION_HANDLE session,
 static int test_decrypt(CK_SESSION_HANDLE sess)
 {
 	int             errors = 0;
-	CK_RV           rv;
+	CK_RV           rv = 0;
 	CK_OBJECT_HANDLE privKeyObject;
 	CK_MECHANISM_TYPE *mechs = NULL;
 	CK_SESSION_INFO sessionInfo;
 	CK_ULONG        j, num_mechs = 0;
 #ifdef ENABLE_OPENSSL
-	CK_ULONG        n;
+	CK_ULONG        n = 0;
 #endif
-	char 		*label;
+	char 		*label = NULL;
 
 	rv = p11->C_GetSessionInfo(sess, &sessionInfo);
 	if (rv != CKR_OK)
@@ -5389,7 +5394,7 @@ static int test_random(CK_SESSION_HANDLE session)
 {
 	CK_BYTE buf1[100], buf2[100];
 	CK_BYTE seed1[100];
-	CK_RV rv;
+	CK_RV rv = 0;
 	int errors = 0;
 
 	printf("C_SeedRandom() and C_GenerateRandom():\n");
@@ -5445,7 +5450,7 @@ static int test_card_detection(int wait_for_event)
 {
 	char buffer[256];
 	CK_SLOT_ID slot_id;
-	CK_RV rv;
+	CK_RV rv = 0;
 
 	printf("Testing card detection using %s\n",
 		wait_for_event? "C_WaitForSlotEvent()" : "C_GetSlotList()");
@@ -5508,12 +5513,12 @@ static CK_SESSION_HANDLE test_kpgen_certwrite(CK_SLOT_ID slot, CK_SESSION_HANDLE
 	CK_MECHANISM		mech = {CKM_RSA_PKCS, NULL_PTR, 0};
 	CK_MECHANISM_TYPE	*mech_type = NULL;
 	CK_OBJECT_HANDLE	pub_key, priv_key;
-	CK_ULONG		i, num_mechs = 0;
-	CK_RV			rv;
-	CK_BYTE			buf[20], *tmp;
+	CK_ULONG		i = 0, num_mechs = 0;
+	CK_RV			rv = 0;
+	CK_BYTE			buf[20], *tmp = NULL;
 	CK_BYTE			md5_and_digestinfo[34] = "\x30\x20\x30\x0c\x06\x08\x2a\x86\x48\x86\xf7\x0d\x02\x05\x05\x00\x04\x10";
-	CK_BYTE			*data, sig[512];
-	CK_ULONG		data_len, sig_len;
+	CK_BYTE			*data = NULL, sig[512];
+	CK_ULONG		data_len = 0, sig_len = 0;
 	CK_BYTE			id[] = "abcdefghijklmnopqrst";
 	CK_ULONG		id_len = 20, mod_len = 0;
 	CK_BYTE			*label = (CK_BYTE *) "Just a label";
@@ -5704,11 +5709,11 @@ static void test_ec(CK_SLOT_ID slot, CK_SESSION_HANDLE session)
 	CK_MECHANISM_TYPE	*mech_type = NULL;
 	CK_OBJECT_HANDLE	pub_key, priv_key;
 	CK_ULONG		i, num_mechs = 0;
-	CK_RV			rv;
-	CK_BYTE			*tmp;
+	CK_RV			rv = 0;
+	CK_BYTE			*tmp = NULL;
 	CK_BYTE			*data_to_sign = (CK_BYTE *)"My Heart's in the Highland";
-	CK_BYTE			*data, sig[512];
-	CK_ULONG		data_len, sig_len;
+	CK_BYTE			*data = NULL, sig[512];
+	CK_ULONG		data_len = 0, sig_len = 0;
 	CK_BYTE			*id = (CK_BYTE *) "abcdefghijklmnopqrst";
 	CK_ULONG		id_len = strlen((char *)id), ec_params_len, ec_point_len;
 	CK_BYTE			*label = (CK_BYTE *) "Just a label";
@@ -5740,8 +5745,11 @@ static void test_ec(CK_SLOT_ID slot, CK_SESSION_HANDLE session)
 	}
 
 	printf("*** Generating EC key pair ***\n");
-	if (!gen_keypair(slot, session, &pub_key, &priv_key, opt_key_type))
+	if (!gen_keypair(slot, session, &pub_key, &priv_key, opt_key_type)) {
+		printf("warning: unable to generate EC Key Pair on the token\n");
+		// extract the key handle instead, don't just return
 		return;
+	}
 
 	tmp = getID(session, priv_key, (CK_ULONG *) &opt_object_id_len);
 	if (opt_object_id_len == 0) {
@@ -5935,7 +5943,7 @@ static const char *p11_token_info_flags(CK_FLAGS value)
 static const char *p11_utf8_to_local(CK_UTF8CHAR *string, size_t len)
 {
 	static char	buffer[512];
-	size_t		n, m;
+	size_t		n = 0, m = 0;
 
 	while (len && string[len-1] == ' ')
 		len--;
@@ -5973,7 +5981,7 @@ static void p11_perror(const char *msg, CK_RV rv)
 
 static int hex_to_bin(const char *in, unsigned char *out, size_t *outlen)
 {
-	size_t left, count = 0;
+	size_t left = 0, count = 0;
 	int nybbles = 2;
 
 	if (in == NULL || *in == '\0') {
@@ -6264,7 +6272,7 @@ static struct mech_info	p11_mgf[] = {
 static const char *p11_mechanism_to_name(CK_MECHANISM_TYPE mech)
 {
 	static char temp[64];
-	struct mech_info *mi;
+	struct mech_info *mi = NULL;
 
 	for (mi = p11_mechanisms; mi->name; mi++) {
 		if (mi->mech == mech)
@@ -6276,7 +6284,7 @@ static const char *p11_mechanism_to_name(CK_MECHANISM_TYPE mech)
 
 static CK_MECHANISM_TYPE p11_name_to_mechanism(const char *name)
 {
-	struct mech_info *mi;
+	struct mech_info *mi = NULL;
 
 	if (strncasecmp("0x", name, 2) == 0) {
 		return strtoul(name, NULL, 0);
@@ -6292,7 +6300,7 @@ static CK_MECHANISM_TYPE p11_name_to_mechanism(const char *name)
 
 static CK_RSA_PKCS_MGF_TYPE p11_name_to_mgf(const char *name)
 {
-	struct mech_info *mi;
+	struct mech_info *mi = NULL;
 
 	for (mi = p11_mgf; mi->name; mi++) {
 		if (!strcasecmp(mi->name, name))
@@ -6304,7 +6312,7 @@ static CK_RSA_PKCS_MGF_TYPE p11_name_to_mgf(const char *name)
 static const char *p11_mgf_to_name(CK_RSA_PKCS_MGF_TYPE mgf)
 {
 	static char temp[64];
-	struct mech_info *mi;
+	struct mech_info *mi = NULL;
 
 	for (mi = p11_mgf; mi->name; mi++) {
 		if (mi->mech == mgf)
