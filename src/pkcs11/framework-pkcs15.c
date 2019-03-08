@@ -4021,6 +4021,15 @@ pkcs15_prkey_sign(struct sc_pkcs11_session *session, void *obj,
 	case CKM_ECDSA_SHA1:
 		flags = SC_ALGORITHM_ECDSA_HASH_SHA1;
 		break;
+	case CKM_ECDSA_SHA256:
+		flags = SC_ALGORITHM_ECDSA_HASH_SHA256;
+		break;
+	case CKM_ECDSA_SHA384:
+		flags = SC_ALGORITHM_ECDSA_HASH_SHA384;
+		break;
+	case CKM_ECDSA_SHA512:
+		flags = SC_ALGORITHM_ECDSA_HASH_SHA512;
+		break;
 	default:
 		sc_log(context, "DEE - need EC for %lu", pMechanism->mechanism);
 		return CKR_MECHANISM_INVALID;
@@ -5388,6 +5397,30 @@ static CK_RV register_ec_mechanisms(struct sc_pkcs11_card *p11card, int flags,
 #ifdef ENABLE_OPENSSL
 	if(flags & SC_ALGORITHM_ECDSA_HASH_SHA1) {
 		mt = sc_pkcs11_new_fw_mechanism(CKM_ECDSA_SHA1, &mech_info, CKK_EC, NULL, NULL);
+		if (!mt)
+			return CKR_HOST_MEMORY;
+		rc = sc_pkcs11_register_mechanism(p11card, mt);
+		if (rc != CKR_OK)
+			return rc;
+	}
+	if(flags & SC_ALGORITHM_ECDSA_HASH_SHA256) {
+		mt = sc_pkcs11_new_fw_mechanism(CKM_ECDSA_SHA256, &mech_info, CKK_EC, NULL, NULL);
+		if (!mt)
+			return CKR_HOST_MEMORY;
+		rc = sc_pkcs11_register_mechanism(p11card, mt);
+		if (rc != CKR_OK)
+			return rc;
+	}
+	if(flags & SC_ALGORITHM_ECDSA_HASH_SHA384) {
+		mt = sc_pkcs11_new_fw_mechanism(CKM_ECDSA_SHA384, &mech_info, CKK_EC, NULL, NULL);
+		if (!mt)
+			return CKR_HOST_MEMORY;
+		rc = sc_pkcs11_register_mechanism(p11card, mt);
+		if (rc != CKR_OK)
+			return rc;
+	}
+	if(flags & SC_ALGORITHM_ECDSA_HASH_SHA512) {
+		mt = sc_pkcs11_new_fw_mechanism(CKM_ECDSA_SHA512, &mech_info, CKK_EC, NULL, NULL);
 		if (!mt)
 			return CKR_HOST_MEMORY;
 		rc = sc_pkcs11_register_mechanism(p11card, mt);
