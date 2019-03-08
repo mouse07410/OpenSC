@@ -341,8 +341,13 @@ static int refresh_attributes(sc_reader_t *reader)
 			LOG_FUNC_RETURN(reader->ctx, SC_SUCCESS);
 		}
 		
-		/* the system could not dectect any reader. It means, the prevoiusly attached reader is disconnected. */		
-		if (rv == (LONG)SCARD_E_NO_READERS_AVAILABLE || rv == (LONG)SCARD_E_SERVICE_STOPPED) {
+		/* the system could not detect the reader. It means, the prevoiusly attached reader is disconnected. */
+		if (
+#ifdef SCARD_E_NO_READERS_AVAILABLE
+			(rv == (LONG)SCARD_E_NO_READERS_AVAILABLE) ||
+#endif
+			(rv == (LONG)SCARD_E_UNKNOWN_READER) || (rv == (LONG)SCARD_E_SERVICE_STOPPED)) {
+
  			if (old_flags & SC_READER_CARD_PRESENT) {
  				reader->flags |= SC_READER_CARD_CHANGED;
  			}
@@ -1346,6 +1351,29 @@ static int pcsc_detect_readers(sc_context_t *ctx)
 		} else {
 			rv = gpriv->SCardListReaders(gpriv->pcsc_ctx, NULL,
 					NULL, (LPDWORD) &reader_buf_size);
+
+			/*
+			 * All readers have disappeared, so mark them as
+			 * such so we don't keep polling them over and over.
+			 */
+			if (
+#ifdef SCARD_E_NO_READERS_AVAILABLE
+				(rv == (LONG)SCARD_E_NO_READERS_AVAILABLE) ||
+#endif
+				(rv == (LONG)SCARD_E_NO_SERVICE) || (rv == (LONG)SCARD_E_SERVICE_STOPPED)) {
+
+				for (i = 0; i < sc_ctx_get_reader_count(ctx); i++) {
+					sc_reader_t *reader = sc_ctx_get_reader(ctx, i);
+
+					if (!reader) {
+						ret = SC_ERROR_INTERNAL;
+						goto out;
+					}
+
+					reader->flags |= SC_READER_REMOVED;
+				}
+			}
+
 			if ((rv == (LONG)SCARD_E_NO_SERVICE) || (rv == (LONG)SCARD_E_SERVICE_STOPPED)) {
 				gpriv->SCardReleaseContext(gpriv->pcsc_ctx);
 				gpriv->pcsc_ctx = 0;
