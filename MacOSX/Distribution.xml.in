@@ -1,7 +1,4 @@
 <?xml version="1.0" encoding="utf-8" standalone="no"?>
-<!--
-https://developer.apple.com/library/mac/documentation/DeveloperTools/Reference/DistributionDefinitionRef/
--->
 <installer-gui-script minSpecVersion="2">
     <allowed-os-versions>
       <os-version min="10.10"/>
@@ -9,15 +6,17 @@ https://developer.apple.com/library/mac/documentation/DeveloperTools/Reference/D
     <background file="background.jpg" mime-type="image/jpeg" scaling="tofit"/>
     <welcome file="Welcome.html" mime-type="text/html"/>
     <title>@PACKAGE_STRING@</title>
-    <options customize="allow" require-scripts="false"/>
+
+    <pkg-ref id="com.apple.tokend.opensc"/>
+    <options customize="never" require-scripts="false"/>
     <choices-outline>
-        <line choice="default" />
-        <line choice="tokend" />
+        <line choice="default">
+            <line choice="com.apple.tokend.opensc"/>
+        </line>
     </choices-outline>
-    <choice id="default" title="OpenSC PKCS11 and tools" enabled="false">
-        <pkg-ref id="org.opensc-project.mac">OpenSC.pkg</pkg-ref>
+    <choice id="default"/>
+    <choice id="com.apple.tokend.opensc" visible="true">
+        <pkg-ref id="com.apple.tokend.opensc"/>
     </choice>
-    <choice id="tokend" title="OpenSC tokend">
-        <pkg-ref id="org.opensc-project.tokend">OpenSC-tokend.pkg</pkg-ref>
-    </choice>
+    <pkg-ref id="com.apple.tokend.opensc" onConclusion="none">OpenSC.pkg</pkg-ref>
 </installer-gui-script>
