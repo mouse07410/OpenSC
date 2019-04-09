@@ -63,9 +63,18 @@ do
 	ln -sf $f /usr/local/bin/
 done
 
+# <<< HEAD
 #if [ -e "/Library/OpenSC/OpenSCTokenApp.app/Contents/PlugIns/OpenSCToken.appex" ]
 #then
 #	pluginkit -a /Library/OpenSC/OpenSCTokenApp.app/Contents/PlugIns/OpenSCToken.appex
 #fi
+# >>> upstream/master
+for f in /Library/LaunchAgents/pkcs11-register.plist /Library/LaunchAgents/opensc-notify.plist
+do
+	if [ -e "$f" ]
+	then
+		/bin/launchctl asuser $(id -u "${USER}") /bin/launchctl load "$f"
+	fi
+done
 
 exit 0

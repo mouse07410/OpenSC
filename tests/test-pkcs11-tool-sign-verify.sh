@@ -1,67 +1,6 @@
-## from OpenSC/src/tests/p11test/runtest.sh
-SOPIN="12345678"
-PIN="123456"
-PKCS11_TOOL="../src/tools/pkcs11-tool"
-P11LIB="/usr/lib64/pkcs11/libsofthsm2.so"
+#!/bin/bash
 
-ERRORS=0
-function assert() {
-	if [[ $1 != 0 ]]; then
-		echo "====> ERROR: $2"
-		ERRORS=1
-	fi
-}
-
-function generate_key() {
-	TYPE="$1"
-	ID="$2"
-	LABEL="$3"
-
-	# Generate key pair
-	$PKCS11_TOOL --keypairgen --key-type="$TYPE" --login --pin=$PIN \
-		--module="$P11LIB" --label="$LABEL" --id=$ID
-
-	if [[ "$?" -ne "0" ]]; then
-		echo "Couldn't generate $TYPE key pair"
-		return 1
-	fi
-
-	# Extract public key from the card
-	$PKCS11_TOOL --read-object --id $ID --type pubkey --output-file $ID.der \
-		--module="$P11LIB"
-
-	# convert it to more digestible PEM format
-	if [[ ${TYPE:0:3} == "RSA" ]]; then
-		openssl rsa -inform DER -outform PEM -in $ID.der -pubin > $ID.pub
-	else
-		openssl ec -inform DER -outform PEM -in $ID.der -pubin > $ID.pub
-	fi
-	rm $ID.der
-}
-
-function card_setup() {
-	echo "directories.tokendir = .tokens/" > .softhsm2.conf
-	mkdir ".tokens"
-	export SOFTHSM2_CONF=".softhsm2.conf"
-	# Init token
-	softhsm2-util --init-token --slot 0 --label "SC test" --so-pin="$SOPIN" --pin="$PIN"
-
-	# Generate 1024b RSA Key pair
-	generate_key "RSA:1024" "01" "RSA_auth"
-	# Generate 2048b RSA Key pair
-	generate_key "RSA:2048" "02" "RSA2048"
-	# Generate 256b ECC Key pair
-	# generate_key "EC:secp256r1" "03" "ECC_auth"
-	# Generate 521b ECC Key pair
-	# generate_key "EC:secp521r1" "04" "ECC521"
-	# TODO ECDSA keys tests
-}
-
-function card_cleanup() {
-	rm .softhsm2.conf
-	rm -rf ".tokens"
-	rm 0{1,2}.pub
-}
+source common.sh
 
 echo "======================================================="
 echo "Setup SoftHSM"
@@ -73,6 +12,9 @@ fi
 card_setup
 echo "data to sign (max 100 bytes)" > data
 
+echo "======================================================="
+echo "Test RSA keys"
+echo "======================================================="
 for HASH in "" "SHA1" "SHA224" "SHA256" "SHA384" "SHA512"; do
     for SIGN_KEY in "01" "02"; do
         METHOD="RSA-PKCS"
@@ -112,7 +54,7 @@ for HASH in "" "SHA1" "SHA224" "SHA256" "SHA384" "SHA512"; do
         echo "$METHOD: Sign & Verify (KEY $SIGN_KEY)"
         echo "======================================================="
         if [[ -z $HASH ]]; then
-            # hashing is done outside of the module. We chouse here SHA256
+            # hashing is done outside of the module. We choose here SHA256
             openssl dgst -binary -sha256 data > data.hash
             HASH_ALGORITM="--hash-algorithm=SHA256"
             VERIFY_DGEST="-sha256"
@@ -168,8 +110,41 @@ for HASH in "" "SHA1" "SHA224" "SHA256" "SHA384" "SHA512"; do
 done
 
 echo "======================================================="
+echo "Test ECDSA keys"
+echo "======================================================="
+for SIGN_KEY in "03" "04"; do
+    METHOD="ECDSA"
+
+    echo
+    echo "======================================================="
+    echo "$METHOD: Sign & Verify (KEY $SIGN_KEY)"
+    echo "======================================================="
+    openssl dgst -binary -sha256 data > data.hash
+    $PKCS11_TOOL --id $SIGN_KEY -s -p $PIN -m $METHOD --module $P11LIB \
+        --input-file data.hash --output-file data.sig
+    assert $? "Failed to Sign data"
+    $PKCS11_TOOL --id $SIGN_KEY -s -p $PIN -m $METHOD --module $P11LIB \
+        --input-file data.hash --output-file data.sig.openssl \
+        --signature-format openssl
+    assert $? "Failed to Sign data into OpenSSL format"
+
+    # OpenSSL verification
+    openssl dgst -keyform PEM -verify $SIGN_KEY.pub -sha256 \
+               -signature data.sig.openssl data
+    assert $? "Failed to Verify signature using OpenSSL"
+
+    # pkcs11-tool verification
+    $PKCS11_TOOL --id $SIGN_KEY --verify -m $METHOD --module $P11LIB \
+           --input-file data.hash --signature-file data.sig
+    assert $? "Failed to Verify signature using pkcs11-tool"
+    rm data.sig{,.openssl} data.hash
+done
+
+echo "======================================================="
 echo "Cleanup"
 echo "======================================================="
 card_cleanup
+
+rm data
 
 exit $ERRORS

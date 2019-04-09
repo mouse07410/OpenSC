@@ -13,10 +13,17 @@
         <line choice="default">
             <line choice="com.apple.tokend.opensc"/>
         </line>
+        <line choice="tokend" />
+        <line choice="startup" />
     </choices-outline>
     <choice id="default"/>
     <choice id="com.apple.tokend.opensc" visible="true">
         <pkg-ref id="com.apple.tokend.opensc"/>
     </choice>
     <pkg-ref id="com.apple.tokend.opensc" onConclusion="none">OpenSC.pkg</pkg-ref>
+   <!--
+    <choice id="startup" title="OpenSC startup icons">
+        <pkg-ref id="org.opensc-project.startup">OpenSC-startup.pkg</pkg-ref>
+    </choice>
+   -->
 </installer-gui-script>
