@@ -48,6 +48,14 @@ static const struct sc_atr_table rtecp_atrs[] = {
 	/* Rutoken ECP (DS) */
 	{ "3B:8B:01:52:75:74:6F:6B:65:6E:20:44:53:20:C1",
 		NULL, "Rutoken ECP (DS)", SC_CARD_TYPE_GENERIC_BASE, 0, NULL },
+	/* Rutoken ECP SC T0 */
+	{ "3B:9C:96:00:52:75:74:6F:6B:65:6E:45:43:50:73:63",
+		"00:00:00:00:FF:FF:FF:FF:FF:FF:FF:FF:FF:FF:FF:FF",
+		"Rutoken ECP SC", SC_CARD_TYPE_GENERIC_BASE, 0, NULL },
+	/* Rutoken ECP SC T1 */
+	{ "3B:9C:94:80:11:40:52:75:74:6F:6B:65:6E:45:43:50:73:63:C3",
+		"00:00:00:00:00:00:FF:FF:FF:FF:FF:FF:FF:FF:FF:FF:FF:FF:00",
+		"Rutoken ECP SC", SC_CARD_TYPE_GENERIC_BASE, 0, NULL },
 	{ NULL, NULL, NULL, 0, 0, NULL }
 };
 
@@ -252,36 +260,41 @@ static int set_sec_attr_from_acl(sc_card_t *card, sc_file_t *file)
 static int rtecp_select_file(sc_card_t *card,
 		const sc_path_t *in_path, sc_file_t **file_out)
 {
-	sc_file_t **file_out_copy, *file;
-	int r;
+	sc_file_t *file = NULL;
+	int r = SC_SUCCESS;
 
-	assert(card && card->ctx && in_path);
+	if (!card || !card->ctx || !in_path)
+		return SC_ERROR_INVALID_ARGUMENTS;
+
+	SC_FUNC_CALLED(card->ctx, SC_LOG_DEBUG_VERBOSE);
+
 	switch (in_path->type)
 	{
 	case SC_PATH_TYPE_DF_NAME:
 	case SC_PATH_TYPE_FROM_CURRENT:
 	case SC_PATH_TYPE_PARENT:
-		LOG_FUNC_RETURN(card->ctx, SC_ERROR_NOT_SUPPORTED);
+		SC_FUNC_RETURN(card->ctx, SC_LOG_DEBUG_VERBOSE, SC_ERROR_NOT_SUPPORTED);
 	}
-	assert(iso_ops && iso_ops->select_file);
-	file_out_copy = file_out;
-	r = iso_ops->select_file(card, in_path, file_out_copy);
-	if (r || file_out_copy == NULL)
+
+	// Card Rutoken ECP SC T0 doesn't support SELECT FILE without return a file info.
+	// So here we request a file and then assign/free it depending on file_out.
+	r = iso_ops->select_file(card, in_path, &file);
+	if (r != SC_SUCCESS)
 		SC_FUNC_RETURN(card->ctx, SC_LOG_DEBUG_VERBOSE, r);
-	assert(file_out_copy);
-	file = *file_out_copy;
-	assert(file);
+
 	if (file->sec_attr && file->sec_attr_len == SC_RTECP_SEC_ATTR_SIZE)
 		set_acl_from_sec_attr(card, file);
 	else
-		r = SC_ERROR_UNKNOWN_DATA_RECEIVED;
-	if (r && !file_out)
-		sc_file_free(file);
-	else
 	{
-		assert(file_out);
-		*file_out = file;
+		sc_file_free(file);
+		SC_FUNC_RETURN(card->ctx, SC_LOG_DEBUG_VERBOSE, SC_ERROR_UNKNOWN_DATA_RECEIVED);
 	}
+
+	if (file_out)
+		*file_out = file;
+	else
+		sc_file_free(file);
+
 	SC_FUNC_RETURN(card->ctx, SC_LOG_DEBUG_VERBOSE, r);
 }
 
@@ -776,7 +789,7 @@ struct sc_card_driver * sc_get_rtecp_driver(void)
 	rtecp_ops.append_record = NULL;
 	rtecp_ops.update_record = NULL;
 	rtecp_ops.select_file = rtecp_select_file;
-	rtecp_ops.get_response = NULL;
+	/* get_response */
 	/* get_challenge */
 	rtecp_ops.verify = rtecp_verify;
 	rtecp_ops.logout = rtecp_logout;
