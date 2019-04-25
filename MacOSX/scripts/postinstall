@@ -57,19 +57,35 @@ else
 	md5 -r /Library/OpenSC/etc/opensc.conf  > /Library/OpenSC/etc/opensc.conf.md5
 fi
 
+<<<<<<< HEAD
 # Force symlinks for OpenSC executables to /usr/local/bin directory
 for f in /Library/OpenSC/bin/*
 do
 	ln -sf $f /usr/local/bin/
 done
 
-# <<< HEAD
 #if [ -e "/Library/OpenSC/OpenSCTokenApp.app/Contents/PlugIns/OpenSCToken.appex" ]
 #then
 #	pluginkit -a /Library/OpenSC/OpenSCTokenApp.app/Contents/PlugIns/OpenSCToken.appex
 #fi
 # >>> upstream/master
-for f in /Library/LaunchAgents/pkcs11-register.plist /Library/LaunchAgents/opensc-notify.plist
+for f in \
+	/Library/OpenSC/bin/* \
+	/Library/OpenSC/etc/bash_completion.d/* \
+	/Library/OpenSC/share/doc/opensc \
+	/Library/OpenSC/share/man/man1/* \
+	/Library/OpenSC/share/man/man5/*
+do
+	a=/Library/OpenSC
+	b=/usr/local
+	l="$(dirname ${f/$a/$b})"
+	mkdir -p $l
+	ln -sf $f $l
+done
+
+for f in \
+	/Library/LaunchAgents/pkcs11-register.plist \
+	/Library/LaunchAgents/opensc-notify.plist
 do
 	if [ -e "$f" ]
 	then
