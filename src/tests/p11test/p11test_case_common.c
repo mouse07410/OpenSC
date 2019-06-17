@@ -315,15 +315,30 @@ int callback_public_keys(test_certs_t *objects,
 		const unsigned char *pub, *p;
 		BIGNUM *bn = NULL;
 		EC_POINT *ecpoint;
-		EC_GROUP *ecgroup;
+		EC_GROUP *ecgroup = NULL;
 		int nid, pub_len;
 
 		/* Parse the nid out of the EC_PARAMS */
 		p = template[6].pValue;
 		oid = d2i_ASN1_OBJECT(NULL, &p, template[6].ulValueLen);
+		if (oid == NULL) {
+			debug_print(" [WARN %s ] Failed to convert EC_PARAMS"
+				" to OpenSSL format", o->id_str);
+			return -1;
+		}
 		nid = OBJ_obj2nid(oid);
 		ASN1_OBJECT_free(oid);
+		if (nid == NID_undef) {
+			debug_print(" [WARN %s ] Failed to convert EC_PARAMS"
+				" to NID", o->id_str);
+			return -1;
+		}
 		ecgroup = EC_GROUP_new_by_curve_name(nid);
+		if (ecgroup == NULL) {
+			debug_print(" [WARN %s ] Failed to create new EC_GROUP"
+				" from NID", o->id_str);
+			return -1;
+		}
 		EC_GROUP_set_asn1_flag(ecgroup, OPENSSL_EC_NAMED_CURVE);
 
 		p = template[7].pValue;
@@ -334,7 +349,7 @@ int callback_public_keys(test_certs_t *objects,
 		ASN1_STRING_free(s);
 		if (bn == NULL) {
 			debug_print(" [WARN %s ] Can not convert EC_POINT from"
-				"PKCS#11 to BIGNUM", o->id_str);
+				" PKCS#11 to BIGNUM", o->id_str);
 			EC_GROUP_free(ecgroup);
 			return -1;
 		}
@@ -343,7 +358,7 @@ int callback_public_keys(test_certs_t *objects,
 		BN_free(bn);
 		if (ecpoint == NULL) {
 			debug_print(" [WARN %s ] Can not convert EC_POINT from"
-				"BIGNUM to OpenSSL format", o->id_str);
+				" BIGNUM to OpenSSL format", o->id_str);
 			EC_GROUP_free(ecgroup);
 			return -1;
 		}
@@ -597,6 +612,8 @@ const char *get_mechanism_name(int mech_id)
 			return "SHA384_RSA_PKCS_PSS";
 		case CKM_SHA512_RSA_PKCS_PSS:
 			return "SHA512_RSA_PKCS_PSS";
+		case CKM_MD5_HMAC:
+			return "MD5_HMAC";
 		case CKM_SHA_1_HMAC:
 			return "SHA_1_HMAC";
 		case CKM_SHA256_HMAC:
@@ -607,6 +624,8 @@ const char *get_mechanism_name(int mech_id)
 			return "SHA512_HMAC";
 		case CKM_RSA_PKCS_OAEP:
 			return "RSA_PKCS_OAEP";
+		case CKM_MD5:
+			return "MD5";
 		case CKM_SHA_1:
 			return "SHA_1";
 		case CKM_SHA224:
