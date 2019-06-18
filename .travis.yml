@@ -9,17 +9,7 @@ matrix:
     - compiler: clang
       os: osx
       env: DO_PUSH_ARTIFACT=yes
-    - compiler: gcc
-      os: linux
-      env:
-        - DO_SIMULATION=javacard
-        - ENABLE_DOC=--enable-doc
-      sudo: true
-    - compiler: gcc
-      os: linux
-      env:
-        - DO_SIMULATION=oseid
-      sudo: true
+   
     - env:
         - HOST=x86_64-w64-mingw32
         - DO_PUSH_ARTIFACT=yes
@@ -34,6 +24,17 @@ matrix:
       env:
         - DO_SIMULATION=yes
         - ENABLE_DOC=yes
+      sudo: true
+    - compiler: gcc
+      os: linux
+      env:
+        - DO_SIMULATION=javacard
+        - ENABLE_DOC=--enable-doc
+      sudo: true
+    - compiler: gcc
+      os: linux
+      env:
+        - DO_SIMULATION=oseid
       sudo: true
 
 env:
