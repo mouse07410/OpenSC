@@ -905,7 +905,7 @@ else
 	DEFAULT_PKCS11_PROVIDER="${with_pkcs11_provider}"
 	DEFAULT_ONEPIN_PKCS11_PROVIDER="${with_pkcs11_provider}"
 fi
-AC_DEFINE_UNQUOTED([DEFAULT_PKCS11_PROVIDER], ["${DEFAULT_PKCS11_PROVIDER}"], [Default PKCS11 provider])
+#AC_DEFINE_UNQUOTED([DEFAULT_PKCS11_PROVIDER], ["${DEFAULT_PKCS11_PROVIDER}"], [Default PKCS11 provider])
 
 if test "${enable_man}" = "detect"; then
 	if test "${WIN32}" = "yes"; then
