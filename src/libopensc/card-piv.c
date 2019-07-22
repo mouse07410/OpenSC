@@ -3780,13 +3780,17 @@ static int piv_card_reader_lock_obtained(sc_card_t *card, int was_reset)
 		if (was_reset > 0 || !(priv->card_issues & CI_PIV_AID_LOSE_STATE)) {
 			r = piv_select_aid(card, piv_aids[0].value, piv_aids[0].len_short, temp, &templen);
 			sc_debug(card->ctx,SC_LOG_DEBUG_MATCH, "PIV_MATCH piv_select_aid card->type:%d r:%d\n", card->type, r);
+			sc_debug(card->ctx,SC_LOG_DEBUG_NORMAL, "priv->logged_in:%d priv->card_issues:%08x\n",
+				priv->logged_in, priv->card_issues);
 		} else {
 			r = 0; /* cant do anything with this card, hope there was no interference */
+			sc_debug(card->ctx,SC_LOG_DEBUG_NORMAL, "priv->logged_in:%d priv->card_issues:%08x\n",
+				priv->logged_in, priv->card_issues);
 		}
 	}
 
-	if (r < 0) /* bad error return will show up in sc_lock as error*/
-		goto err;
+	//if (r < 0) /* bad error return will show up in sc_lock as error*/
+	//	goto err;
 	
 	if (was_reset > 0)
 		priv->logged_in =  SC_PIN_STATE_UNKNOWN;
