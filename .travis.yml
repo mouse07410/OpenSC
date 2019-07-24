@@ -27,6 +27,7 @@ matrix:
       sudo: true
     - compiler: gcc
       os: linux
+      dist: trusty
       env:
         - DO_SIMULATION=javacard
         - ENABLE_DOC=--enable-doc
@@ -61,6 +62,8 @@ addons:
     - pcscd
     - pcsc-tools
     - check
+    - ant
+    - socat
 
 before_install:
   # brew install gengetopt help2man cmocka ccache llvm;
