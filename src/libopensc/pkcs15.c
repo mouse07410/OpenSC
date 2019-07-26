@@ -472,6 +472,8 @@ parse_ddo(struct sc_pkcs15_card *p15card, const u8 * buf, size_t buflen)
 		p15card->file_odf->path = odf_path;
 	}
 	if (asn1_ddo[2].flags & SC_ASN1_PRESENT) {
+		if (p15card->file_tokeninfo)
+			sc_file_free(p15card->file_tokeninfo);
 		p15card->file_tokeninfo = sc_file_new();
 		if (p15card->file_tokeninfo == NULL)
 			goto mem_err;
@@ -1182,17 +1184,19 @@ sc_pkcs15_bind(struct sc_card *card, struct sc_aid *aid,
 		struct sc_pkcs15_card **p15card_out)
 {
 	struct sc_pkcs15_card *p15card = NULL;
-	struct sc_context *ctx = card->ctx;
+	struct sc_context *ctx;
 	scconf_block *conf_block = NULL;
 	int r, emu_first, enable_emu;
 	const char *private_certificate;
 
+	if (card == NULL || p15card_out == NULL) {
+		return SC_ERROR_INVALID_ARGUMENTS;
+	}
+	ctx = card->ctx;
+
 	LOG_FUNC_CALLED(ctx);
 	sc_log(ctx, "application(aid:'%s')", aid ? sc_dump_hex(aid->value, aid->len) : "empty");
 
-	if (p15card_out == NULL) {
-		return SC_ERROR_INVALID_ARGUMENTS;
-	}
 	p15card = sc_pkcs15_card_new();
 	if (p15card == NULL)
 		LOG_FUNC_RETURN(ctx, SC_ERROR_OUT_OF_MEMORY);
@@ -1305,12 +1309,13 @@ __sc_pkcs15_search_objects(struct sc_pkcs15_card *p15card, unsigned int class_ma
 
 	/* Make sure the class mask we have makes sense */
 	if (class_mask == 0
-	 || (class_mask & ~(SC_PKCS15_SEARCH_CLASS_PRKEY |
-			    SC_PKCS15_SEARCH_CLASS_PUBKEY |
-			    SC_PKCS15_SEARCH_CLASS_SKEY |
-			    SC_PKCS15_SEARCH_CLASS_CERT |
-			    SC_PKCS15_SEARCH_CLASS_DATA |
-			    SC_PKCS15_SEARCH_CLASS_AUTH))) {
+			|| (class_mask & ~(
+					SC_PKCS15_SEARCH_CLASS_PRKEY |
+					SC_PKCS15_SEARCH_CLASS_PUBKEY |
+					SC_PKCS15_SEARCH_CLASS_SKEY |
+					SC_PKCS15_SEARCH_CLASS_CERT |
+					SC_PKCS15_SEARCH_CLASS_DATA |
+					SC_PKCS15_SEARCH_CLASS_AUTH))) {
 		LOG_FUNC_RETURN(p15card->card->ctx, SC_ERROR_INVALID_ARGUMENTS);
 	}
 

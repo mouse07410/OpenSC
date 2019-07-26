@@ -150,6 +150,8 @@ sc_pkcs15_cache_file
 sc_pkcs15_card_clear
 sc_pkcs15_card_free
 sc_pkcs15_card_new
+sc_pkcs15_tokeninfo_new
+sc_pkcs15_free_tokeninfo
 sc_pkcs15_change_pin
 sc_pkcs15_compare_id
 sc_pkcs15_compute_signature
@@ -210,6 +212,7 @@ sc_pkcs15_free_prkey
 sc_pkcs15_free_prkey_info
 sc_pkcs15_free_pubkey
 sc_pkcs15_free_pubkey_info
+sc_pkcs15_free_tokeninfo
 sc_pkcs15_get_application_by_type
 sc_pkcs15_get_name_from_dn
 sc_pkcs15_get_object_guid
@@ -237,6 +240,7 @@ sc_pkcs15_pubkey_from_cert
 sc_pkcs15_remove_object
 sc_pkcs15_remove_unusedspace
 sc_pkcs15_search_objects
+sc_pkcs15_tokeninfo_new
 sc_pkcs15_unbind
 sc_pkcs15_unblock_pin
 sc_pkcs15_unwrap
