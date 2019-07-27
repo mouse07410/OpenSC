@@ -66,18 +66,18 @@ if ! pkg-config libcrypto --atleast-version=1.0.1; then
 	if ! test -e $BUILDPATH/openssl_bin/$PREFIX/lib/pkgconfig; then
 		# Build OpenSSL manually, because Apple's binaries are deprecated
 		if ! test -e openssl; then
-			git clone --depth=1 https://github.com/openssl/openssl.git -b OpenSSL_1_0_2-stable
+			git clone --depth=1 https://github.com/openssl/openssl.git -b OpenSSL_1_1_1-stable
 		fi
 		cd openssl
-		KERNEL_BITS=64 ./config --prefix=$PREFIX
+		KERNEL_BITS=64 ./config --prefix=$PREFIX no-shared
 		make clean
 		make update
 		make depend
 		make -j 2
-		make INSTALL_PREFIX=$BUILDPATH/openssl_bin install_sw
+		make INSTALL_PREFIX=$BUILDPATH/openssl_bin DESTDIR=$BUILDPATH/openssl_bin install_sw
 		cd ..
 	fi
-	# Make sure now-unnecessary OpenSSL-1.0.2 source files (98+MB) are removed
+	# Make sure now-unnecessary OpenSSL source files (98+MB) are removed
 	rm -rf openssl
 
 	# The following lines pass the "local" OpenSSL installation location (headers and libraries)
