@@ -1115,6 +1115,7 @@ AC_CONFIG_FILES([
 	MacOSX/Distribution.xml
 	MacOSX/resources/Welcome.html
 ])
+
 AC_OUTPUT
 
 cat <<EOF
