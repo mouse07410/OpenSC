@@ -96,7 +96,7 @@ buf_spec(CK_VOID_PTR buf_addr, CK_ULONG buf_len)
 #if !defined(_MSC_VER) || _MSC_VER >= 1800
 	const size_t prwidth = sizeof(CK_VOID_PTR) * 2;
 
-	sprintf(ret, "%0*"PRIxPTR" / %lu", (int) prwidth, (uintptr_t) buf_addr,
+	sprintf(ret, "%0*"PRIxPTR" / %ld", (int) prwidth, (uintptr_t) buf_addr,
 		buf_len);
 #else
 	if (sizeof(CK_VOID_PTR) == 4)
@@ -750,6 +750,20 @@ type_spec ck_attribute_specs[] = {
   { CKA_WRAP_WITH_TRUSTED , "CKA_WRAP_WITH_TRUSTED ", print_generic, NULL },
   { CKA_WRAP_TEMPLATE     , "CKA_WRAP_TEMPLATE    ", print_generic, NULL },
   { CKA_UNWRAP_TEMPLATE   , "CKA_UNWRAP_TEMPLATE  ", print_generic, NULL },
+  { CKA_OTP_FORMAT        , "CKA_OTP_FORMAT       ", print_generic, NULL },
+  { CKA_OTP_LENGTH        , "CKA_OTP_LENGTH       ", print_generic, NULL },
+  { CKA_OTP_TIME_INTERVAL , "CKA_OTP_TIME_INTERVAL ", print_generic, NULL },
+  { CKA_OTP_USER_FRIENDLY_MODE, "CKA_OTP_USER_FRIENDLY_MODE ", print_boolean, NULL },
+  { CKA_OTP_CHALLENGE_REQUIREMENT, "CKA_OTP_CHALLENGE_REQUIREMENT ", print_generic, NULL },
+  { CKA_OTP_TIME_REQUIREMENT, "CKA_OTP_TIME_REQUIREMENT ", print_generic, NULL },
+  { CKA_OTP_COUNTER_REQUIREMENT, "CKA_OTP_COUNTER_REQUIREMENT ", print_generic, NULL },
+  { CKA_OTP_PIN_REQUIREMENT, "CKA_OTP_PIN_REQUIREMENT ", print_generic, NULL },
+  { CKA_OTP_COUNTER       , "CKA_OTP_COUNTER      ", print_generic, NULL },
+  { CKA_OTP_TIME          , "CKA_OTP_TIME         ", print_print, NULL },
+  { CKA_OTP_USER_IDENTIFIER, "CKA_OTP_USER_IDENTIFIER ", print_print, NULL },
+  { CKA_OTP_SERVICE_IDENTIFIER, "CKA_OTP_SERVICE_IDENTIFIER ", print_print, NULL },
+  { CKA_OTP_SERVICE_LOGO  , "CKA_OTP_SERVICE_LOGO ", print_generic, NULL },
+  { CKA_OTP_SERVICE_LOGO_TYPE, "CKA_OTP_SERVICE_LOGO_TYPE ", print_print, NULL },
   { CKA_GOSTR3410_PARAMS  , "CKA_GOSTR3410_PARAMS ", print_generic, NULL },
   { CKA_GOSTR3411_PARAMS  , "CKA_GOSTR3411_PARAMS ", print_generic, NULL },
   { CKA_GOST28147_PARAMS  , "CKA_GOST28147_PARAMS ", print_generic, NULL },
