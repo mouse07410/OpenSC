@@ -215,7 +215,7 @@ static int parse_EF_CardInfo(sc_pkcs15_card_t *p15card)
 
 	/* read EF_CardInfo1 */
 	r = read_file(p15card->card, "3F001003b200", info1, &info1_len);
-	if (r != SC_SUCCESS)
+	if (r != SC_SUCCESS || info1_len < 4)
 		return SC_ERROR_WRONG_CARD;
 	/* read EF_CardInfo2 */
 	r = read_file(p15card->card, "3F001003b201", info2, &info2_len);
@@ -230,10 +230,15 @@ static int parse_EF_CardInfo(sc_pkcs15_card_t *p15card)
 		"found %d private keys\n", (int)key_num);
 	/* set p1 to the address of the first key descriptor */
 	offset = info1_len - 4 - key_num * 2;
-	if (offset >= sizeof info1)
+	if (offset >= info1_len)
 		return SC_ERROR_INVALID_DATA;
 	p1 = info1 + offset;
 	p2 = info2;
+
+	/* This is the minimum amount of data expected by the following code without
+	 * overunning the buffer without additional condition for cert_count == 4 */
+	if (info2_len < key_num * 14)
+		return SC_ERROR_INVALID_DATA;
 	for (i=0; i<key_num; i++) {
 		u8   pinId, keyId, cert_count;
 		int  ch_cert, ca_cert, r1_cert, r2_cert = 0;
