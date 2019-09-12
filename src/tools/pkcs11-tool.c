@@ -4825,8 +4825,9 @@ static EVP_PKEY *get_public_key(CK_SESSION_HANDLE session, CK_OBJECT_HANDLE priv
 			free(exp);
 			return pkey;
 		case CKK_DSA:
-		case CKK_ECDSA:
 		case CKK_GOSTR3410:
+			break;
+		case CKK_ECDSA:
 			break;
 		default:
 			fprintf(stderr, "public key of unsupported type\n");
@@ -5576,13 +5577,14 @@ static int encrypt_decrypt(CK_SESSION_HANDLE session,
 		CK_OBJECT_HANDLE privKeyObject)
 {
 	EVP_PKEY       *pkey = 0;
-	unsigned char	orig_data[] = {'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', '\0'};
+	/* Note: the actual size of the data to be encrypted is 10 bytes! */
+	unsigned char	orig_data[512] = {'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', '\0'};
 	unsigned char	encrypted[512], data[512];
 	CK_MECHANISM	mech;
 	CK_ULONG	encrypted_len = 0, data_len = 0;
 	int             failed = 0;
 	CK_RV           rv = 0;
-	int             pad;
+	int             pad = 0;
 	CK_MECHANISM_TYPE hash_alg = CKM_SHA256;
 	CK_RSA_PKCS_MGF_TYPE mgf = CKG_MGF1_SHA256;
 	CK_RSA_PKCS_OAEP_PARAMS oaep_params;
@@ -5601,14 +5603,14 @@ static int encrypt_decrypt(CK_SESSION_HANDLE session,
 		EVP_PKEY_free(pkey);
 		return 0;
 	}
-	size_t in_len = sizeof(orig_data);
+	size_t in_len = 10; /* to reflect the actual size of the plaintext */
+	size_t max_in_len = sizeof(orig_data); /* to accommodate for max module size for RSA raw */
 	CK_ULONG mod_len = (get_private_key_length(session, privKeyObject) + 7) / 8;
 	switch (mech_type) {
 	case CKM_RSA_PKCS:
 		pad = RSA_PKCS1_PADDING;
 		/* Limit the input length to <= mod_len-11 */
-		if (in_len > mod_len - 11)
-			in_len = mod_len-11;
+		max_in_len = mod_len - 11;
 		break;
 	case CKM_RSA_PKCS_OAEP: {
 		if (opt_hash_alg != 0) {
@@ -5642,29 +5644,28 @@ static int encrypt_decrypt(CK_SESSION_HANDLE session,
 
 		pad = RSA_PKCS1_OAEP_PADDING;
 		/* Limit the input length to <= mod_len-2-2*hlen */
-		size_t len = 2+2*hash_length(hash_alg);
+		size_t len = 2 + 2*hash_length(hash_alg);
 		if (len >= mod_len) {
 			printf("Incompatible mechanism and key size\n");
 			return 0;
 		}
-		if (in_len > mod_len - len)
-			in_len = mod_len-len;
+		max_in_len = mod_len - len;
 		break;
 	}
 	case CKM_RSA_X_509:
 		pad = RSA_NO_PADDING;
-		/* Limit the input length to the modulus length */
-		if (in_len > mod_len)
-			in_len = mod_len;
+		/* Make input length equal to the modulus length */
+		max_in_len = mod_len;
+		in_len = mod_len;
 		break;
 	default:
 		printf("Unsupported mechanism %s, returning\n", p11_mechanism_to_name(mech_type));
 		return 0;
 	}
 
-	if (in_len > sizeof(orig_data)) {
-		printf("Computed length (%lu) fails truth (%lu), aborting...\n",
-			       in_len, sizeof(orig_data));
+	if (in_len > sizeof(orig_data) || in_len > max_in_len) {
+		printf("%s:%d Input data (%lu) too large (%lu) (#orig_data=%lu), aborting...\n",
+		       __FILE__, __LINE__, in_len, max_in_len, sizeof(orig_data));
 		return 0;
 	}
 
@@ -5751,7 +5752,7 @@ static int encrypt_decrypt(CK_SESSION_HANDLE session,
 	}
 
 	size_t out_len = sizeof(encrypted);
-	if (EVP_PKEY_encrypt(ctx, encrypted, &out_len, orig_data, sizeof(orig_data)) <= 0) {
+	if (EVP_PKEY_encrypt(ctx, encrypted, &out_len, orig_data, in_len) <= 0) {
 		EVP_PKEY_CTX_free(ctx);
 		EVP_PKEY_free(pkey);
 		printf("Encryption failed, returning\n");
@@ -5808,12 +5809,12 @@ static int encrypt_decrypt(CK_SESSION_HANDLE session,
 	if (rv != CKR_OK)
 		p11_fatal("C_Decrypt", rv);
 
-	failed = data_len != sizeof(orig_data) || memcmp(orig_data, data, data_len);
+	failed = data_len != in_len || memcmp(orig_data, data, data_len);
 
 	if (failed) {
 		CK_ULONG n;
 
-		printf("resulting cleartext doesn't match input\n");
+		printf("resulting cleartext (%lu bytes) doesn't match input (%lu bytes)\n", data_len, in_len);
 		printf("    Original:");
 		for (n = 0; n < in_len; n++)
 			printf(" %02x", orig_data[n]);
@@ -6255,6 +6256,7 @@ static void test_ec(CK_SLOT_ID slot, CK_SESSION_HANDLE session)
 		//return;
 	}
 
+	/* This is a STUPID test. Commenting it out */
 	printf("*** Generating EC key pair ***\n");
 	if (!gen_keypair(slot, session, &pub_key, &priv_key, opt_key_type)) {
 		printf("warning: unable to generate EC Key Pair on the token\n");
