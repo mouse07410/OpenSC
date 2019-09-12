@@ -1972,10 +1972,10 @@ static void verify_signature(CK_SLOT_ID slot, CK_SESSION_HANDLE session,
 	unsigned char	in_buffer[1025], sig_buffer[512];
 	CK_MECHANISM	mech;
 	CK_RSA_PKCS_PSS_PARAMS pss_params;
-	CK_RV		rv;
-	CK_ULONG	sig_len;
-	int		fd, fd2, r, r2;
-	unsigned long   hashlen;
+	CK_RV		rv = 0;
+	CK_ULONG	sig_len=0;
+	int		fd=0, fd2=0, r=0, r2=0;
+	unsigned long   hashlen=0;
 
 	if (!opt_mechanism_used)
 		if (!find_mechanism(slot, CKF_VERIFY|CKF_HW, NULL, 0, &opt_mechanism))
@@ -1992,7 +1992,7 @@ static void verify_signature(CK_SLOT_ID slot, CK_SESSION_HANDLE session,
 	else if ((fd2 = open(opt_signature_file, O_RDONLY|O_BINARY)) < 0)
 		util_fatal("Cannot open %s: %m", opt_signature_file);
 
-	r2 = read(fd2, sig_buffer, sizeof(sig_buffer));
+	r2 = read(fd2, sig_buffer, sizeof(sig_buffer)); // r2 <- size of signature
 	if (r2 < 0)
 		util_fatal("Cannot read from %s: %m", opt_signature_file);
 
@@ -2004,8 +2004,8 @@ static void verify_signature(CK_SLOT_ID slot, CK_SESSION_HANDLE session,
 		if (opt_sig_format && (!strcmp(opt_sig_format, "openssl") ||
 							   !strcmp(opt_sig_format, "sequence"))) {
 
-			CK_BYTE* bytes;
-			CK_ULONG len;
+			CK_BYTE* bytes = NULL;
+			CK_ULONG len = 0;
 			size_t rs_len = 0;
 			unsigned char rs_buffer[512];
 			bytes = getEC_POINT(session, key, &len);
@@ -5576,7 +5576,7 @@ static int encrypt_decrypt(CK_SESSION_HANDLE session,
 		CK_OBJECT_HANDLE privKeyObject)
 {
 	EVP_PKEY       *pkey = 0;
-	unsigned char	orig_data[512] = {'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', '\0'};
+	unsigned char	orig_data[] = {'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', '\0'};
 	unsigned char	encrypted[512], data[512];
 	CK_MECHANISM	mech;
 	CK_ULONG	encrypted_len = 0, data_len = 0;
@@ -5601,13 +5601,14 @@ static int encrypt_decrypt(CK_SESSION_HANDLE session,
 		EVP_PKEY_free(pkey);
 		return 0;
 	}
-	size_t in_len;
+	size_t in_len = sizeof(orig_data);
 	CK_ULONG mod_len = (get_private_key_length(session, privKeyObject) + 7) / 8;
 	switch (mech_type) {
 	case CKM_RSA_PKCS:
 		pad = RSA_PKCS1_PADDING;
 		/* Limit the input length to <= mod_len-11 */
-		in_len = mod_len-11;
+		if (in_len > mod_len - 11)
+			in_len = mod_len-11;
 		break;
 	case CKM_RSA_PKCS_OAEP: {
 		if (opt_hash_alg != 0) {
@@ -5646,13 +5647,15 @@ static int encrypt_decrypt(CK_SESSION_HANDLE session,
 			printf("Incompatible mechanism and key size\n");
 			return 0;
 		}
-		in_len = mod_len-len;
+		if (in_len > mod_len - len)
+			in_len = mod_len-len;
 		break;
 	}
 	case CKM_RSA_X_509:
 		pad = RSA_NO_PADDING;
 		/* Limit the input length to the modulus length */
-		in_len = mod_len;
+		if (in_len > mod_len)
+			in_len = mod_len;
 		break;
 	default:
 		printf("Unsupported mechanism %s, returning\n", p11_mechanism_to_name(mech_type));
@@ -5660,11 +5663,12 @@ static int encrypt_decrypt(CK_SESSION_HANDLE session,
 	}
 
 	if (in_len > sizeof(orig_data)) {
-		printf("Private key size is too long\n");
+		printf("Computed length (%lu) fails truth (%lu), aborting...\n",
+			       in_len, sizeof(orig_data));
 		return 0;
 	}
 
-	EVP_PKEY_CTX *ctx;
+	EVP_PKEY_CTX *ctx = NULL;
 	ctx = EVP_PKEY_CTX_new(pkey, NULL);
 	if (!ctx) {
 		EVP_PKEY_free(pkey);
@@ -5685,7 +5689,7 @@ static int encrypt_decrypt(CK_SESSION_HANDLE session,
 	}
 	if (mech_type == CKM_RSA_PKCS_OAEP) {
 #if defined(EVP_PKEY_CTX_set_rsa_oaep_md) && defined(EVP_PKEY_CTX_set_rsa_mgf1_md)
-		const EVP_MD *md;
+		const EVP_MD *md = NULL;
 		switch (hash_alg) {
 		case CKM_SHA_1:
 			md = EVP_sha1();
@@ -5747,7 +5751,7 @@ static int encrypt_decrypt(CK_SESSION_HANDLE session,
 	}
 
 	size_t out_len = sizeof(encrypted);
-	if (EVP_PKEY_encrypt(ctx, encrypted, &out_len, orig_data, in_len) <= 0) {
+	if (EVP_PKEY_encrypt(ctx, encrypted, &out_len, orig_data, sizeof(orig_data)) <= 0) {
 		EVP_PKEY_CTX_free(ctx);
 		EVP_PKEY_free(pkey);
 		printf("Encryption failed, returning\n");
@@ -5804,7 +5808,7 @@ static int encrypt_decrypt(CK_SESSION_HANDLE session,
 	if (rv != CKR_OK)
 		p11_fatal("C_Decrypt", rv);
 
-	failed = data_len != in_len || memcmp(orig_data, data, data_len);
+	failed = data_len != sizeof(orig_data) || memcmp(orig_data, data, data_len);
 
 	if (failed) {
 		CK_ULONG n;
