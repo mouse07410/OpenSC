@@ -5646,9 +5646,11 @@ static int encrypt_decrypt(CK_SESSION_HANDLE session,
 		/* Limit the input length to <= mod_len-2-2*hlen */
 		size_t len = 2 + 2*hash_length(hash_alg);
 		if (len >= mod_len) {
-			printf("Incompatible mechanism and key size\n");
+			printf("Incompatible mechanism and key size (len=%lu must be smaller than mod_len=%lu\n",
+				len, mod_len);
 			return 0;
 		}
+		/* input length <= mod_len-2-2*hlen */
 		max_in_len = mod_len - len;
 		break;
 	}
@@ -5664,8 +5666,14 @@ static int encrypt_decrypt(CK_SESSION_HANDLE session,
 	}
 
 	if (in_len > sizeof(orig_data) || in_len > max_in_len) {
-		printf("%s:%d Input data (%lu) too large (%lu) (#orig_data=%lu), aborting...\n",
+		printf("%s:%d Input data (%lu) of wrong size (max allowed is %lu) (#orig_data=%lu), aborting...\n",
 		       __FILE__, __LINE__, in_len, max_in_len, sizeof(orig_data));
+	if (in_len > sizeof(orig_data)) {
+		printf("Provided input data not big enough for this operation\n");
+		return 0;
+	}
+	if (in_len > max_in_len) {
+		printf("Input data is too large for this key\n");
 		return 0;
 	}
 
