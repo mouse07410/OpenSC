@@ -5565,7 +5565,7 @@ static int test_unwrap(CK_SESSION_HANDLE sess)
 #ifndef OPENSSL_NO_CAST
 		errors += wrap_unwrap(sess, EVP_cast5_cfb(), privKeyObject);
 #endif
-#endif
+#endif /* ENABLE_OPENSSL */
 	}
 
 	return errors;
@@ -5665,7 +5665,7 @@ static int encrypt_decrypt(CK_SESSION_HANDLE session,
 		return 0;
 	}
 
-	if (in_len > sizeof(orig_data) || in_len > max_in_len) {
+	if (in_len > sizeof(orig_data) || in_len > max_in_len)
 		printf("%s:%d Input data (%lu) of wrong size (max allowed is %lu) (#orig_data=%lu), aborting...\n",
 		       __FILE__, __LINE__, in_len, max_in_len, sizeof(orig_data));
 	if (in_len > sizeof(orig_data)) {
