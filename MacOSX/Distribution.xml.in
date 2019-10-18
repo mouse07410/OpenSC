@@ -6,22 +6,59 @@
     <background file="background.jpg" mime-type="image/jpeg" scaling="tofit"/>
     <welcome file="Welcome.html" mime-type="text/html"/>
     <title>@PACKAGE_STRING@</title>
-
-    <pkg-ref id="com.apple.tokend.opensc"/>
-    <options customize="never" require-scripts="false"/>
+    <options customize="allow" require-scripts="false" rootVolumeOnly="true"/>
+    <script>
+      <![CDATA[
+	function osx_before_catalina() {
+	 if((system.compareVersions(system.version.ProductVersion, '10.15')) == -1)
+	 {
+	  return true;
+	 }
+	 else
+	 {
+	  return false;
+	 }
+	}
+	function osx_after_catalina() {
+	 if((system.compareVersions(system.version.ProductVersion, '10.15')) >= 0)
+	 {
+	  return true;
+	 }
+	 else
+	 {
+	  return false;
+	 }
+	}
+	function osx_after_yosemite() {
+	 if((system.compareVersions(system.version.ProductVersion, '10.12')) >= 0)
+	 {
+	  return true;
+	 }
+	 else
+	 {
+	  return false;
+	 }
+	}
+      ]]>
+   </script>
     <choices-outline>
         <line choice="default">
-            <line choice="com.apple.tokend.opensc"/>
+            <line choice="tokend" />
+            <line choice="token" />
+            <line choice="startup" />
         </line>
         <line choice="tokend" />
         <line choice="startup" />
     </choices-outline>
-    <choice id="default"/>
-    <choice id="com.apple.tokend.opensc" visible="true">
-        <pkg-ref id="com.apple.tokend.opensc"/>
+    <choice id="default" title="OpenSC PKCS11 and tools" enabled="false">
+        <pkg-ref id="org.opensc-project.mac">OpenSC.pkg</pkg-ref>
     </choice>
-    <pkg-ref id="com.apple.tokend.opensc" onConclusion="none">OpenSC.pkg</pkg-ref>
-   <!--
+    <choice id="tokend" title="OpenSC tokend" selected="osx_before_catalina()">
+        <pkg-ref id="org.opensc-project.tokend">OpenSC-tokend.pkg</pkg-ref>
+    </choice>
+    <choice id="token" title="OpenSC token driver" visible="osx_after_yosemite()" selected="osx_after_catalina()">
+        <pkg-ref id="org.opensc-project.mac.opensctoken">OpenSCToken.pkg</pkg-ref>
+    </choice>
     <choice id="startup" title="OpenSC startup icons">
         <pkg-ref id="org.opensc-project.startup">OpenSC-startup.pkg</pkg-ref>
     </choice>
