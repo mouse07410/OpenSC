@@ -166,7 +166,7 @@ else
 	mkdir -p ${BUILDPATH}/target_tokend
     # Check out OpenSCToken instead of OpenSC.tokend, if not already fetched.
     #if ! test -e OpenSCToken; then
-    #	git clone http://github.com/frankmorgner/OpenSCToken.git
+    #	git clone http://github.com/mouse07410/OpenSCToken.git
     #fi
 fi
 
