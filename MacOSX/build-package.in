@@ -164,6 +164,10 @@ if (( xcodebuild -version | sed -En 's/Xcode[[:space:]]+([0-9]+)\.[0-9]*/\1/p' <
 else
 	# https://github.com/OpenSC/OpenSC.tokend/issues/33
 	mkdir -p ${BUILDPATH}/target_tokend
+    # Check out OpenSCToken instead of OpenSC.tokend, if not already fetched.
+    #if ! test -e OpenSCToken; then
+    #	git clone http://github.com/frankmorgner/OpenSCToken.git
+    #fi
 fi
 
 #if ! test -e $BUILDPATH/target/Library/Security/tokend/OpenSC.tokend/Contents/Resources/Applications/terminal-notifier.app; then
