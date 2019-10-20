@@ -1,4 +1,7 @@
 <?xml version="1.0" encoding="utf-8" standalone="no"?>
+<!--
+https://developer.apple.com/library/mac/documentation/DeveloperTools/Reference/DistributionDefinitionRef/
+-->
 <installer-gui-script minSpecVersion="2">
     <allowed-os-versions>
       <os-version min="10.10"/>
@@ -40,15 +43,13 @@
 	 }
 	}
       ]]>
-   </script>
+    </script>
     <choices-outline>
         <line choice="default">
             <line choice="tokend" />
             <line choice="token" />
             <line choice="startup" />
         </line>
-        <line choice="tokend" />
-        <line choice="startup" />
     </choices-outline>
     <choice id="default" title="OpenSC PKCS11 and tools" enabled="false">
         <pkg-ref id="org.opensc-project.mac">OpenSC.pkg</pkg-ref>
@@ -62,5 +63,4 @@
     <choice id="startup" title="OpenSC startup icons">
         <pkg-ref id="org.opensc-project.startup">OpenSC-startup.pkg</pkg-ref>
     </choice>
-   -->
 </installer-gui-script>

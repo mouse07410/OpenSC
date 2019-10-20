@@ -1,24 +1,23 @@
 #!/bin/bash
-# Building the installer is only tested and supported on 10.9+ with Xcode 6.0.1
-# Built package targets 10.10+ (and for CryptoTokenKit - 10.12+)
-# Building should also work on older versions with older revisions or slight changes, YMMV
+# Build the macOS installer for the tokend and command line tools.
+#
+# This is only tested and supported on macOS 10.10 or later, using Xcode 6.0.1.
+# Building should also work on older macOS versions with slight changes; YMMV.
 
-# You need to have  the following from homebrew or macports or fink:
+# You need to install the following packages from homebrew or macports or fink:
 # autoconf automake libtool pkg-config help2man gengetopt
 
-# If you want to compile with OpenSCToken/CryptoTokenKit set the following:
-#ENABLE_CRYPTOTOKENKIT="--disable-pcsc  --enable-cryptotokenkit"
-# When using CryptoTokenKit, code signing is required
-SIGNING_IDENTITY=10D48618E61527C275C70AD5725E3DD15E62B515
-
-# In any case, we are building for 10.13 or newer
-export MACOSX_DEPLOYMENT_TARGET="10.13"
+export MACOSX_DEPLOYMENT_TARGET="10.10"
 
 set -ex
 test -x ./configure || ./bootstrap
 BUILDPATH=${PWD}
 
+# Locate the latest OSX SDK
 SDK_PATH=$(xcrun --sdk macosx --show-sdk-path)
+
+# Set SDK path
+export CFLAGS="$CFLAGS -isysroot $SDK_PATH -arch x86_64"
 
 # Determine version of the available SDK, and force Xcode-9.4.1
 # if what we have is 10.14 (aka Xcode-10.x)
@@ -43,7 +42,8 @@ if [ "${old}" = "yes" ]; then
 	env TOKEND_DEVELOPER_DIR="/Applications/Xcode.app"
 	export TOKEND_DEVELOPER_DIR="/Applications/Xcode.app"
 else
-	# We cannot use Xcode-10.x or newer, so have to downgrade to the older SDK from Xcode-9.x
+	# We cannot use Xcode-10.x or newer for OpenSC.tokend, so have to downgrade to
+    # the older SDK from Xcode-9.x
 	TOKEND_SDK_PATH="/Applications/Xcode-9.4.1.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX10.13.sdk"
 	TOKEND_DEVELOPER_DIR="/Applications/Xcode-9.4.1.app"
 	env TOKEND_DEVELOPER_DIR="/Applications/Xcode-9.4.1.app"
@@ -52,10 +52,6 @@ fi
 DEVDIR=${TOKEND_DEVELOPER_DIR}
 
 echo "Using SDK ${SDK_VER} at ${DEVDIR}"
-
-# Set SDK path
-TOKEND_CFLAGS="$CFLAGS"
-export CFLAGS="$CFLAGS -isysroot $SDK_PATH -arch x86_64"
 
 export SED=/usr/bin/sed
 PREFIX=/Library/OpenSC
@@ -69,41 +65,34 @@ if ! pkg-config libcrypto --atleast-version=1.0.1; then
 			git clone --depth=1 https://github.com/openssl/openssl.git -b OpenSSL_1_1_1-stable
 		fi
 		cd openssl
-		KERNEL_BITS=64 ./config --prefix=$PREFIX no-shared
+		KERNEL_BITS=64 ./config --prefix=$PREFIX
 		make clean
 		make update
 		make depend
-		make -j 2
+		make -j 4
 		make INSTALL_PREFIX=$BUILDPATH/openssl_bin DESTDIR=$BUILDPATH/openssl_bin install_sw
 		cd ..
 	fi
-	# Make sure now-unnecessary OpenSSL source files (98+MB) are removed
-	rm -rf openssl
-
-	# The following lines pass the "local" OpenSSL installation location (headers and libraries)
-	# to the OpenSC configurator.
 	export OPENSSL_CFLAGS="`env PKG_CONFIG_PATH=$BUILDPATH/openssl_bin/$PREFIX/lib/pkgconfig PKG_CONFIG_SYSROOT_DIR=$BUILDPATH/openssl_bin pkg-config --static --cflags libcrypto`"
 	export OPENSSL_LIBS="`env PKG_CONFIG_PATH=$BUILDPATH/openssl_bin/$PREFIX/lib/pkgconfig PKG_CONFIG_SYSROOT_DIR=$BUILDPATH/openssl_bin pkg-config --static --libs libcrypto`"
-	
-	# The following lines are needed to pass the "local" OpenSSL installation location (headers and libraries)
+
+   	# The following lines are needed to pass the "local" OpenSSL installation location (headers and libraries)
 	# to the Xcode (xcodebuild) builder on MacOS. It is unclear why the above pkgconfig-based env var setting
 	# does not appear to work properly.
 	export OPENSSL_INCLUDE="$BUILDPATH/openssl_bin/$PREFIX/include"
 	export OPENSSL_LIBS="-L$BUILDPATH/openssl_bin/$PREFIX/lib -lcrypto"
 	export OPENSSL_LOCAL="true"
 else
-	export OPENSSL_CFLAGS="`pkg-config --static --cflags libcrypto`"
+    export OPENSSL_CFLAGS="`pkg-config --static --cflags libcrypto`"
 	export OPENSSL_LIBS="`pkg-config --static --libs libcrypto`"
 	export OPENSSL_LOCAL="false"
 fi
 
-
 # MacOS seems to have a problem: if target dir has not been wiped - it does not rebuild the libraries!
 # So force the correct re-configuration, and achieve rebuild by this crude but effective measure
-rm -rf ${BUILDPATH}/target/$PREFIX/lib/pkgconfig
+#rm -rf ${BUILDPATH}/target/$PREFIX/lib/pkgconfig
 # If target directory has already been build, no need to re-configure
 
-# Download and install EAC libraries
 if ! test -e $BUILDPATH/openpace_bin/$PREFIX/lib/pkgconfig; then
 	if ! test -e openpace; then
 		git clone --depth=1 https://github.com/frankmorgner/openpace.git -b 1.1.0
@@ -128,11 +117,9 @@ if ! test -e ${BUILDPATH}/target/$PREFIX/lib/pkgconfig; then
 		--enable-static \
 		--enable-strict \
 		--disable-assert \
-		--disable-silent-rules \
-		--with-pkcs11-provider=$PREFIX/lib/opensc-pkcs11.so \
+        --disable-silent-rules \
+        --with-pkcs11-provider=$PREFIX/lib/opensc-pkcs11.so \
 		--enable-sm # TODO: remove this (must be sensible default in master)
-		#--with-xsl-stylesheetsdir=/opt/local/share/xsl/docbook-xsl-nons 
-		# the above line breaks CI, but is helpful in Macports builds. Act accordingly.
 
 	# always make clean
 	make clean
@@ -141,8 +128,8 @@ if ! test -e ${BUILDPATH}/target/$PREFIX/lib/pkgconfig; then
 	make V=1 -j 4
 
 	# clean target from previous runs
-	rm -rf target ${BUILDPATH}/target
-	# copy files
+	rm -rf ${BUILDPATH}/target
+    # copy files
 	make install DESTDIR=${BUILDPATH}/target
 
 	# remove garbage
@@ -150,34 +137,33 @@ if ! test -e ${BUILDPATH}/target/$PREFIX/lib/pkgconfig; then
 	rm -f ${BUILDPATH}/target/$PREFIX/lib/*.a
 
 	# generate .bundle (required by Adobe Acrobat)
-	# (ULB) Probably Acrobat does not require this any more, at least Acrobat 11 and 15
+    # (ULB) Probably Acrobat does not require this any more, at least Acrobat 11 and 15
 	# rely on CSDA tokend rather than opensc-pkcs11 bundle. Still, it doesn't hurt to
 	# keep this one around.
-
 	./MacOSX/libtool-bundle ${BUILDPATH}/target/$PREFIX/lib/opensc-pkcs11.so ${BUILDPATH}/target/$PREFIX/lib
 fi
 
+# Check out OpenSC.tokend, if not already fetched.
 if ! test -e OpenSC.tokend; then
-	# Check out OpenSC.tokend, if not already fetched.
-	if ! test -e OpenSC.tokend; then
-		git clone http://github.com/mouse07410/OpenSC.tokend.git
-	fi
+	git clone http://github.com/mouse07410/OpenSC.tokend.git
 fi
 
 # Create the symlink to OpenSC sources
-mkdir -p OpenSC.tokend/build
 test -L OpenSC.tokend/build/opensc-src || ln -sf ${BUILDPATH}/src OpenSC.tokend/build/opensc-src
 
-# Build and copy OpenSC.tokend
-SDK_PATH=${TOKEND_SDK_PATH}
-export CFLAGS="${TOKEND_CFLAGS} -isysroot $SDK_PATH -arch x86_64"
-mkdir -p ${BUILDPATH}/target_tokend
 if (( xcodebuild -version | sed -En 's/Xcode[[:space:]]+([0-9]+)\.[0-9]*/\1/p' < 10 )); then
+    # Take care of the flags
+    BACKUP_SDK_PATH="${SDK_PATH}"
+    SDK_PATH="${TOKEND_SDK_PATH}"
+    BACKUP_CFLAGS="${CFLAGS}"
+    CFLAGS="${TOKEND_CFLAGS} -isysroot $SDK_PATH -arch x86_64"
 	# Build and copy OpenSC.tokend
 	DEVELOPER_DIR="${DEVDIR}" /usr/bin/xcodebuild -target OpenSC -configuration Deployment -project OpenSC.tokend/Tokend.xcodeproj install DSTROOT=${BUILDPATH}/target_tokend
-#else
-#	# https://github.com/OpenSC/OpenSC.tokend/issues/33
-#	mkdir -p ${BUILDPATH}/target_tokend
+    SDK_PATH="${BACKUP_SDK_PATH}"
+    CFLAGS="${BACKUP_CFLAGS}"
+else
+	# https://github.com/OpenSC/OpenSC.tokend/issues/33
+	mkdir -p ${BUILDPATH}/target_tokend
 fi
 
 #if ! test -e $BUILDPATH/target/Library/Security/tokend/OpenSC.tokend/Contents/Resources/Applications/terminal-notifier.app; then
@@ -194,7 +180,7 @@ fi
 if ! test -e NotificationProxy; then
 	git clone http://github.com/frankmorgner/NotificationProxy.git
 fi
-DEVELOPER_DIR="${DEVDIR}" xcodebuild -target NotificationProxy -configuration Release -project NotificationProxy/NotificationProxy.xcodeproj install DSTROOT=$BUILDPATH/target/Library/Security/tokend/OpenSC.tokend/Contents/Resources/
+xcodebuild -target NotificationProxy -configuration Release -project NotificationProxy/NotificationProxy.xcodeproj install DSTROOT=$BUILDPATH/target_tokend/Library/Security/tokend/OpenSC.tokend/Contents/Resources/
 mkdir -p "$BUILDPATH/target/Applications"
 osacompile -o "$BUILDPATH/target/Applications/OpenSC Notify.app" "MacOSX/OpenSC_Notify.applescript"
 
@@ -219,7 +205,15 @@ if test -e OpenSCToken; then
 		cd OpenSC && git pull && cd ..
 	fi
 	if ! test -e openssl; then
-		git clone --depth=1 ../openssl
+        if ! test -e ../openssl; then
+            git clone --depth=1 https://github.com/mouse07410/openssl
+            cd openssl
+            git checkout OpenSSL_1_1_1-stable
+            git pull
+            cd ..
+        else
+		    git clone --depth=1 ../openssl
+        fi
 	else
 		cd openssl && git pull && cd ..
 	fi
@@ -262,10 +256,4 @@ do
 		exit 1
 	fi
 done
-
-# Cleanup local OpenSSL
-rm -f ${BUILDPATH}/src/common/openssl
-rm -f ${BUILDPATH}/target/$PREFIX/lib/libcrypto.a
-# Cleanup temporary imagedir
 rm -rf ${imagedir}
-
