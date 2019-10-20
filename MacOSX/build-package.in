@@ -206,10 +206,7 @@ if test -e OpenSCToken; then
 	fi
 	if ! test -e openssl; then
         if ! test -e ../openssl; then
-            git clone --depth=1 https://github.com/mouse07410/openssl
-            cd openssl
-            git checkout OpenSSL_1_1_1-stable
-            git pull
+            git clone --depth=1 https://github.com/mouse07410/openssl -b OpenSSL_1_1_1-stable
             cd ..
         else
 		    git clone --depth=1 ../openssl
