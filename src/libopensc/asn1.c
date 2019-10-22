@@ -28,6 +28,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <limits.h>
 
 #include "internal.h"
 #include "asn1.h"
@@ -708,18 +709,30 @@ static int encode_bit_field(const u8 *inbuf, size_t inlen,
 int sc_asn1_decode_integer(const u8 * inbuf, size_t inlen, int *out)
 {
 	int    a = 0, is_negative = 0;
-	size_t i;
+	size_t i = 0;
 
 	if (inlen > sizeof(int) || inlen == 0)
 		return SC_ERROR_INVALID_ASN1_OBJECT;
-	if (inbuf[0] & 0x80)
+	if (inbuf[0] & 0x80) {
 		is_negative = 1;
-	for (i = 0; i < inlen; i++) {
-		a <<= 8;
-		a |= *inbuf++;
+		a |= 0xff^(*inbuf++);
+		i = 1;
 	}
-	if (is_negative)
-		a *= -1;
+	for (; i < inlen; i++) {
+		if (a > (INT_MAX >> 8) || a < (INT_MIN + (1<<8))) {
+			return SC_ERROR_NOT_SUPPORTED;
+		}
+		a <<= 8;
+		if (is_negative) {
+			a |= 0xff^(*inbuf++);
+		} else {
+			a |= *inbuf++;
+		}
+	}
+	if (is_negative) {
+		/* Calculate Two's complement from previously positive number */
+		a = -1 * (a + 1);
+	}
 	*out = a;
 	return 0;
 }
@@ -804,6 +817,11 @@ sc_asn1_decode_object_id(const u8 *inbuf, size_t inlen, struct sc_object_id *id)
 		a = *p & 0x7F;
 		inlen--;
 		while (inlen && *p & 0x80) {
+			/* Limit the OID values to int size and do not overflow */
+			if (a > (INT_MAX>>7)) {
+				sc_init_oid(id);
+				return SC_ERROR_NOT_SUPPORTED;
+			}
 			p++;
 			a <<= 7;
 			a |= *p & 0x7F;
@@ -1029,7 +1047,9 @@ static int asn1_write_element(sc_context_t *ctx, unsigned int tag,
 	else   {
 		*p++ = datalen & 0x7F;
 	}
-	memcpy(p, data, datalen);
+	if (datalen && data) {
+		memcpy(p, data, datalen);
+	}
 
 	return SC_SUCCESS;
 }
@@ -2047,7 +2067,7 @@ sc_asn1_sig_value_sequence_to_rs(struct sc_context *ctx, const unsigned char *in
 	struct sc_asn1_entry asn1_sig_value[C_ASN1_SIG_VALUE_SIZE];
 	struct sc_asn1_entry asn1_sig_value_coefficients[C_ASN1_SIG_VALUE_COEFFICIENTS_SIZE];
 	unsigned char *r = NULL, *s = NULL;
-	size_t r_len, s_len, halflen = buflen/2;
+	size_t r_len = 0, s_len = 0, halflen = buflen/2;
 	int rv;
 
 	LOG_FUNC_CALLED(ctx);
