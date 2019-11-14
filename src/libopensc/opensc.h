@@ -217,6 +217,8 @@ extern "C" {
 #define SC_EVENT_READER_DETACHED	0x0008
 #define SC_EVENT_READER_EVENTS		SC_EVENT_READER_ATTACHED|SC_EVENT_READER_DETACHED
 
+#define MAX_FILE_SIZE 65535
+
 struct sc_supported_algo_info {
 	unsigned int reference;
 	unsigned int mechanism;
@@ -578,7 +580,6 @@ typedef struct sc_card {
 
 	struct sc_app_info *app[SC_MAX_CARD_APPS];
 	int app_count;
-	struct sc_file *ef_dir;
 
 	struct sc_ef_atr *ef_atr;
 

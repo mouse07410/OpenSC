@@ -68,7 +68,7 @@ int sc_asn1_read_tag(const u8 ** buf, size_t buflen, unsigned int *cla_out,
 
 	*buf = NULL;
 
-	if (left == 0)
+	if (left == 0 || !p)
 		return SC_ERROR_INVALID_ASN1_OBJECT;
 	if (*p == 0xff || *p == 0) {
 		/* end of data reached */
@@ -678,7 +678,7 @@ static int decode_bit_field(const u8 * inbuf, size_t inlen, void *outbuf, size_t
 		return n;
 
 	for (i = 0; i < n; i += 8) {
-		field |= (data[i/8] << i);
+		field |= ((unsigned int) data[i/8] << i);
 	}
 	memcpy(outbuf, &field, outlen);
 	return 0;
@@ -731,7 +731,7 @@ int sc_asn1_decode_integer(const u8 * inbuf, size_t inlen, int *out)
 	}
 	if (is_negative) {
 		/* Calculate Two's complement from previously positive number */
-		a = -1 * (a + 1);
+		a = (-1 * a) - 1;
 	}
 	*out = a;
 	return 0;
@@ -1464,10 +1464,12 @@ static int asn1_decode_entry(sc_context_t *ctx,struct sc_asn1_entry *entry,
 			}
 			if (entry->flags & SC_ASN1_ALLOC) {
 				u8 **buf = (u8 **) parm;
-				*buf = malloc(objlen-1);
-				if (*buf == NULL) {
-					r = SC_ERROR_OUT_OF_MEMORY;
-					break;
+				if (objlen > 1) {
+					*buf = malloc(objlen-1);
+					if (*buf == NULL) {
+						r = SC_ERROR_OUT_OF_MEMORY;
+						break;
+					}
 				}
 				*len = objlen-1;
 				parm = *buf;
@@ -1498,10 +1500,12 @@ static int asn1_decode_entry(sc_context_t *ctx,struct sc_asn1_entry *entry,
 			/* Allocate buffer if needed */
 			if (entry->flags & SC_ASN1_ALLOC) {
 				u8 **buf = (u8 **) parm;
-				*buf = malloc(objlen);
-				if (*buf == NULL) {
-					r = SC_ERROR_OUT_OF_MEMORY;
-					break;
+				if (objlen > 0) {
+					*buf = malloc(objlen);
+					if (*buf == NULL) {
+						r = SC_ERROR_OUT_OF_MEMORY;
+						break;
+					}
 				}
 				c = *len = objlen;
 				parm = *buf;
@@ -1518,10 +1522,12 @@ static int asn1_decode_entry(sc_context_t *ctx,struct sc_asn1_entry *entry,
 			assert(len != NULL);
 			if (entry->flags & SC_ASN1_ALLOC) {
 				u8 **buf = (u8 **) parm;
-				*buf = malloc(objlen);
-				if (*buf == NULL) {
-					r = SC_ERROR_OUT_OF_MEMORY;
-					break;
+				if (objlen > 0) {
+					*buf = malloc(objlen);
+					if (*buf == NULL) {
+						r = SC_ERROR_OUT_OF_MEMORY;
+						break;
+					}
 				}
 				c = *len = objlen;
 				parm = *buf;

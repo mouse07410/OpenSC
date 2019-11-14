@@ -260,10 +260,7 @@ int sc_pkcs15_decode_prkdf_entry(struct sc_pkcs15_card *p15card,
 	r = sc_asn1_decode_choice(ctx, asn1_prkey, *buf, *buflen, buf, buflen);
 	if (r < 0) {
 		/* This might have allocated something. If so, clear it now */
-		if (asn1_com_prkey_attr->flags & SC_ASN1_PRESENT &&
-			asn1_com_prkey_attr[0].flags & SC_ASN1_PRESENT) {
-			free(asn1_com_prkey_attr[0].parm);
-		}
+		free(info.subject.value);
 	}
 	if (r == SC_ERROR_ASN1_END_OF_CONTENTS)
 		return r;
@@ -300,7 +297,10 @@ int sc_pkcs15_decode_prkdf_entry(struct sc_pkcs15_card *p15card,
 		LOG_FUNC_RETURN(ctx, SC_ERROR_INVALID_ASN1_OBJECT);
 	}
 
-	if (!p15card->app || !p15card->app->ddo.aid.len)   {
+	if (!p15card->app || !p15card->app->ddo.aid.len) {
+		if (!p15card->file_app) {
+			return SC_ERROR_INTERNAL;
+		}
 		r = sc_pkcs15_make_absolute_path(&p15card->file_app->path, &info.path);
 		if (r < 0) {
 			sc_pkcs15_free_key_params(&info.params);
@@ -606,6 +606,9 @@ sc_pkcs15_free_prkey(struct sc_pkcs15_prkey *key)
 
 void sc_pkcs15_free_prkey_info(sc_pkcs15_prkey_info_t *key)
 {
+	if (!key)
+		return;
+
 	if (key->subject.value)
 		free(key->subject.value);
 

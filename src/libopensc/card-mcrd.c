@@ -278,7 +278,8 @@ static int mcrd_init(sc_card_t * card)
 	priv->curpath[0] = MFID;
 	priv->curpathlen = 1;
 
-	sc_select_file (card, sc_get_mf_path(), NULL);
+	if (SC_SUCCESS != sc_select_file (card, sc_get_mf_path(), NULL))
+		sc_log(card->ctx, "Warning: select MF failed");
 
 	/* Not needed for the fixed EstEID profile */
 	if (!is_esteid_card(card))
@@ -297,6 +298,7 @@ static int mcrd_finish(sc_card_t * card)
 	while (priv->df_infos) {
 		struct df_info_s *tmp = priv->df_infos->next;
 		clear_special_files(priv->df_infos);
+		free(priv->df_infos);
 		priv->df_infos = tmp;
 	}
 	free(priv);
@@ -837,8 +839,10 @@ select_file_by_path(sc_card_t * card, unsigned short *pathptr,
 			priv->is_ef = 0;
 		}
 		/* Free the previously allocated file so we do not leak memory here */
-		sc_file_free(*file);
-		*file = NULL;
+		if (file) {
+			sc_file_free(*file);
+			*file = NULL;
+		}
 		r = select_down(card, pathptr, pathlen, 0, file);
 	}
 	return r;

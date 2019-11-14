@@ -280,8 +280,10 @@ static int myeid_init(struct sc_card *card)
 
 	if (card->version.fw_major >= 45)
 		priv->cap_chaining = 1;
-
-	card->max_recv_size = 256;
+	if (card->version.fw_major >= 40)
+		card->max_recv_size = 256;
+	else
+		card->max_recv_size = 255;
 	card->max_send_size = 255;
 
 	LOG_FUNC_RETURN(card->ctx, SC_SUCCESS);
@@ -1468,11 +1470,6 @@ static int myeid_loadkey(sc_card_t *card, unsigned mode, u8* value, int value_le
 
 	if (mode == LOAD_KEY_MODULUS && value_len == 256 && !priv->cap_chaining)
 	{
-		if ((value_len % 2) > 0 && value[0] == 0x00)
-		{
-			value_len--;
-			value++;
-		}
 		mode = 0x88;
 		memset(&apdu, 0, sizeof(apdu));
 		sc_format_apdu(card, &apdu, SC_APDU_CASE_3_SHORT, 0xDA, 0x01, mode);
