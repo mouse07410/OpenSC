@@ -86,7 +86,7 @@ static int tcos_match_card(sc_card_t *card)
 
 static int tcos_init(sc_card_t *card)
 {
-        unsigned long flags;
+        unsigned long flags = 0;
 
 	tcos_data *data = malloc(sizeof(tcos_data));
 	if (!data) return SC_ERROR_OUT_OF_MEMORY;
@@ -95,7 +95,9 @@ static int tcos_init(sc_card_t *card)
 	card->drv_data = (void *)data;
 	card->cla = 0x00;
 
-        flags = SC_ALGORITHM_RSA_RAW;
+        if (card->type != SC_CARD_TYPE_TCOS_V3) {
+                flags |= SC_ALGORITHM_RSA_RAW;
+        }
         flags |= SC_ALGORITHM_RSA_PAD_PKCS1;
         flags |= SC_ALGORITHM_RSA_HASH_NONE;
 
@@ -508,7 +510,6 @@ static int tcos_set_security_env(sc_card_t *card, const sc_security_env_t *env, 
 
 	sc_format_apdu(card, &apdu, SC_APDU_CASE_3_SHORT, 0x22, tcos3 ? 0x41 : 0xC1, 0xB8);
 	p = sbuf;
-	*p++=0x80; *p++=0x01; *p++=tcos3 ? 0x0A : 0x10;
 	if (env->flags & SC_SEC_ENV_KEY_REF_PRESENT) {
 		*p++ = (env->flags & SC_SEC_ENV_KEY_REF_SYMMETRIC) ? 0x83 : 0x84;
 		*p++ = env->key_ref_len;
@@ -722,7 +723,6 @@ struct sc_card_driver * sc_get_tcos_driver(void)
 	tcos_ops.select_file          = tcos_select_file;
 	tcos_ops.list_files           = tcos_list_files;
 	tcos_ops.delete_file          = tcos_delete_file;
-	tcos_ops.set_security_env     = tcos_set_security_env;
 	tcos_ops.compute_signature    = tcos_compute_signature;
 	tcos_ops.decipher             = tcos_decipher;
 	tcos_ops.restore_security_env = tcos_restore_security_env;
