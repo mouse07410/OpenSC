@@ -86,7 +86,7 @@ static int tcos_match_card(sc_card_t *card)
 
 static int tcos_init(sc_card_t *card)
 {
-        unsigned long flags = 0;
+        unsigned long flags;
 
 	tcos_data *data = malloc(sizeof(tcos_data));
 	if (!data) return SC_ERROR_OUT_OF_MEMORY;
@@ -95,9 +95,7 @@ static int tcos_init(sc_card_t *card)
 	card->drv_data = (void *)data;
 	card->cla = 0x00;
 
-        if (card->type != SC_CARD_TYPE_TCOS_V3) {
-                flags |= SC_ALGORITHM_RSA_RAW;
-        }
+        flags = SC_ALGORITHM_RSA_RAW;
         flags |= SC_ALGORITHM_RSA_PAD_PKCS1;
         flags |= SC_ALGORITHM_RSA_HASH_NONE;
 
@@ -551,7 +549,8 @@ static int tcos_compute_signature(sc_card_t *card, const u8 * data, size_t datal
 	assert(card != NULL && data != NULL && out != NULL);
 	tcos3=(card->type==SC_CARD_TYPE_TCOS_V3);
 
-	if (datalen > 255) SC_FUNC_RETURN(card->ctx, SC_LOG_DEBUG_VERBOSE, SC_ERROR_INVALID_ARGUMENTS);
+	// We can sign (key length / 8) bytes
+	if (datalen > 256) SC_FUNC_RETURN(card->ctx, SC_LOG_DEBUG_VERBOSE, SC_ERROR_INVALID_ARGUMENTS);
 
 	if(((tcos_data *)card->drv_data)->next_sign){
 		if(datalen>48){
