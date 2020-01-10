@@ -36,10 +36,8 @@
 
 #ifdef ENABLE_OPENSSL
 #include <openssl/opensslv.h>
-#if OPENSSL_VERSION_NUMBER >= 0x10000000L
 #include <openssl/opensslconf.h>
 #include <openssl/crypto.h>
-#endif
 #include <openssl/conf.h>
 #include <openssl/evp.h>
 #include <openssl/x509.h>
@@ -2838,7 +2836,7 @@ parse_rsa_pkey(EVP_PKEY *pkey, int private, struct rsakey_info *rsa)
 	return 0;
 }
 
-#if OPENSSL_VERSION_NUMBER >= 0x10000000L && !defined(OPENSSL_NO_EC)
+#if !defined(OPENSSL_NO_EC)
 static int
 parse_gost_pkey(EVP_PKEY *pkey, int private, struct gostkey_info *gost)
 {
@@ -3055,7 +3053,7 @@ static int write_object(CK_SESSION_HANDLE session)
 		if (pk_type == EVP_PKEY_RSA)   {
 			rv = parse_rsa_pkey(evp_key, is_private, &rsa);
 		}
-#if OPENSSL_VERSION_NUMBER >= 0x10000000L && !defined(OPENSSL_NO_EC)
+#if !defined(OPENSSL_NO_EC)
 		else if (pk_type == NID_id_GostR3410_2001)   {
 			rv = parse_gost_pkey(evp_key, is_private, &gost);
 			type = CKK_GOSTR3410;
@@ -3183,7 +3181,7 @@ static int write_object(CK_SESSION_HANDLE session)
 			FILL_ATTR(privkey_templ[n_privkey_attr], CKA_COEFFICIENT, rsa.coefficient, rsa.coefficient_len);
 			n_privkey_attr++;
 		}
-#if OPENSSL_VERSION_NUMBER >= 0x10000000L && !defined(OPENSSL_NO_EC)
+#if !defined(OPENSSL_NO_EC)
 		else if (pk_type == EVP_PKEY_EC)   {
 			type = CKK_EC;
 
@@ -3218,7 +3216,7 @@ static int write_object(CK_SESSION_HANDLE session)
 		pk_type = EVP_PKEY_base_id(evp_key);
 		if (pk_type == EVP_PKEY_RSA)
 			type = CKK_RSA;
-#if OPENSSL_VERSION_NUMBER >= 0x10000000L && !defined(OPENSSL_NO_EC)
+#if !defined(OPENSSL_NO_EC)
 		else if (pk_type == EVP_PKEY_EC)
 			type = CKK_EC;
 		else if (pk_type == NID_id_GostR3410_2001)
@@ -3283,7 +3281,7 @@ static int write_object(CK_SESSION_HANDLE session)
 			FILL_ATTR(pubkey_templ[n_pubkey_attr], CKA_PUBLIC_EXPONENT, rsa.public_exponent, rsa.public_exponent_len);
 			n_pubkey_attr++;
 		}
-#if OPENSSL_VERSION_NUMBER >= 0x10000000L && !defined(OPENSSL_NO_EC)
+#if !defined(OPENSSL_NO_EC)
 		else if (pk_type == EVP_PKEY_EC)   {
 			type = CKK_EC;
 
@@ -4440,7 +4438,7 @@ static int read_object(CK_SESSION_HANDLE session)
 			if (!i2d_RSA_PUBKEY_bio(pout, rsa))
 				util_fatal("cannot convert RSA public key to DER");
 			RSA_free(rsa);
-#if OPENSSL_VERSION_NUMBER >= 0x10000000L && !defined(OPENSSL_NO_EC)
+#if !defined(OPENSSL_NO_EC)
 		} else if (type == CKK_EC) {
 			EC_KEY *ec;
 			CK_BYTE *params;
@@ -4949,7 +4947,7 @@ static int test_signature(CK_SESSION_HANDLE sess)
 {
 	int             errors = 0;
 	CK_RV           rv;
-	CK_OBJECT_HANDLE privKeyObject;
+	CK_OBJECT_HANDLE pubKeyObject, privKeyObject;
 	CK_MECHANISM    ck_mech = { CKM_MD5, NULL, 0 };
 	CK_MECHANISM_TYPE firstMechType;
 	CK_SESSION_INFO sessionInfo;
@@ -5188,19 +5186,17 @@ static int test_signature(CK_SESSION_HANDLE sess)
 	ck_mech.mechanism = mechTypes[i];
 	j = 1;  /* j-th signature key */
 	while (find_object(sess, CKO_PRIVATE_KEY, &privKeyObject, NULL, 0, j++) != 0) {
+		unsigned char   *id;
+		CK_ULONG        idLen;
 		CK_ULONG	modLenBits;
 
-		label = getLABEL(sess, privKeyObject, NULL);
-		modLenBits = get_private_key_length(sess, privKeyObject);
-		modLenBytes = (modLenBits + 7) / 8;
-
-		printf("  testing key %d (%u bits%s%s) with 1 signature mechanism",
-				(int) (j-1),
-				(int) modLenBits,
-				label? ", label=" : "",
-				label? label : "");
-		if (label)
+		printf("  testing key %d", (int) (j-1));
+		if ((label = getLABEL(sess, privKeyObject, NULL)) != NULL) {
+			printf(" (%s)", label);
 			free(label);
+		}
+		if ((int) (j-1) != 0)
+			printf(" with 1 mechanism");
 
 		if (getKEY_TYPE(sess, privKeyObject) != CKK_RSA) {
 			printf(" -- non-RSA, skipping\n");
@@ -5210,13 +5206,28 @@ static int test_signature(CK_SESSION_HANDLE sess)
 			printf(" -- can't be used to sign/verify, skipping\n");
 			continue;
 		}
-		else if (!modLenBytes)   {
+		if ((id = getID(sess, privKeyObject, &idLen)) != NULL) {
+			int r;
+
+			r = find_object(sess, CKO_PUBLIC_KEY, &pubKeyObject, id, idLen, 0);
+			free(id);
+			if (r == 0) {
+				printf(" -- can't find corresponding public key, skipping\n");
+				continue;
+			}
+		}
+		else {
+			printf(" -- can't get the ID for looking up the public key, skipping\n");
+			continue;
+		}
+
+		modLenBits = get_private_key_length(sess, privKeyObject);
+		modLenBytes = (modLenBits + 7) / 8;
+		if (!modLenBytes)   {
 			printf(" -- can't be used to sign/verify, skipping: can't obtain modulus\n");
 			continue;
 		}
-		else   {
-			printf("\n");
-		}
+		printf("\n");
 
 		/* Fill in data[0] and dataLens[0] */
 		dataLen = modLenBytes;
@@ -5858,10 +5869,11 @@ static int test_decrypt(CK_SESSION_HANDLE sess)
 {
 	int             errors = 0;
 	CK_RV           rv = 0;
-	CK_OBJECT_HANDLE privKeyObject;
+	CK_OBJECT_HANDLE pubKeyObject, privKeyObject;
+	unsigned char   *id = NULL;
 	CK_MECHANISM_TYPE *mechs = NULL;
 	CK_SESSION_INFO sessionInfo;
-	CK_ULONG        j, num_mechs = 0;
+	CK_ULONG        j, num_mechs = 0, id_len;
 #ifdef ENABLE_OPENSSL
 	CK_ULONG        n = 0;
 #endif
@@ -5883,9 +5895,9 @@ static int test_decrypt(CK_SESSION_HANDLE sess)
 
 	printf("Decryption (currently only for RSA)\n");
 	for (j = 0; find_object(sess, CKO_PRIVATE_KEY, &privKeyObject, NULL, 0, j); j++) {
-		printf("  testing key %ld ", j);
+		printf("  testing key %ld", j);
 		if ((label = getLABEL(sess, privKeyObject, NULL)) != NULL) {
-			printf("(%s) ", label);
+			printf(" (%s)", label);
 			free(label);
 		}
 		if (getKEY_TYPE(sess, privKeyObject) != CKK_RSA) {
@@ -5896,6 +5908,22 @@ static int test_decrypt(CK_SESSION_HANDLE sess)
 			printf(" -- can't be used to decrypt, skipping\n");
 			continue;
 		}
+
+		if ((id = getID(sess, privKeyObject, &id_len)) != NULL) {
+			int r;
+
+			r = find_object(sess, CKO_PUBLIC_KEY, &pubKeyObject, id, id_len, 0);
+			free(id);
+			if (r == 0) {
+				printf(" -- can't find corresponding public key, skipping\n");
+				continue;
+			}
+		}
+		else {
+			printf(" -- can't get the ID for looking up the public key, skipping\n");
+			continue;
+		}
+
 		printf("\n");
 
 #ifndef ENABLE_OPENSSL

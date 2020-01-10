@@ -32,6 +32,7 @@
  * https://gnupg.org/ftp/specs/OpenPGP-smart-card-application-3.3.pdf
  * https://gnupg.org/ftp/specs/OpenPGP-smart-card-application-3.3.0.pdf
  * https://gnupg.org/ftp/specs/OpenPGP-smart-card-application-3.3.1.pdf
+ * https://gnupg.org/ftp/specs/OpenPGP-smart-card-application-3.4.pdf
  */
 
 #if HAVE_CONFIG_H
@@ -62,10 +63,11 @@ static const struct sc_atr_table pgp_atrs[] = {
 	{
 		"3b:da:11:ff:81:b1:fe:55:1f:03:00:31:84:73:80:01:80:00:90:00:e4",
 		"ff:ff:ff:ff:ff:ff:ff:ff:ff:ff:ff:ff:ff:ff:ff:ff:ff:00:ff:ff:00",
-		"Gnuk v1.0.x (OpenPGP v2.0)", SC_CARD_TYPE_OPENPGP_GNUK, 0, NULL
+		"Gnuk v1.x.x (OpenPGP v2.0)", SC_CARD_TYPE_OPENPGP_GNUK, 0, NULL
 	},
 	{ "3b:fc:13:00:00:81:31:fe:15:59:75:62:69:6b:65:79:4e:45:4f:72:33:e1", NULL, "Yubikey NEO (OpenPGP v2.0)", SC_CARD_TYPE_OPENPGP_V2, 0, NULL },
 	{ "3b:f8:13:00:00:81:31:fe:15:59:75:62:69:6b:65:79:34:d4", NULL, "Yubikey 4 (OpenPGP v2.1)", SC_CARD_TYPE_OPENPGP_V2, 0, NULL },
+	{ "3b:fd:13:00:00:81:31:fe:15:80:73:c0:21:c0:57:59:75:62:69:4b:65:79:40", NULL, "Yubikey 5 (OpenPGP v3.4)", SC_CARD_TYPE_OPENPGP_V3, 0, NULL },
 	{ "3b:da:18:ff:81:b1:fe:75:1f:03:00:31:f5:73:c0:01:60:00:90:00:1c", NULL, default_cardname_v3, SC_CARD_TYPE_OPENPGP_V3, 0, NULL },
 	{ NULL, NULL, NULL, 0, 0, NULL }
 };
@@ -106,6 +108,7 @@ enum _version {		/* 2-byte BCD-alike encoded version number */
 	OPENPGP_CARD_3_1 = 0x0301,
 	OPENPGP_CARD_3_2 = 0x0302,
 	OPENPGP_CARD_3_3 = 0x0303,
+	OPENPGP_CARD_3_4 = 0x0304,
 };
 
 enum _access {		/* access flags for the respective DO/file */
@@ -168,6 +171,22 @@ static struct pgp_supported_ec_curves {
 		{{0x2b, 0x24, 0x03, 0x03, 0x02, 0x08, 0x01, 0x01, 0x0b, -1}}}, /* brainpoolP384r1 */
 	{{{1, 3, 36, 3, 3, 2, 8, 1, 1, 13, -1}}, 512,
 		{{0x2b, 0x24, 0x03, 0x03, 0x02, 0x08, 0x01, 0x01, 0x0d, -1}}}, /* brainpoolP512r1 */
+	{{{-1}}, 0, {{0x0}}} /* This entry must not be touched. */
+};
+
+static struct pgp_supported_ec_curves_gnuk {
+		struct sc_object_id oid;
+		size_t size;
+		struct sc_object_id oid_binary;
+} ec_curves_gnuk[] = {
+	{{{1, 2, 840, 10045, 3, 1, 7, -1}}, 256,
+		{{0x2a, 0x86, 0x48, 0xce, 0x3d, 0x03, 0x01, 0x07, -1}}}, /* ansiX9p256r1 */
+	{{{1, 3, 132, 0, 10, -1}}, 256,
+		{{0x06, 0x05, 0x2B, 0x81, 0x04, 0x00, 0x0A, -1}}}, /* secp256k1 */
+	/*{{{1, 3, 6, 1, 4, 1, 3029, 1, 5, 1, -1}}, 256,
+		{{0x0A, 0x2B, 0x06, 0x01, 0x04, 0x01, 0x97, 0x55, 0x01, 0x05, 0x01, -1}}}, //cv25519
+	{{{1, 3, 6, 1, 4, 1, 11591, 15, 1, -1}}, 256,
+		{{0x09, 0x2B, 0x06, 0x01, 0x04, 0x01, 0xDA, 0x47, 0x0F, 0x01, -1}}}, // ed25519 */
 	{{{-1}}, 0, {{0x0}}} /* This entry must not be touched. */
 };
 
@@ -297,9 +316,22 @@ static struct do_info		pgp1x_objects[] = {	/* OpenPGP card spec 1.1 */
 	{ 0, 0, 0, NULL, NULL },
 };
 
-static struct do_info		pgp33_objects[] = {	/* OpenPGP card spec 3.3 */
+static struct do_info		pgp34_objects[] = {	/**** OpenPGP card spec 3.4 ****/
+	{ 0x00d9, SIMPLE,      READ_ALWAYS | WRITE_PIN3,  NULL,               sc_put_data },
+	{ 0x00da, SIMPLE,      READ_ALWAYS | WRITE_PIN3,  NULL,               sc_put_data },
+	{ 0x00db, SIMPLE,      READ_ALWAYS | WRITE_PIN3,  NULL,               sc_put_data },
+	{ 0x00dc, SIMPLE,      READ_ALWAYS | WRITE_PIN3,  NULL,               sc_put_data },
+	{ 0x00de, SIMPLE,      READ_ALWAYS | WRITE_PIN3,  NULL,               sc_put_data },
+	{ 0x00de, SIMPLE,      READ_ALWAYS | WRITE_NEVER, NULL,               NULL        },
+	/* DO FA is CONSTRUCTED in spec; we treat it as SIMPLE for the time being */
+	{ 0x00fa, SIMPLE,      READ_ALWAYS | WRITE_NEVER, NULL,               NULL        },
+	/* DO FB is CONSTRUCTED in spec; we treat it as SIMPLE for the time being */
+	{ 0x00fb, SIMPLE,      READ_ALWAYS | WRITE_PIN3,  NULL,               sc_put_data },
+	/* DO FC is CONSTRUCTED in spec; we treat it as SIMPLE for the time being */
+	{ 0x00fc, SIMPLE,      READ_ALWAYS | WRITE_NEVER, NULL,               NULL        },
+	/**** OpenPGP card spec 3.3 ****/
 	{ 0x00f9, SIMPLE,      READ_ALWAYS | WRITE_PIN3,  NULL,               sc_put_data },
-	/* OpenPGP card spec 3.0 - 3.2 */
+	/**** OpenPGP card spec 3.0 - 3.2 ****/
 	{ 0x00d6, SIMPLE,      READ_ALWAYS | WRITE_PIN3,  NULL,               sc_put_data },
 	{ 0x00d7, SIMPLE,      READ_ALWAYS | WRITE_PIN3,  NULL,               sc_put_data },
 	{ 0x00d8, SIMPLE,      READ_ALWAYS | WRITE_PIN3,  NULL,               sc_put_data },
@@ -307,9 +339,9 @@ static struct do_info		pgp33_objects[] = {	/* OpenPGP card spec 3.3 */
 	{ 0x7f66, SIMPLE,      READ_ALWAYS | WRITE_NEVER, NULL,               sc_put_data },
 	/* DO 7F74 is CONSTRUCTED in spec; we treat it as SIMPLE for the time being */
 	{ 0x7f74, SIMPLE,      READ_ALWAYS | WRITE_NEVER, NULL,               sc_put_data },
-	/* OpenPGP card spec 2.1 & 2.2 */
+	/**** OpenPGP card spec 2.1 & 2.2 ****/
 	{ 0x00d5, SIMPLE,      READ_NEVER  | WRITE_PIN3,  NULL,               sc_put_data },
-	/* OpenPGP card spec 2.0 */
+	/**** OpenPGP card spec 2.0 ****/
 	{ 0x004d, CONSTRUCTED, READ_NEVER  | WRITE_PIN3,  NULL,               sc_put_data },
 	{ 0x004f, SIMPLE,      READ_ALWAYS | WRITE_NEVER, sc_get_data,        NULL        },
 	{ 0x005b, SIMPLE,      READ_ALWAYS | WRITE_PIN3,  NULL,               sc_put_data },
@@ -368,9 +400,10 @@ static struct do_info		pgp33_objects[] = {	/* OpenPGP card spec 3.3 */
 	{ 0, 0, 0, NULL, NULL },
 };
 
-static struct do_info		*pgp30_objects = pgp33_objects + 1;
-static struct do_info		*pgp21_objects = pgp33_objects + 6;
-static struct do_info		*pgp20_objects = pgp33_objects + 7;
+static struct do_info		*pgp33_objects = pgp34_objects +  9;
+static struct do_info		*pgp30_objects = pgp34_objects + 10;
+static struct do_info		*pgp21_objects = pgp34_objects + 15;
+static struct do_info		*pgp20_objects = pgp34_objects + 16;
 
 
 #define DRVDATA(card)        ((struct pgp_priv_data *) ((card)->drv_data))
@@ -572,7 +605,8 @@ pgp_init(sc_card_t *card)
 			  : (priv->bcd_version < OPENPGP_CARD_2_1) ? pgp20_objects
 			  : (priv->bcd_version < OPENPGP_CARD_3_0) ? pgp21_objects
 			  : (priv->bcd_version < OPENPGP_CARD_3_3) ? pgp30_objects
-			  :					     pgp33_objects;
+			  : (priv->bcd_version < OPENPGP_CARD_3_4) ? pgp33_objects
+			  :					     pgp34_objects;
 
 	/* change file path to MF for re-use in MF */
 	sc_format_path("3f00", &file->path);
@@ -637,10 +671,12 @@ pgp_init(sc_card_t *card)
 				break;
 			case SC_CARD_TYPE_OPENPGP_GNUK:
 				_sc_card_add_rsa_alg(card, 2048, flags_rsa, 0);
-				/* TODO add ECC for more recent Gnuk (1.2.x)
-				 * these are not include in SC_CARD_TYPE_OPENPGP_GNUK, but
-				 * are treated like SC_CARD_TYPE_OPENPGP_V2
-				 * Gnuk supports NIST, SECG and Curve25519 from version 1.2.x on */
+				/* Gnuk supports NIST, SECG and Curve25519 since version 1.2 */
+				for (i=0; ec_curves_gnuk[i].oid.value[0] >= 0; i++)
+				{
+					_sc_card_add_ec_alg(card, ec_curves_gnuk[i].size,
+						flags_ecc, ext_flags, &ec_curves_gnuk[i].oid);
+				}
 				break;
 			case SC_CARD_TYPE_OPENPGP_V2:
 			default:
@@ -2744,9 +2780,10 @@ pgp_update_card_algorithms(sc_card_t *card, sc_cardctl_openpgp_keygen_info_t *ke
 
 	LOG_FUNC_CALLED(card->ctx);
 
-	/* protect older cards against non-RSA */
+	/* protect incompatible cards against non-RSA */
 	if (key_info->algorithm != SC_OPENPGP_KEYALGO_RSA
-		&& card->type < SC_CARD_TYPE_OPENPGP_V3)
+		&& card->type < SC_CARD_TYPE_OPENPGP_V3
+		&& card->type != SC_CARD_TYPE_OPENPGP_GNUK)
 		LOG_FUNC_RETURN(card->ctx, SC_ERROR_NOT_SUPPORTED);
 
 	if (id > card->algorithm_count) {
@@ -2791,9 +2828,10 @@ pgp_gen_key(sc_card_t *card, sc_cardctl_openpgp_keygen_info_t *key_info)
 
 	LOG_FUNC_CALLED(card->ctx);
 
-	/* protect older cards against non-RSA */
+	/* protect incompatible cards against non-RSA */
 	if (key_info->algorithm != SC_OPENPGP_KEYALGO_RSA
-		&& card->type < SC_CARD_TYPE_OPENPGP_V3)
+		&& card->type < SC_CARD_TYPE_OPENPGP_V3
+		&& card->type != SC_CARD_TYPE_OPENPGP_GNUK)
 		LOG_FUNC_RETURN(card->ctx, SC_ERROR_NOT_SUPPORTED);
 
 	/* set Control Reference Template for key */
@@ -2807,10 +2845,6 @@ pgp_gen_key(sc_card_t *card, sc_cardctl_openpgp_keygen_info_t *key_info)
 		LOG_TEST_RET(card->ctx, SC_ERROR_INVALID_ARGUMENTS,
 				"Invalid key ID; must be 1, 2, or 3");
 	}
-
-	if (card->type == SC_CARD_TYPE_OPENPGP_GNUK && key_info->u.rsa.modulus_len != 2048)
-		LOG_TEST_RET(card->ctx, SC_ERROR_INVALID_ARGUMENTS,
-				"Gnuk only supports generating keys up to 2048-bit");
 
 	/* set attributes for new-generated key */
 	r = pgp_update_new_algo_attr(card, key_info);
@@ -3150,9 +3184,10 @@ pgp_store_key(sc_card_t *card, sc_cardctl_openpgp_keystore_info_t *key_info)
 
 	LOG_FUNC_CALLED(card->ctx);
 
-	/* protect older cards against non-RSA */
+	/* protect incompatible cards against non-RSA */
 	if (key_info->algorithm != SC_OPENPGP_KEYALGO_RSA
-		&& card->type < SC_CARD_TYPE_OPENPGP_V3)
+		&& card->type < SC_CARD_TYPE_OPENPGP_V3
+		&& card->type != SC_CARD_TYPE_OPENPGP_GNUK)
 		LOG_FUNC_RETURN(card->ctx, SC_ERROR_NOT_SUPPORTED);
 
 	/* Validate */
