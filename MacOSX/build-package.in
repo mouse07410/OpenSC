@@ -157,8 +157,8 @@ if ! test -e OpenSC.tokend; then
 	git clone http://github.com/mouse07410/OpenSC.tokend.git
 fi
 
-# Create the symlink to OpenSC sources
-test -L OpenSC.tokend/build/opensc-src || ln -sf ${BUILDPATH}/src OpenSC.tokend/build/opensc-src
+	# Create the symlink to OpenSC sources
+	test -L OpenSC.tokend/build/opensc-src || ln -sf ${BUILDPATH}/src OpenSC.tokend/build/opensc-src
 
 if (( xcodebuild -version | sed -En 's/Xcode[[:space:]]+([0-9]+)\.[0-9]*/\1/p' < 10 )); then
     # Take care of the flags
