@@ -201,9 +201,15 @@
 
 				<varlistentry>
 					<term>
-						<option>--label</option>
-						<replaceable>name</replaceable>, <option>-a</option>
-						<replaceable>name</replaceable>
+						<option>--usage-wrap</option>
+					</term>
+					<listitem><para>Specify 'wrap' key usage flag.</para></listitem>
+				</varlistentry>
+
+				<varlistentry>
+					<term>
+						<option>--label</option> <replaceable>name</replaceable>,
+						<option>-a</option> <replaceable>name</replaceable>
 					</term>
 					<listitem>
 						<para>Specify the name of the object to operate on (or the token label when
