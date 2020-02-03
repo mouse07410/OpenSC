@@ -245,7 +245,7 @@ AC_ARG_ENABLE(
 
 AC_ARG_ENABLE(
 	[man],
-	[AS_HELP_STRING([--disable-man],[disable installation of manuals @<:@enabled for none Windows@:>@])],
+	[AS_HELP_STRING([--disable-man],[disable installation of manuals @<:@enabled for non-Windows@:>@])],
 	,
 	[enable_man="detect"]
 )
@@ -357,6 +357,8 @@ if test "${xslstylesheetsdir}" = "detect"; then
 		/usr/share/xml/docbook/stylesheet/nwalsh \
 		/usr/share/xml/docbook/stylesheet/nwalsh/current \
 		/opt/local/share/xsl/docbook-xsl \
+		/opt/local/share/xsl/docbook-xsl-nons \
+		/opt/local/share/xsl/docbook-xsl-ns \
 		/sw/share/xml/xsl/docbook-xsl \
 		/usr/share/sgml/docbook/*; do
 
