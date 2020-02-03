@@ -1,4 +1,4 @@
-<html><head><meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1"><title>OpenSC Manual Pages: Section 5</title><meta name="generator" content="DocBook XSL Stylesheets V1.79.1"><style type="text/css"><!--
+<html><head><meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1"><title>OpenSC Manual Pages: Section 5</title><meta name="generator" content="DocBook XSL Stylesheets Vsnapshot"><style type="text/css"><!--
 			body {
   font-family: Verdana, Arial;
   font-size: 0.9em;
@@ -43,7 +43,7 @@ span.errortext {
   font-style: italic;
 }
 
-		--></style></head><body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF"><div class="book"><div class="titlepage"><div><div><h1 class="title"><a name="idm1"></a>OpenSC Manual Pages: Section 5</h1></div></div><hr></div><div class="toc"><p><b>Table of Contents</b></p><dl class="toc"><dt><span class="refentrytitle"><a href="#opensc.conf">opensc.conf</a></span><span class="refpurpose"> &#8212; configuration file for OpenSC</span></dt><dt><span class="refentrytitle"><a href="#pkcs15-profile">pkcs15-profile</a></span><span class="refpurpose"> &#8212; format of profile for <span class="command"><strong>pkcs15-init</strong></span></span></dt></dl></div><div class="refentry"><a name="opensc.conf"></a><div class="titlepage"></div><div class="refnamediv"><h2>Name</h2><p>opensc.conf &#8212; configuration file for OpenSC</p></div><div class="refsect1"><a name="idm13"></a><h2>Description</h2><p>
+		--></style></head><body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF"><div class="book"><div class="titlepage"><div><div><h1 class="title"><a name="id-1"></a>OpenSC Manual Pages: Section 5</h1></div></div><hr></div><div class="toc"><p><b>Table of Contents</b></p><dl class="toc"><dt><span class="refentrytitle"><a href="#opensc.conf">opensc.conf</a></span><span class="refpurpose"> &#8212; configuration file for OpenSC</span></dt><dt><span class="refentrytitle"><a href="#pkcs15-profile">pkcs15-profile</a></span><span class="refpurpose"> &#8212; format of profile for <span class="command"><strong>pkcs15-init</strong></span></span></dt></dl></div><div class="refentry"><a name="opensc.conf"></a><div class="titlepage"></div><div class="refnamediv"><h2>Name</h2><p>opensc.conf &#8212; configuration file for OpenSC</p></div><div class="refsect1"><a name="id-1.2.3"></a><h2>Description</h2><p>
 			OpenSC obtains configuration data from the following sources in the following order
 			</p><div class="orderedlist"><ol class="orderedlist" type="1"><li class="listitem"><p>
 						command-line options
@@ -57,7 +57,7 @@ span.errortext {
 						<code class="literal">HKEY_LOCAL_MACHINE</code> (if available)
 				</p></li><li class="listitem"><p>
 						system-wide configuration file
-						(<code class="literal">/usr/etc/opensc.conf</code>)
+						(<code class="literal">/Library/OpenSC/etc/opensc.conf</code>)
 				</p></li></ol></div><p>
 		</p><p>
 			The configuration file, <code class="literal">opensc.conf</code>, is composed
@@ -122,7 +122,7 @@ app <em class="replaceable"><code>application</code></em> {
 						<code class="literal">westcos-tool</code>:
 						Configuration block for OpenSC tools
 				</p></li></ul></div><p>
-		</p></div><div class="refsect1"><a name="idm103"></a><h2>Configuration Options</h2><div class="variablelist"><dl class="variablelist"><dt><a name="debug"></a><span class="term">
+		</p></div><div class="refsect1"><a name="id-1.2.4"></a><h2>Configuration Options</h2><div class="variablelist"><dl class="variablelist"><dt><a name="debug"></a><span class="term">
 					<code class="option">debug = <em class="replaceable"><code>num</code></em>;</code>
 				</span></dt><dd><p>
 						Amount of debug info to print (Default:
@@ -146,13 +146,19 @@ app <em class="replaceable"><code>application</code></em> {
 						directory for 
 						<span class="citerefentry"><span class="refentrytitle">pkcs15-init</span>(1).
 						</span>
-						(Default: <code class="literal">/usr/share/opensc</code>).
+						(Default: <code class="literal">/Library/OpenSC/share/opensc</code>).
 					</p><p>
 						If this configuration value is not found on
 						Windows, the registry key
 						<code class="filename">Software\OpenSC
 							Project\OpenSC\ProfileDir</code> is
 						checked.
+				</p></dd><dt><span class="term">
+					<code class="option">disable_colors = <em class="replaceable"><code>bool</code></em>;</code>
+				</span></dt><dd><p>
+						Disable colors of log messages (Default:
+						<code class="literal">false</code> if attached to a console,
+						<code class="literal">true</code> otherwise).
 				</p></dd><dt><span class="term">
 					<code class="option">disable_popups = <em class="replaceable"><code>bool</code></em>;</code>
 				</span></dt><dd><p>
@@ -176,7 +182,7 @@ app <em class="replaceable"><code>application</code></em> {
 						default) will load all statically linked drivers.
 					</p><p>
 						If an unknown (i.e. not internal or old) driver is
-						supplied, a separate configuration configuration
+						supplied, a separate configuration
 						block has to be written for the driver. A special
 						value <code class="literal">old</code> will load all
 						statically linked drivers that may be removed in
@@ -257,7 +263,7 @@ app <em class="replaceable"><code>application</code></em> {
 								<code class="option">module_path = <em class="replaceable"><code>filename</code></em>;</code>
 							</span></dt><dd><p>
 									Directory with external SM module
-									(Default: /usr/lib).
+									(Default: /Library/OpenSC/lib).
 								</p><p>
 									If this configuration value is not
 									found on Windows, the registry key
@@ -332,7 +338,7 @@ app <em class="replaceable"><code>application</code></em> {
 						Parameters for the OpenSC PKCS11 module.
 					</p><p>
 						For details see <a class="xref" href="#pkcs11" title="Configuration of PKCS#11">the section called &#8220;Configuration of PKCS#11&#8221;</a>.
-					</p></dd></dl></div><div class="refsect2"><a name="reader_driver"></a><h3>Configuration of Smart Card Reader Driver</h3><div class="refsect3"><a name="idm330"></a><h4>Configuration Options for all Reader Drivers</h4><div class="variablelist"><dl class="variablelist"><dt><span class="term">
+					</p></dd></dl></div><div class="refsect2"><a name="reader_driver"></a><h3>Configuration of Smart Card Reader Driver</h3><div class="refsect3"><a name="id-1.2.4.3.2"></a><h4>Configuration Options for all Reader Drivers</h4><div class="variablelist"><dl class="variablelist"><dt><span class="term">
 							<code class="option">max_send_size = <em class="replaceable"><code>num</code></em>;</code>
 							<code class="option">max_recv_size = <em class="replaceable"><code>num</code></em>;</code>
 						</span></dt><dd><p>
@@ -424,7 +430,7 @@ app <em class="replaceable"><code>application</code></em> {
 						</span></dt><dd><p>
 								Use specific PC/SC provider
 								(Default:
-								<code class="literal">libpcsclite.so.1</code>).
+								<code class="literal">/System/Library/Frameworks/PCSC.framework/PCSC</code>).
 						</p></dd></dl></div></div><div class="refsect3"><a name="openct"></a><h4>Configuration of OpenCT Readers</h4><div class="variablelist"><dl class="variablelist"><dt><span class="term">
 							<code class="option">readers = <em class="replaceable"><code>num</code></em>;</code>
 						</span></dt><dd><p>
@@ -554,10 +560,10 @@ app <em class="replaceable"><code>application</code></em> {
 											<code class="literal">raw</code>
 									</p></li></ul></div><p>
 						</p></dd><dt><span class="term">
-							<code class="option">md_read_only = <em class="replaceable"><code>bool</code></em>;</code>
+							<code class="option">read_only = <em class="replaceable"><code>bool</code></em>;</code>
 						</span></dt><dd><p>
 								Mark card as read/only card in
-								Minidriver/BaseCSP interface
+								PKCS#11/Minidriver/BaseCSP interface
 								(Default: <code class="literal">false</code>).
 						</p></dd><dt><span class="term">
 							<code class="option">md_supports_X509_enrollment = <em class="replaceable"><code>bool</code></em>;</code>
@@ -754,6 +760,22 @@ app <em class="replaceable"><code>application</code></em> {
 							need to set this to get signatures to work with
 							some cards (Default: <code class="literal">false</code>).
 					</p></dd><dt><span class="term">
+						<code class="option">private_certificate = <em class="replaceable"><code>value</code></em>;</code>
+					</span></dt><dd><p>
+							How to handle a PIN-protected certificate. Known
+							parameters:
+							</p><div class="itemizedlist"><ul class="itemizedlist" style="list-style-type: disc; "><li class="listitem"><p>
+										<code class="literal">protect</code>: The certificate stays PIN-protected.
+								</p></li><li class="listitem"><p>
+										<code class="literal">declassify</code>: Allow
+										reading the certificate without
+										enforcing verification of the PIN.
+								</p></li><li class="listitem"><p>
+										<code class="literal">ignore</code>: Ignore PIN-protected certificates.
+								</p></li></ul></div><p>
+							(Default: <code class="literal">ignore</code> in Tokend,
+							<code class="literal">protect</code> otherwise).
+					</p></dd><dt><span class="term">
 						<code class="option">enable_pkcs15_emulation = <em class="replaceable"><code>bool</code></em>;</code>
 					</span></dt><dd><p>
 							Enable pkcs15 emulation (Default:
@@ -775,7 +797,7 @@ app <em class="replaceable"><code>application</code></em> {
 						<code class="option">builtin_emulators = <em class="replaceable"><code>emulators</code></em>;</code>
 					</span></dt><dd><p>
 							List of the builtin pkcs15 emulators to test
-							(Default: <code class="literal">westcos, openpgp,
+							(Default: <code class="literal">westcos, openpgp, 
 								starcert, tcos, esteid, itacns, 
 								PIV-II, cac, gemsafeGPK, gemsafeV1, actalis,
 								atrust-acos, tccardos, entersafe, pteid,
@@ -854,13 +876,6 @@ app <em class="replaceable"><code>application</code></em> {
 							Score for <span class="application">OpenSC.tokend</span>
 							(Default: <code class="literal">300</code>).  The tokend with
 							the highest score shall be used.
-					</p></dd><dt><span class="term">
-						<code class="option">ignore_private_certificate = <em class="replaceable"><code>bool</code></em>;</code>
-					</span></dt><dd><p>
-							Tokend ignore to read PIN protected certificate
-							that is set
-							<code class="literal">SC_PKCS15_CO_FLAG_PRIVATE</code> flag
-							(Default: <code class="literal">true</code>).
 					</p></dd></dl></div></div><div class="refsect2"><a name="pkcs11"></a><h3>Configuration of PKCS#11</h3><div class="variablelist"><dl class="variablelist"><dt><span class="term">
 						<code class="option">max_virtual_slots = <em class="replaceable"><code>num</code></em>;</code>
 					</span></dt><dd><p>
@@ -1020,7 +1035,7 @@ app <em class="replaceable"><code>application</code></em> {
 							For the module to simulate the opensc-onepin module
 							behavior the following option
 							<code class="option">create_slots_for_pins = "user";</code>
-					</p></dd></dl></div></div></div><div class="refsect1"><a name="idm971"></a><h2>Environment</h2><div class="variablelist"><dl class="variablelist"><dt><span class="term">
+					</p></dd></dl></div></div></div><div class="refsect1"><a name="id-1.2.5"></a><h2>Environment</h2><div class="variablelist"><dl class="variablelist"><dt><span class="term">
 					<code class="envar">OPENSC_CONF</code>
 				</span></dt><dd><p>
 						Filename for a user defined configuration file
@@ -1063,15 +1078,15 @@ app <em class="replaceable"><code>application</code></em> {
 				</span></dt><dd><p>
 						PIV configuration during initialization with
 						<span class="application">piv-tool</span>.
-				</p></dd></dl></div></div><div class="refsect1"><a name="idm1012"></a><h2>Files</h2><div class="variablelist"><dl class="variablelist"><dt><span class="term">
-					<code class="filename">/usr/etc/opensc.conf</code>
+				</p></dd></dl></div></div><div class="refsect1"><a name="id-1.2.6"></a><h2>Files</h2><div class="variablelist"><dl class="variablelist"><dt><span class="term">
+					<code class="filename">/Library/OpenSC/etc/opensc.conf</code>
 				</span></dt><dd><p>
 						System-wide configuration file
 				</p></dd><dt><span class="term">
-					<code class="filename">/usr/share/doc/opensc/opensc.conf</code>
+					<code class="filename">/Library/OpenSC/share/doc/opensc/opensc.conf</code>
 				</span></dt><dd><p>
 						Extended example configuration file
-				</p></dd></dl></div></div></div><div class="refentry"><div class="refentry.separator"><hr></div><a name="pkcs15-profile"></a><div class="titlepage"></div><div class="refnamediv"><h2>Name</h2><p>pkcs15-profile &#8212; format of profile for <span class="command"><strong>pkcs15-init</strong></span></p></div><div class="refsect1"><a name="idm1036"></a><h2>Description</h2><p>
+				</p></dd></dl></div></div></div><div class="refentry"><div class="refentry.separator"><hr></div><a name="pkcs15-profile"></a><div class="titlepage"></div><div class="refnamediv"><h2>Name</h2><p>pkcs15-profile &#8212; format of profile for <span class="command"><strong>pkcs15-init</strong></span></p></div><div class="refsect1"><a name="id-1.3.3"></a><h2>Description</h2><p>
 			The <span class="command"><strong>pkcs15-init</strong></span> utility for PKCS #15 smart card
 			personalization is controlled via profiles. When starting, it will read two
 			such profiles at the moment, a generic application profile, and a card
@@ -1087,10 +1102,10 @@ app <em class="replaceable"><code>application</code></em> {
 			The card specific profile contains additional information required during
 			card initialization, such as location of PIN files, key references etc.
 			Profiles currently reside in <code class="filename">@pkgdatadir@</code>
-		</p></div><div class="refsect1"><a name="idm1044"></a><h2>Syntax</h2><p>
+		</p></div><div class="refsect1"><a name="id-1.3.4"></a><h2>Syntax</h2><p>
 			This section should contain information about the profile syntax. Will add
 			this soonishly.
-		</p></div><div class="refsect1"><a name="idm1047"></a><h2>See also</h2><p>
+		</p></div><div class="refsect1"><a name="id-1.3.5"></a><h2>See also</h2><p>
 			<span class="citerefentry"><span class="refentrytitle">pkcs15-init</span>(1)</span>,
 			<span class="citerefentry"><span class="refentrytitle">pkcs15-crypt</span>(1)</span>
 		</p></div></div></div></body></html>

@@ -7,7 +7,7 @@
 # You need to install the following packages from homebrew or macports or fink:
 # autoconf automake libtool pkg-config help2man gengetopt
 
-export MACOSX_DEPLOYMENT_TARGET="10.10"
+export MACOSX_DEPLOYMENT_TARGET="10.15"
 
 set -ex
 test -x ./configure || ./bootstrap
@@ -20,7 +20,7 @@ SDK_PATH=$(xcrun --sdk macosx --show-sdk-path)
 export CFLAGS="$CFLAGS -isysroot $SDK_PATH -arch x86_64"
 
 # Determine version of the available SDK, and force Xcode-9.4.1
-# if what we have is 10.14 (aka Xcode-10.x)
+# if what we have is 10.14+ (aka Xcode-10.x)
 SDK_VER=$(xcrun --show-sdk-version)
 arrSDK_VER=(${SDK_VER//./ })
 
@@ -118,8 +118,12 @@ if ! test -e ${BUILDPATH}/target/$PREFIX/lib/pkgconfig; then
 		--enable-strict \
 		--disable-assert \
 		--disable-silent-rules \
+		--enable-doc \
 		--with-pkcs11-provider=$PREFIX/lib/opensc-pkcs11.so \
-		--enable-sm # TODO: remove this (must be sensible default in master)
+		--enable-sm 2>&1 | tee opensc-config-log.txt # TODO: remove this (must be sensible default in master)
+		#--disable-pcsc \
+		#--enable-cryptotokenkit \
+		# does not seem to work even on macOS Catalina?
 
 	# always make clean
 	make clean
@@ -137,9 +141,6 @@ if ! test -e ${BUILDPATH}/target/$PREFIX/lib/pkgconfig; then
 	rm -f ${BUILDPATH}/target/$PREFIX/lib/*.a
 
 	# generate .bundle (required by Adobe Acrobat)
-    # (ULB) Probably Acrobat does not require this any more, at least Acrobat 11 and 15
-	# rely on CSDA tokend rather than opensc-pkcs11 bundle. Still, it doesn't hurt to
-	# keep this one around.
 	./MacOSX/libtool-bundle ${BUILDPATH}/target/$PREFIX/lib/opensc-pkcs11.so ${BUILDPATH}/target/$PREFIX/lib
 fi
 
