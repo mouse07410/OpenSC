@@ -219,15 +219,19 @@ if test -e OpenSCToken; then
 		    git clone --depth=1 ../openssl
         fi
 	else
-		cd openssl && git pull && cd ..
+		cd openssl 
+		git pull
+		cd ..
 	fi
 	if ! test -e openpace; then
 		git clone --depth=1 ../openpace
 	else
-		cd openpace && git pull && cd ..
+		cd openpace 
+		git pull 
+		cd ..
 	fi
 	BP=${BUILDPATH}
-	. ./bootstrap
+	./bootstrap
 	BUILDPATH=${BP}
 	xcodebuild -target OpenSCTokenApp -configuration Debug -project OpenSCTokenApp.xcodeproj install DSTROOT=${BUILDPATH}/target_token
 	cd ..
