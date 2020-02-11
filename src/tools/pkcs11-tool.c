@@ -1434,9 +1434,9 @@ static int login(CK_SESSION_HANDLE session, int login_type)
 {
 	char		*pin = NULL;
 	size_t		len = 0;
-	int		pin_allocated = 0, r;
+	int		pin_allocated = 0, r = 0;
 	CK_TOKEN_INFO	info;
-	CK_RV		rv;
+	CK_RV		rv = 0;
 	CK_FLAGS	pin_flags;
 
 	get_token_info(opt_slot, &info);
@@ -1486,7 +1486,8 @@ static int login(CK_SESSION_HANDLE session, int login_type)
 
 	if (!(info.flags & CKF_PROTECTED_AUTHENTICATION_PATH)
 			&& (!pin || !*pin)
-			&& login_type != CKU_CONTEXT_SPECIFIC)
+			&& login_type != CKU_CONTEXT_SPECIFIC
+	    )
 		return 1;
 
 	rv = p11->C_Login(session, login_type,
@@ -1908,11 +1909,17 @@ static void sign_data(CK_SLOT_ID slot, CK_SESSION_HANDLE session,
 		rv = p11->C_SignInit(session, &mech, key);
 		if (rv != CKR_OK)
 			p11_fatal("C_SignInit", rv);
-		if (getALWAYS_AUTHENTICATE(session, key))
-			login(session,CKU_CONTEXT_SPECIFIC);
 
 		sig_len = sizeof(sig_buffer);
 		rv =  p11->C_Sign(session, in_buffer, r, sig_buffer, &sig_len);
+
+		if (rv != CKR_OK && getALWAYS_AUTHENTICATE(session, key)) {
+			login(session,CKU_CONTEXT_SPECIFIC);
+
+			sig_len = sizeof(sig_buffer);
+			rv =  p11->C_Sign(session, in_buffer, r, sig_buffer, &sig_len);
+		}
+
 	}
 
 	if (rv != CKR_OK)   {
