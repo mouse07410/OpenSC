@@ -30,8 +30,8 @@ done
 cp -f /Library/OpenSC/lib/opensc-pkcs11.so /usr/local/lib/opensc-pkcs11.so
 cp -f /Library/OpenSC/lib/onepin-opensc-pkcs11.so /usr/local/lib/onepin-opensc-pkcs11.so
 # Take care of libopensc.dylib
-cp -f /Library/OpenSC/lib/libopensc.4.dylib /usr/local/lib/
-ln -sf /usr/local/lib/libopensc.4.dylib /usr/local/lib/libopensc.dylib
+cp -f /Library/OpenSC/lib/libopensc.6.dylib /usr/local/lib/
+ln -sf /usr/local/lib/libopensc.6.dylib /usr/local/lib/libopensc.dylib
 
 # Restore opensc.conf if necessary, and make sure MD5 hash of this file is recorded correctly
 if [ -e "/Library/OpenSC/etc/opensc.conf.orig" ]
@@ -81,18 +81,18 @@ do
 	ln -sf $f $l
 done
 
-for f in \
-	/Library/LaunchAgents/pkcs11-register.plist \
-	/Library/LaunchAgents/opensc-notify.plist
-do
-	if [ -e "$f" ]
-	then
-		/bin/launchctl asuser $(id -u "${USER}") /bin/launchctl load "$f"
-	fi
-done
+#for f in \
+#	/Library/LaunchAgents/pkcs11-register.plist \
+#	/Library/LaunchAgents/opensc-notify.plist
+#do
+#	if [ -e "$f" ]
+#	then
+#		/bin/launchctl asuser $(id -u "${USER}") /bin/launchctl load "$f"
+#	fi
+#done
 
-if [ -e /Applications/OpenSCTokenApp.app/Contents/PlugIns/OpenSCToken.appex ]
-	sudo -u _securityagent pluginkit -a /Applications/OpenSCTokenApp.app/Contents/PlugIns/OpenSCToken.appex
-fi
+#if [ -e /Applications/OpenSCTokenApp.app/Contents/PlugIns/OpenSCToken.appex ]
+#	sudo -u _securityagent pluginkit -a /Applications/OpenSCTokenApp.app/Contents/PlugIns/OpenSCToken.appex
+#fi
 
 exit 0
