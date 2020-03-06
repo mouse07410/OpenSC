@@ -2073,7 +2073,7 @@ static void verify_signature(CK_SLOT_ID slot, CK_SESSION_HANDLE session,
 		rv =  p11->C_Verify(session, in_buffer, r, sig_buffer, sig_len);
 	}
 
-	if (rv != CKR_OK) {
+	if (rv != CKR_OK && rv != CKR_SIGNATURE_INVALID) {
 		rv = p11->C_VerifyInit(session, &mech, key);
 		if (rv != CKR_OK)
 			p11_fatal("C_VerifyInit", rv);
@@ -2088,7 +2088,7 @@ static void verify_signature(CK_SLOT_ID slot, CK_SESSION_HANDLE session,
 
 		sig_len = r2;
 		rv = p11->C_VerifyFinal(session, sig_buffer, sig_len);
-		if (rv != CKR_OK)
+		if (rv != CKR_OK && rv != CKR_SIGNATURE_INVALID)
 			p11_fatal("C_VerifyFinal", rv);
 	}
 
@@ -3336,7 +3336,7 @@ static int write_object(CK_SESSION_HANDLE session)
 			else if (strncasecmp(opt_key_type, "DES3:", strlen("DES3:")) == 0)
 				type = CKK_DES3;
 			else
-				util_fatal("Unknown key type: 0x%X", type);
+				util_fatal("Unknown key type: 0x%lX", type);
 		}
 
 		FILL_ATTR(seckey_templ[0], CKA_CLASS, &clazz, sizeof(clazz));
@@ -4497,7 +4497,7 @@ static int read_object(CK_SESSION_HANDLE session)
 #endif
 		}
 		else
-			util_fatal("Reading public keys of type 0x%X not (yet) supported", type);
+			util_fatal("Reading public keys of type 0x%lX not (yet) supported", type);
 		value = BIO_copy_data(pout, &derlen);
 		BIO_free(pout);
 		len = derlen;

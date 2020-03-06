@@ -1093,10 +1093,8 @@ static int cac_select_file_by_type(sc_card_t *card, const sc_path_t *in_path, sc
 	 * We only need to do this for private keys.
 	 */
 	if ((pathlen > 2) && (pathlen <= 4) && memcmp(path, "\x3F\x00", 2) == 0) {
-		if (pathlen > 2) {
-			path += 2;
-			pathlen -= 2;
-		}
+		path += 2;
+		pathlen -= 2;
 	}
 
 
@@ -1542,7 +1540,7 @@ static int cac_process_CCC(sc_card_t *card, cac_private_data_t *priv, int depth)
 	size_t tl_len, val_len;
 	int r;
 
-	if (depth < 0) {
+	if (depth > CAC_MAX_CCC_DEPTH) {
 		sc_log(card->ctx, "Too much recursive CCC found. Exiting");
 		return SC_ERROR_INVALID_CARD;
 	}
@@ -1782,7 +1780,7 @@ static int cac_find_and_initialize(sc_card_t *card, int initialize)
 		priv = cac_new_private_data();
 		if (!priv)
 			return SC_ERROR_OUT_OF_MEMORY;
-		r = cac_process_CCC(card, priv, CAC_MAX_CCC_DEPTH);
+		r = cac_process_CCC(card, priv, 0);
 		if (r == SC_SUCCESS) {
 			card->type = SC_CARD_TYPE_CAC_II;
 			card->drv_data = priv;
