@@ -58,10 +58,10 @@ else
 fi
 
 # Force symlinks for OpenSC executables to /usr/local/bin directory
-#for f in /Library/OpenSC/bin/*
-#do
-#	ln -sf $f /usr/local/bin/
-#done
+for f in /Library/OpenSC/bin/*
+do
+	ln -sf $f /usr/local/bin/
+done
 
 #if [ -e "/Library/OpenSC/OpenSCTokenApp.app/Contents/PlugIns/OpenSCToken.appex" ]
 #then
