@@ -28,7 +28,7 @@ matrix:
       sudo: true
     - compiler: gcc
       os: linux
-      dist: trusty
+      dist: bionic
       env:
         - DO_SIMULATION=javacard
         - ENABLE_DOC=--enable-doc
@@ -91,6 +91,14 @@ before_install:
         export OTHER_CODE_SIGN_FLAGS=--timestamp CODE_SIGN_INJECT_BASE_ENTITLEMENTS=NO CODE_SIGN_STYLE=Manual;
         git clone https://github.com/frankmorgner/OpenSCToken.git;
     fi
+  - if [ "${DO_SIMULATION}" = "javacard" ]; then
+        sudo apt-get install -y openjdk-8-jdk;
+        sudo update-java-alternatives -s java-1.8.0-openjdk-amd64;
+        sudo update-alternatives --get-selections | grep ^java;
+        export PATH="/usr/lib/jvm/java-8-openjdk-amd64/bin/:$PATH";
+        export JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64/;
+        env | grep -i openjdk;
+    fi
   - if [ "${DO_SIMULATION}" = "cac" ]; then
         sudo apt-get install -y libglib2.0-dev libnss3-dev  pkgconf libtool make autoconf autoconf-archive automake libsofthsm2-dev softhsm2 softhsm2-common help2man gnutls-bin libcmocka-dev libusb-dev libudev-dev flex libnss3-tools libssl-dev libpcsclite1;
         export PKG_CONFIG_PATH=/usr/local/lib/pkgconfig;
@@ -133,11 +141,12 @@ before_script:
   - if [ "${DO_COVERITY_SCAN}" = "yes" ]; then curl -s 'https://scan.coverity.com/scripts/travisci_build_coverity_scan.sh' | bash || true; fi
 
   - if [ "${DO_SIMULATION}" = "javacard" ]; then
+      set -ex;
       git clone https://github.com/frankmorgner/vsmartcard.git;
       cd vsmartcard/virtualsmartcard;
       autoreconf -vis && ./configure && sudo make install;
       cd $TRAVIS_BUILD_DIR;
-      sudo /etc/init.d/pcscd restart;
+      sudo systemctl stop pcscd.service pcscd.socket;
 
       git clone https://github.com/martinpaljak/oracle_javacard_sdks.git;
       export JC_HOME=$PWD/oracle_javacard_sdks/jc222_kit;
@@ -145,6 +154,8 @@ before_script:
 
       git clone https://github.com/arekinath/jcardsim.git;
       cd jcardsim;
+      env | grep -i openjdk;
+      export JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64/;
       mvn initialize && mvn clean install;
       cd $TRAVIS_BUILD_DIR;
 
@@ -176,13 +187,14 @@ before_script:
 
       git clone --recursive https://github.com/arekinath/PivApplet.git;
       cd PivApplet;
-      ant dist;
+      JC_HOME=${JC_CLASSIC_HOME} ant dist;
       cd $TRAVIS_BUILD_DIR;
 
       git clone https://github.com/Yubico/yubico-piv-tool.git;
       cd yubico-piv-tool;
       autoreconf -vis && ./configure && sudo make install;
       cd $TRAVIS_BUILD_DIR;
+      set +ex;
     fi
 
   - if [ "${DO_SIMULATION}" = "oseid" ]; then
@@ -191,6 +203,7 @@ before_script:
       make -f Makefile.console;
       mkdir tmp;
       socat -d -d pty,link=tmp/OsEIDsim.socket,raw,echo=0 "exec:build/console/console ...,pty,raw,echo=0" &
+      PID=$!;
       sleep 1;
       echo "# OsEIDsim" > tmp/reader.conf;
       echo 'FRIENDLYNAME      "OsEIDsim"' >> tmp/reader.conf;
@@ -244,7 +257,11 @@ script:
       sudo make install;
       export LD_LIBRARY_PATH=/usr/local/lib;
 
+      sudo /usr/sbin/pcscd -f &
+      PCSCD_PID=$!;
+
       java -noverify -cp IsoApplet/src/:jcardsim/target/jcardsim-3.0.5-SNAPSHOT.jar com.licel.jcardsim.remote.VSmartCard isoapplet_jcardsim.cfg >/dev/null &
+      PID=$!;
       sleep 5;
       opensc-tool --card-driver default --send-apdu 80b800001a0cf276a288bcfba69d34f310010cf276a288bcfba69d34f3100100;
       opensc-tool -n;
@@ -254,32 +271,37 @@ script:
       pkcs15-init --generate-key ec/secp256r1 --id 3 --key-usage sign         --auth-id FF --pin 123456;
       pkcs15-tool -D;
       pkcs11-tool -l -t -p 123456;
-      killall java;
+      kill -9 $PID;
 
       java -noverify -cp GidsApplet/src/:jcardsim/target/jcardsim-3.0.5-SNAPSHOT.jar com.licel.jcardsim.remote.VSmartCard gids_jcardsim.cfg >/dev/null &
+      PID=$!;
       sleep 5;
       opensc-tool --card-driver default --send-apdu 80b80000190bA0000003974254465902010bA00000039742544659020100;
       opensc-tool -n;
       gids-tool --initialize --pin 123456 --admin-key 000000000000000000000000000000000000000000000000 --serial 00000000000000000000000000000000;
-      killall java;
+      kill -9 $PID;
 
       java -noverify -cp ykneo-openpgp/applet/bin:jcardsim/target/jcardsim-3.0.5-SNAPSHOT.jar com.licel.jcardsim.remote.VSmartCard openpgp_jcardsim.cfg >/dev/null &
+      PID=$!;
       sleep 5;
       opensc-tool --card-driver default --send-apdu 80b800002210D276000124010200000000000001000010D276000124010200000000000001000000;
       opensc-tool -n;
       openpgp-tool --verify CHV3 --pin 12345678 --gen-key 2;
       pkcs15-init --verify --auth-id 3 --pin 12345678 --delete-objects privkey,pubkey --id 2 --generate-key rsa/2048;
       pkcs11-tool -l -t -p 123456;
-      killall java;
+      kill -9 $PID;
 
       java -noverify -cp PivApplet/bin/:jcardsim/target/jcardsim-3.0.5-SNAPSHOT.jar com.licel.jcardsim.remote.VSmartCard PivApplet/test/jcardsim.cfg >/dev/null &
+      PID=$!;
       sleep 5;
       opensc-tool --card-driver default --send-apdu 80b80000120ba000000308000010000100050000020F0F7f;
       opensc-tool -n;
-      yubico-piv-tool -r 'Virtual PCD 00 00' -P 123456 -s 9a -a generate -A ECCP256;
-      yubico-piv-tool -r 'Virtual PCD 00 00' -P 123456 -s 9e -a generate -A RSA2048;
+      yubico-piv-tool -v 9999 -r 'Virtual PCD 00 00' -P 123456 -s 9e -a generate -A RSA2048;
+      yubico-piv-tool -v 9999 -r 'Virtual PCD 00 00' -P 123456 -s 9a -a generate -A ECCP256;
       pkcs11-tool -l -t -p 123456;
-      killall java;
+      kill -9 $PID;
+
+      sudo kill -9 $PCSCD_PID;
 
       set +ex;
     fi
@@ -298,7 +320,7 @@ script:
       ./OsEID-tool EC-UPLOAD-KEYS;
       ./OsEID-tool EC-SIGN-TEST;
       ./OsEID-tool EC-ECDH-TEST;
-      killall socat;
+      kill -9 $PID;
 
       set +ex;
     fi
