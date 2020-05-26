@@ -10,22 +10,9 @@ matrix:
       os: osx
       osx_image: xcode9.4
       env: DO_PUSH_ARTIFACT=yes
-   
-    - env:
-        - HOST=x86_64-w64-mingw32
-        - DO_PUSH_ARTIFACT=yes
-    - env:
-        - HOST=i686-w64-mingw32
-        - DO_PUSH_ARTIFACT=yes
-    - env: DO_COVERITY_SCAN=yes
-
-  allow_failures:
-    - compiler: gcc
+    - compiler: clang
       os: linux
-      env:
-        - DO_SIMULATION=yes
-        - ENABLE_DOC=yes
-      sudo: true
+      dist: bionic
     - compiler: gcc
       os: linux
       dist: bionic
