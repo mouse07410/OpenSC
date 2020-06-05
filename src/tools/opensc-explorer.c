@@ -33,6 +33,11 @@
 #include <arpa/inet.h>  /* for htons() */
 #endif
 
+#ifdef _WIN32
+#include <io.h>		/* for_setmode() */
+#include <fcntl.h>	/* for _O_TEXT and _O_BINARY */
+#endif
+
 #ifdef HAVE_IO_H
 #include <io.h>
 #endif
@@ -100,6 +105,7 @@ static int do_verify(int argc, char **argv);
 static int do_change(int argc, char **argv);
 static int do_unblock(int argc, char **argv);
 static int do_get(int argc, char **argv);
+static int do_get_record(int argc, char **argv);
 static int do_update_binary(int argc, char **argv);
 static int do_update_record(int argc, char **argv);
 static int do_put(int argc, char **argv);
@@ -174,6 +180,9 @@ static struct command	cmds[] = {
 	{ do_get,
 		"get",	"<file-id> [<output-file>]",
 		"copy an EF to a local file"		},
+	{ do_get_record,
+		"get_record",	"<file-id> <rec-no> [<output-file>]",
+		"copy a record of an EF to a local file"	},
 	{ do_get_data,
 		"do_get",	"<hex-tag> [<output-file>]",
 		"get a data object"			},
@@ -217,16 +226,21 @@ static struct command	cmds[] = {
 };
 
 
-static char *path_to_filename(const sc_path_t *path, const char sep)
+static char *path_to_filename(const sc_path_t *path, const char sep, size_t rec)
 {
-	static char buf[2*SC_MAX_PATH_STRING_SIZE];
+	static char buf[2*SC_MAX_PATH_STRING_SIZE+10];
 	size_t i, j;
 
+	/* build file name from path elements */
 	for (i = 0, j = 0; path != NULL && i < path->len; i++) {
 		if (sep != '\0' && i > 0 && (i & 1) == 0)
 			j += sprintf(buf+j, "%c", sep);
 		j += sprintf(buf+j, "%02X", path->value[i]);
 	}
+	/* single record: append record-number */
+	if (rec > 0)
+		j += sprintf(buf+j, "%c%"SC_FORMAT_LEN_SIZE_T"u",
+				(sep == '-') ? '_' : '-', rec);
 	buf[j] = '\0';
 
 	return buf;
@@ -920,7 +934,7 @@ static int do_info(int argc, char **argv)
 		printf("\n%s  ID %04X", st, file->id);
 	if (file->sid)
 		printf(", SFI %02X", file->sid);
-	printf("\n\n%-25s%s\n", "File path:", path_to_filename(&path, '/'));
+	printf("\n\n%-25s%s\n", "File path:", path_to_filename(&path, '/', 0));
 	printf("%-25s%"SC_FORMAT_LEN_SIZE_T"u bytes\n", "File size:", file->size);
 
 	if (file->type == SC_FILE_TYPE_DF) {
@@ -1412,7 +1426,7 @@ static int do_get(int argc, char **argv)
 	if (arg_to_path(argv[0], &path, 0) != 0)
 		return usage(do_get);
 
-	filename = (argc == 2) ? argv[1] : path_to_filename(&path, '_');
+	filename = (argc == 2) ? argv[1] : path_to_filename(&path, '_', 0);
 	outf = (strcmp(filename, "-") == 0)
 		? stdout
 		: fopen(filename, "wb");
@@ -1420,6 +1434,11 @@ static int do_get(int argc, char **argv)
 		perror(filename);
 		goto err;
 	}
+#ifdef _WIN32
+	if (outf == stdout)
+	        _setmode(fileno(stdout), _O_BINARY);
+#endif
+
 	r = sc_lock(card);
 	if (r == SC_SUCCESS)
 		r = sc_select_file(card, &path, &file);
@@ -1463,6 +1482,104 @@ static int do_get(int argc, char **argv)
 	err = 0;
 err:
 	sc_file_free(file);
+#ifdef _WIN32
+	if (outf == stdout)
+	        _setmode(fileno(stdout), _O_TEXT);
+#endif
+	if (outf != NULL && outf != stdout)
+		fclose(outf);
+	select_current_path_or_die();
+	return -err;
+}
+
+static int do_get_record(int argc, char **argv)
+{
+	u8 buf[SC_MAX_EXT_APDU_RESP_SIZE];
+	int r, err = 1;
+	size_t rec, count = 0;
+	sc_path_t path;
+	sc_file_t *file = NULL;
+	char *filename;
+	FILE *outf = NULL;
+
+	if (argc < 2 || argc > 3)
+		return usage(do_get);
+	if (arg_to_path(argv[0], &path, 0) != 0)
+		return usage(do_get);
+	rec = strtoul(argv[1], NULL, 10);
+
+	filename = (argc == 3) ? argv[2] : path_to_filename(&path, '_', rec);
+	outf = (strcmp(filename, "-") == 0)
+		? stdout
+		: fopen(filename, "wb");
+	if (outf == NULL) {
+		perror(filename);
+		goto err;
+	}
+#ifdef _WIN32
+	if (outf == stdout)
+	        _setmode(fileno(stdout), _O_BINARY);
+#endif
+
+	r = sc_lock(card);
+	if (r == SC_SUCCESS)
+		r = sc_select_file(card, &path, &file);
+	sc_unlock(card);
+	if (r || file == NULL) {
+		check_ret(r, SC_AC_OP_SELECT, "Unable to select file", current_file);
+		goto err;
+	}
+
+	/* fail on wrong file type */
+	if (file->type != SC_FILE_TYPE_WORKING_EF ||
+		(file->ef_structure != SC_FILE_EF_LINEAR_FIXED &&
+		file->ef_structure != SC_FILE_EF_LINEAR_FIXED_TLV &&
+		file->ef_structure != SC_FILE_EF_LINEAR_VARIABLE &&
+		file->ef_structure != SC_FILE_EF_LINEAR_VARIABLE_TLV)) {
+		fprintf(stderr, "Only record-oriented working EFs may be read\n");
+		goto err;
+	}
+
+	/* fail on out of bound record index:
+	 * must be > 0 and if record_count is set <= record_count */
+	if (rec < 1 || (file->record_count > 0 && rec > file->record_count)) {
+		fprintf(stderr, "Invalid record number %"SC_FORMAT_LEN_SIZE_T"u\n", rec);
+		goto err;
+	}
+
+	r = sc_read_record(card, rec, buf, sizeof(buf), SC_RECORD_BY_REC_NR);
+	if (r < 0)   {
+		fprintf(stderr, "Cannot read record %"SC_FORMAT_LEN_SIZE_T"u; return %i\n", rec, r);
+		goto err;
+	}
+
+	count = r;
+
+	if (count > 0) {
+		size_t written = fwrite(buf, 1, (size_t) r, outf);
+
+		if (written != count) {
+			fprintf(stderr, "Cannot write to file %s (only %"SC_FORMAT_LEN_SIZE_T"u of %"SC_FORMAT_LEN_SIZE_T"u bytes written)",
+				filename, written, count);
+			goto err;
+		}
+	}
+
+	if (outf == stdout) {
+		fwrite("\n", 1, 1, outf);
+	}
+	else {
+		printf("Total of %"SC_FORMAT_LEN_SIZE_T"u bytes read from %s and saved to %s.\n",
+		       count, argv[0], filename);
+	}
+
+	err = 0;
+err:
+	sc_file_free(file);
+#ifdef _WIN32
+	if (outf == stdout)
+	        _setmode(fileno(stdout), _O_TEXT);
+#endif
 	if (outf != NULL && outf != stdout)
 		fclose(outf);
 	select_current_path_or_die();
@@ -1616,7 +1733,7 @@ static int do_put(int argc, char **argv)
 	if (arg_to_path(argv[0], &path, 0) != 0)
 		return usage(do_put);
 
-	filename = (argc == 2) ? argv[1] : path_to_filename(&path, '_');
+	filename = (argc == 2) ? argv[1] : path_to_filename(&path, '_', 0);
 	inf = fopen(filename, "rb");
 	if (inf == NULL) {
 		perror(filename);
@@ -1736,6 +1853,10 @@ static int do_random(int argc, char **argv)
 			perror(filename);
 			return -1;
 		}
+#ifdef _WIN32
+		if (outf == stdout)
+		        _setmode(fileno(stdout), _O_BINARY);
+#endif
 	}
 
 	r = sc_lock(card);
@@ -1756,7 +1877,11 @@ static int do_random(int argc, char **argv)
 
 		if (written < (size_t) count)
 			perror(filename);
+
 		if (outf == stdout) {
+#ifdef _WIN32
+			_setmode(fileno(stdout), _O_TEXT);
+#endif
 			printf("\nTotal of %"SC_FORMAT_LEN_SIZE_T"u random bytes written\n", written);
 		}
 		else
@@ -1800,12 +1925,24 @@ static int do_get_data(int argc, char **argv)
 	if (argc == 2) {
 		const char *filename = argv[1];
 
-		if (!(fp = fopen(filename, "wb"))) {
+		fp = (strcmp(filename, "-") == 0)
+			? stdout
+			: fopen(filename, "wb");
+		if (fp == NULL) {
 			perror(filename);
 			return -1;
 		}
+#ifdef _WIN32
+		if (fp == stdout)
+			_setmode(fileno(stdout), _O_BINARY);
+#endif
 		fwrite(buffer, r, 1, fp);
-		fclose(fp);
+#ifdef _WIN32
+		if (fp == stdout)
+			_setmode(fileno(stdout), _O_TEXT);
+#endif
+		if (fp != stdout)
+			fclose(fp);
 	} else {
 		printf("Data Object %04X:\n", tag & 0xFFFF);
 		util_hex_dump_asc(stdout, buffer, r, 0);
@@ -2260,7 +2397,7 @@ int main(int argc, char *argv[])
 		struct command *cmd;
 		char prompt[3*SC_MAX_PATH_STRING_SIZE];
 
-		sprintf(prompt, "OpenSC [%s]> ", path_to_filename(&current_path, '/'));
+		sprintf(prompt, "OpenSC [%s]> ", path_to_filename(&current_path, '/', 0));
 		line = read_cmdline(script, prompt);
 		if (line == NULL)
 			break;

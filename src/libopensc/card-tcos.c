@@ -556,9 +556,11 @@ static int tcos_compute_signature(sc_card_t *card, const u8 * data, size_t datal
 		memcpy(sbuf, data, datalen);
 		dlen=datalen;
 	} else {
-		int keylen= tcos3 ? 256 : 128;
+		size_t keylen= tcos3 ? 256 : 128;
 		sc_format_apdu(card, &apdu, keylen>255 ? SC_APDU_CASE_4_EXT : SC_APDU_CASE_4_SHORT, 0x2A,0x80,0x86);
 		for(i=0; i<sizeof(sbuf);++i) sbuf[i]=0xff;
+		if (keylen < datalen)
+			return SC_ERROR_INVALID_ARGUMENTS;
 		sbuf[0]=0x02; sbuf[1]=0x00; sbuf[2]=0x01; sbuf[keylen-datalen]=0x00;
 		memcpy(sbuf+keylen-datalen+1, data, datalen);
 		dlen=keylen+1;
@@ -623,6 +625,8 @@ static int tcos_decipher(sc_card_t *card, const u8 * crgram, size_t crgram_len, 
 	apdu.data = sbuf;
 	apdu.lc = apdu.datalen = crgram_len+1;
 	sbuf[0] = tcos3 ? 0x00 : ((data->pad_flags & SC_ALGORITHM_RSA_PAD_PKCS1) ? 0x81 : 0x02);
+	if (sizeof sbuf - 1 < crgram_len)
+		return SC_ERROR_INVALID_ARGUMENTS;
 	memcpy(sbuf+1, crgram, crgram_len);
 
 	r = sc_transmit_apdu(card, &apdu);
