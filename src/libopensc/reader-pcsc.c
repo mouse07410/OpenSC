@@ -1700,12 +1700,6 @@ static int pcsc_wait_for_event(sc_context_t *ctx, unsigned int event_mask, sc_re
 					r = SC_ERROR_EVENT_TIMEOUT;
 				} else {
 					sc_reader_t *reader = sc_ctx_get_reader_by_name(ctx, rsp->szReader);
-					if (reader) {
-						/* copy the state so we know what to watch out for */
-						struct pcsc_private_data *priv = reader->drv_data;
-						priv->reader_state.dwEventState = state;
-						priv->reader_state.dwCurrentState = prev_state;
-					}
 
 					if ((state & SCARD_STATE_PRESENT) && !(prev_state & SCARD_STATE_PRESENT)) {
 						sc_log(ctx, "card inserted event");
@@ -1746,6 +1740,10 @@ static int pcsc_wait_for_event(sc_context_t *ctx, unsigned int event_mask, sc_re
 				}
 			}
 		}
+
+		/* if a reader was detected, we need to create a new list of readers */
+		if (detected_hotplug)
+			goto out;
 
 		/* Set the timeout if caller wants to time out */
 		if (timeout == -1) {

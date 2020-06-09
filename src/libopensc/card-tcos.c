@@ -535,35 +535,46 @@ static int tcos_restore_security_env(sc_card_t *card, int se_num)
 
 static int tcos_compute_signature(sc_card_t *card, const u8 * data, size_t datalen, u8 * out, size_t outlen)
 {
-	size_t i, dlen=datalen;
+	size_t dlen = datalen;
 	sc_apdu_t apdu;
 	u8 rbuf[SC_MAX_APDU_BUFFER_SIZE];
 	u8 sbuf[SC_MAX_APDU_BUFFER_SIZE];
 	int tcos3, r;
 
-	assert(card != NULL && data != NULL && out != NULL);
-	tcos3=(card->type==SC_CARD_TYPE_TCOS_V3);
+	if (card == NULL || data == NULL || out == NULL) {
+		return SC_ERROR_INVALID_ARGUMENTS;
+	}
+
+	tcos3 = (card->type == SC_CARD_TYPE_TCOS_V3);
 
 	// We can sign (key length / 8) bytes
-	if (datalen > 256) SC_FUNC_RETURN(card->ctx, SC_LOG_DEBUG_VERBOSE, SC_ERROR_INVALID_ARGUMENTS);
+	if (datalen > 256) {
+		SC_FUNC_RETURN(card->ctx, SC_LOG_DEBUG_VERBOSE, SC_ERROR_INVALID_ARGUMENTS);
+	}
 
-	if(((tcos_data *)card->drv_data)->next_sign) {
-		if(datalen>48) {
+	if (((tcos_data *)card->drv_data)->next_sign) {
+		if (datalen > 48) {
 			sc_log(card->ctx, "Data to be signed is too long (TCOS supports max. 48 bytes)\n");
 			SC_FUNC_RETURN(card->ctx, SC_LOG_DEBUG_VERBOSE, SC_ERROR_INVALID_ARGUMENTS);
 		}
 		sc_format_apdu(card, &apdu, SC_APDU_CASE_4_SHORT, 0x2A, 0x9E, 0x9A);
 		memcpy(sbuf, data, datalen);
-		dlen=datalen;
+		dlen = datalen;
 	} else {
-		size_t keylen= tcos3 ? 256 : 128;
-		sc_format_apdu(card, &apdu, keylen>255 ? SC_APDU_CASE_4_EXT : SC_APDU_CASE_4_SHORT, 0x2A,0x80,0x86);
-		for(i=0; i<sizeof(sbuf);++i) sbuf[i]=0xff;
-		if (keylen < datalen)
-			return SC_ERROR_INVALID_ARGUMENTS;
-		sbuf[0]=0x02; sbuf[1]=0x00; sbuf[2]=0x01; sbuf[keylen-datalen]=0x00;
-		memcpy(sbuf+keylen-datalen+1, data, datalen);
-		dlen=keylen+1;
+		size_t keylen = tcos3 ? 256 : 128;
+
+		if (datalen > keylen) {
+			SC_FUNC_RETURN(card->ctx, SC_LOG_DEBUG_VERBOSE, SC_ERROR_INVALID_ARGUMENTS);
+		}
+
+		sc_format_apdu(card, &apdu, keylen > 255 ? SC_APDU_CASE_4_EXT : SC_APDU_CASE_4_SHORT, 0x2A, 0x80, 0x86);
+		memset(sbuf, 0xff, sizeof(sbuf));
+		sbuf[0] = 0x02;
+		sbuf[1] = 0x00;
+		sbuf[2] = 0x01;
+		sbuf[keylen - datalen] = 0x00;
+		memcpy(sbuf + keylen - datalen + 1, data, datalen);
+		dlen = keylen + 1;
 	}
 	apdu.resp = rbuf;
 	apdu.resplen = sizeof(rbuf);
@@ -573,13 +584,21 @@ static int tcos_compute_signature(sc_card_t *card, const u8 * data, size_t datal
 
 	r = sc_transmit_apdu(card, &apdu);
 	LOG_TEST_RET(card->ctx, r, "APDU transmit failed");
-	if (tcos3 && apdu.p1==0x80 && apdu.sw1==0x6A && apdu.sw2==0x87) {
-		int keylen=128;
-		sc_format_apdu(card, &apdu, SC_APDU_CASE_4_SHORT, 0x2A,0x80,0x86);
-		for(i=0; i<sizeof(sbuf);++i) sbuf[i]=0xff;
-		sbuf[0]=0x02; sbuf[1]=0x00; sbuf[2]=0x01; sbuf[keylen-datalen]=0x00;
-		memcpy(sbuf+keylen-datalen+1, data, datalen);
-		dlen=keylen+1;
+	if (tcos3 && apdu.p1 == 0x80 && apdu.sw1 == 0x6A && apdu.sw2 == 0x87) {
+		size_t keylen = 128;
+
+		if (datalen > keylen) {
+			SC_FUNC_RETURN(card->ctx, SC_LOG_DEBUG_VERBOSE, SC_ERROR_INVALID_ARGUMENTS);
+		}
+
+		sc_format_apdu(card, &apdu, SC_APDU_CASE_4_SHORT, 0x2A, 0x80, 0x86);
+		memset(sbuf, 0xff, sizeof(sbuf));
+		sbuf[0] = 0x02;
+		sbuf[1] = 0x00;
+		sbuf[2] = 0x01;
+		sbuf[keylen - datalen] = 0x00;
+		memcpy(sbuf + keylen - datalen + 1, data, datalen);
+		dlen = keylen + 1;
 
 		apdu.resp = rbuf;
 		apdu.resplen = sizeof(rbuf);
@@ -589,7 +608,7 @@ static int tcos_compute_signature(sc_card_t *card, const u8 * data, size_t datal
 		r = sc_transmit_apdu(card, &apdu);
 		LOG_TEST_RET(card->ctx, r, "APDU transmit failed");
 	}
-	if (apdu.sw1==0x90 && apdu.sw2==0x00) {
+	if (apdu.sw1 == 0x90 && apdu.sw2 == 0x00) {
 		size_t len = apdu.resplen>outlen ? outlen : apdu.resplen;
 		memcpy(out, apdu.resp, len);
 		SC_FUNC_RETURN(card->ctx, SC_LOG_DEBUG_VERBOSE, len);
@@ -607,42 +626,47 @@ static int tcos_decipher(sc_card_t *card, const u8 * crgram, size_t crgram_len, 
 	tcos_data *data;
 	int tcos3, r;
 
-	assert(card != NULL && crgram != NULL && out != NULL);
+	if (card == NULL || crgram == NULL || out == NULL) {
+		return SC_ERROR_INVALID_ARGUMENTS;
+	}
 	ctx = card->ctx;
-	tcos3=(card->type==SC_CARD_TYPE_TCOS_V3);
-	data=(tcos_data *)card->drv_data;
+	tcos3 = (card->type == SC_CARD_TYPE_TCOS_V3);
+	data = (tcos_data *)card->drv_data;
 
 	LOG_FUNC_CALLED(ctx);
 	sc_log(ctx,
-		"TCOS3:%d PKCS1:%d\n",tcos3,
+		"TCOS3:%d PKCS1:%d\n", tcos3,
 		!!(data->pad_flags & SC_ALGORITHM_RSA_PAD_PKCS1));
 
-	sc_format_apdu(card, &apdu, crgram_len>255 ? SC_APDU_CASE_4_EXT : SC_APDU_CASE_4_SHORT, 0x2A, 0x80, 0x86);
+	sc_format_apdu(card, &apdu, crgram_len > 255 ? SC_APDU_CASE_4_EXT : SC_APDU_CASE_4_SHORT, 0x2A, 0x80, 0x86);
 	apdu.resp = rbuf;
 	apdu.resplen = sizeof(rbuf);
 	apdu.le = crgram_len;
 
 	apdu.data = sbuf;
-	apdu.lc = apdu.datalen = crgram_len+1;
+	apdu.lc = apdu.datalen = crgram_len + 1;
 	sbuf[0] = tcos3 ? 0x00 : ((data->pad_flags & SC_ALGORITHM_RSA_PAD_PKCS1) ? 0x81 : 0x02);
 	if (sizeof sbuf - 1 < crgram_len)
 		return SC_ERROR_INVALID_ARGUMENTS;
-	memcpy(sbuf+1, crgram, crgram_len);
+	memcpy(sbuf + 1, crgram, crgram_len);
 
 	r = sc_transmit_apdu(card, &apdu);
-	LOG_TEST_RET(card->ctx, r, "APDU transmit failed");
+	LOG_TEST_RET(ctx, r, "APDU transmit failed");
 
-	if (apdu.sw1==0x90 && apdu.sw2==0x00) {
-		size_t len= (apdu.resplen>outlen) ? outlen : apdu.resplen;
-		unsigned int offset=0;
-		if(tcos3 && (data->pad_flags & SC_ALGORITHM_RSA_PAD_PKCS1) && apdu.resp[0]==0 && apdu.resp[1]==2) {
-			offset=2; while(offset<len && apdu.resp[offset]!=0) ++offset;
-			offset=(offset<len-1) ? offset+1 : 0;
+	if (apdu.sw1 == 0x90 && apdu.sw2 == 0x00) {
+		size_t len = (apdu.resplen>outlen) ? outlen : apdu.resplen;
+		unsigned int offset = 0;
+
+		if (tcos3 && (data->pad_flags & SC_ALGORITHM_RSA_PAD_PKCS1) && apdu.resp[0] == 0 && apdu.resp[1] == 2) {
+			offset = 2;
+			while (offset < len && apdu.resp[offset] != 0)
+				++offset;
+			offset = (offset < len - 1) ? offset + 1 : 0;
 		}
-		memcpy(out, apdu.resp+offset, len-offset);
-		SC_FUNC_RETURN(card->ctx, SC_LOG_DEBUG_VERBOSE, len-offset);
+		memcpy(out, apdu.resp + offset, len-offset);
+		SC_FUNC_RETURN(ctx, SC_LOG_DEBUG_VERBOSE, len - offset);
 	}
-	SC_FUNC_RETURN(card->ctx, SC_LOG_DEBUG_VERBOSE, sc_check_sw(card, apdu.sw1, apdu.sw2));
+	SC_FUNC_RETURN(ctx, SC_LOG_DEBUG_VERBOSE, sc_check_sw(card, apdu.sw1, apdu.sw2));
 }
 
 

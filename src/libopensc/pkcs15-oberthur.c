@@ -251,7 +251,10 @@ sc_oberthur_read_file(struct sc_pkcs15_card *p15card, const char *in_path,
 
 	sc_format_path(in_path, &path);
 	rv = sc_select_file(card, &path, &file);
-	LOG_TEST_RET(ctx, rv, "Cannot select oberthur file to read");
+	if (rv != SC_SUCCESS) {
+		sc_file_free(file);
+		LOG_TEST_RET(ctx, rv, "Cannot select oberthur file to read");
+	}
 
 	if (file->ef_structure == SC_FILE_EF_TRANSPARENT)
 		sz = file->size;
@@ -259,8 +262,10 @@ sc_oberthur_read_file(struct sc_pkcs15_card *p15card, const char *in_path,
 		sz = (file->record_length + 2) * file->record_count;
 
 	*out = calloc(sz, 1);
-	if (*out == NULL)
+	if (*out == NULL) {
+		sc_file_free(file);
 		LOG_TEST_RET(ctx, SC_ERROR_OUT_OF_MEMORY, "Cannot read oberthur file");
+	}
 
 	if (file->ef_structure == SC_FILE_EF_TRANSPARENT)   {
 		rv = sc_read_binary(card, 0, *out, sz, 0);
@@ -298,7 +303,10 @@ sc_oberthur_read_file(struct sc_pkcs15_card *p15card, const char *in_path,
 		int ii;
 
 		rv = sc_pkcs15_get_objects(p15card, SC_PKCS15_TYPE_AUTH_PIN, objs, 0x10);
-		LOG_TEST_RET(ctx, rv, "Cannot read oberthur file: get AUTH objects error");
+		if (rv != SC_SUCCESS) {
+			sc_file_free(file);
+			LOG_TEST_RET(ctx, rv, "Cannot read oberthur file: get AUTH objects error");
+		}
 
 		for (ii=0; ii<rv; ii++)   {
 			struct sc_pkcs15_auth_info *auth_info = (struct sc_pkcs15_auth_info *) objs[ii]->data;
@@ -357,8 +365,8 @@ sc_oberthur_parse_tokeninfo (struct sc_pkcs15_card *p15card,
 
 	flags = *(buff + 0x22) * 0x100 + *(buff + 0x23);
 
-	p15card->tokeninfo->label = strdup(label);
-	p15card->tokeninfo->manufacturer_id = strdup("Oberthur/OpenSC");
+	set_string(&p15card->tokeninfo->label, label);
+	set_string(&p15card->tokeninfo->manufacturer_id, "Oberthur/OpenSC");
 
 	if (flags & 0x01)
 		p15card->tokeninfo->flags |= SC_PKCS15_TOKEN_PRN_GENERATION;
@@ -919,7 +927,7 @@ sc_pkcs15emu_oberthur_init(struct sc_pkcs15_card * p15card)
 
 	SC_FUNC_CALLED(card->ctx, SC_LOG_DEBUG_VERBOSE);
 	sc_bin_to_hex(card->serialnr.value, card->serialnr.len, serial, sizeof(serial), 0);
-	p15card->tokeninfo->serial_number = strdup(serial);
+	set_string(&p15card->tokeninfo->serial_number, serial);
 
 	p15card->ops.parse_df = sc_awp_parse_df;
 	p15card->ops.clear = sc_awp_clear;
