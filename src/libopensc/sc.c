@@ -274,7 +274,7 @@ int sc_format_oid(struct sc_object_id *oid, const char *in)
 		if (!*q)
 			break;
 
-		if (!(q[0] == '.' && isdigit(q[1])))
+		if (!(q[0] == '.' && isdigit((unsigned char)q[1])))
 			goto out;
 
 		p = q + 1;
@@ -1132,4 +1132,9 @@ unsigned long sc_thread_id(const sc_context_t *ctx)
 		return 0UL;
 	else
 		return ctx->thread_ctx->thread_id();
+}
+
+void sc_free(void *p)
+{
+	free(p);
 }
