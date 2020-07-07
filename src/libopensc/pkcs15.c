@@ -775,6 +775,7 @@ sc_pkcs15_card_free(struct sc_pkcs15_card *p15card)
 	if (p15card->md_data)
 		free(p15card->md_data);
 
+	sc_pkcs15_free_app(p15card);
 	sc_pkcs15_remove_objects(p15card);
 	sc_pkcs15_remove_dfs(p15card);
 	sc_pkcs15_free_unusedspace(p15card);
@@ -817,30 +818,19 @@ sc_pkcs15_card_clear(struct sc_pkcs15_card *p15card)
 	p15card->file_odf = NULL;
 	sc_file_free(p15card->file_unusedspace);
 	p15card->file_unusedspace = NULL;
-	if (p15card->tokeninfo->label != NULL) {
-		free(p15card->tokeninfo->label);
-		p15card->tokeninfo->label = NULL;
-	}
-	if (p15card->tokeninfo->serial_number != NULL) {
-		free(p15card->tokeninfo->serial_number);
-		p15card->tokeninfo->serial_number = NULL;
-	}
-	if (p15card->tokeninfo->manufacturer_id != NULL) {
-		free(p15card->tokeninfo->manufacturer_id);
-		p15card->tokeninfo->manufacturer_id = NULL;
-	}
-	if (p15card->tokeninfo->last_update.gtime != NULL) {
-		free(p15card->tokeninfo->last_update.gtime);
-		p15card->tokeninfo->last_update.gtime = NULL;
-	}
-	if (p15card->tokeninfo->preferred_language != NULL) {
-		free(p15card->tokeninfo->preferred_language);
-		p15card->tokeninfo->preferred_language = NULL;
-	}
-	if (p15card->tokeninfo->profile_indication.name != NULL)   {
-		free(p15card->tokeninfo->profile_indication.name);
-		p15card->tokeninfo->profile_indication.name = NULL;
-	}
+
+	free(p15card->tokeninfo->label);
+	p15card->tokeninfo->label = NULL;
+	free(p15card->tokeninfo->serial_number);
+	p15card->tokeninfo->serial_number = NULL;
+	free(p15card->tokeninfo->manufacturer_id);
+	p15card->tokeninfo->manufacturer_id = NULL;
+	free(p15card->tokeninfo->last_update.gtime);
+	p15card->tokeninfo->last_update.gtime = NULL;
+	free(p15card->tokeninfo->preferred_language);
+	p15card->tokeninfo->preferred_language = NULL;
+	free(p15card->tokeninfo->profile_indication.name);
+	p15card->tokeninfo->profile_indication.name = NULL;
 	if (p15card->tokeninfo->seInfo != NULL) {
 		size_t i;
 		for (i = 0; i < p15card->tokeninfo->num_seInfo; i++)
@@ -981,6 +971,7 @@ sc_pkcs15_bind_internal(struct sc_pkcs15_card *p15card, struct sc_aid *aid)
 	info = sc_find_app(card, aid);
 	if (info)   {
 		sc_log(ctx, "bind to application('%s',aid:'%s')", info->label, sc_dump_hex(info->aid.value, info->aid.len));
+		sc_pkcs15_free_app(p15card);
 		p15card->app = sc_dup_app_info(info);
 		if (!p15card->app)   {
 			err = SC_ERROR_OUT_OF_MEMORY;
@@ -1050,8 +1041,10 @@ sc_pkcs15_bind_internal(struct sc_pkcs15_card *p15card, struct sc_aid *aid)
 		goto end;
 	}
 	buf = malloc(len);
-	if(buf == NULL)
-		LOG_FUNC_RETURN(ctx, SC_ERROR_OUT_OF_MEMORY);
+	if(buf == NULL) {
+		err = SC_ERROR_OUT_OF_MEMORY;
+		goto end;
+	}
 
 	err = -1; /* file state: not in cache */
 	if (p15card->opts.use_file_cache) {
@@ -1122,8 +1115,10 @@ sc_pkcs15_bind_internal(struct sc_pkcs15_card *p15card, struct sc_aid *aid)
 		goto end;
 	}
 	buf = malloc(len);
-	if(buf == NULL)
-		LOG_FUNC_RETURN(ctx, SC_ERROR_OUT_OF_MEMORY);
+	if(buf == NULL) {
+		err = SC_ERROR_OUT_OF_MEMORY;
+		goto end;
+	}
 
 	err = -1; /* file state: not in cache */
 	if (p15card->opts.use_file_cache) {
