@@ -1424,7 +1424,7 @@ static int pcsc_detect_readers(sc_context_t *ctx)
 
 			if ((rv == (LONG)SCARD_E_NO_SERVICE) || (rv == (LONG)SCARD_E_SERVICE_STOPPED)) {
 				gpriv->SCardReleaseContext(gpriv->pcsc_ctx);
-				gpriv->pcsc_ctx = 0;
+				gpriv->pcsc_ctx = -1;
 				gpriv->pcsc_wait_ctx = -1;
 				/* reconnecting below may may restart PC/SC service */
 				rv = SCARD_E_INVALID_HANDLE;
@@ -1441,6 +1441,7 @@ static int pcsc_detect_readers(sc_context_t *ctx)
 
 			rv = gpriv->SCardEstablishContext(SCARD_SCOPE_USER, NULL, NULL, &gpriv->pcsc_ctx);
 			if (rv != SCARD_S_SUCCESS) {
+				gpriv->pcsc_ctx = -1;
 				PCSC_LOG(ctx, "SCardEstablishContext failed", rv);
 				ret = pcsc_to_opensc_error(rv);
 				goto out;
@@ -1451,7 +1452,8 @@ static int pcsc_detect_readers(sc_context_t *ctx)
 		}
 	} while (rv != SCARD_S_SUCCESS);
 
-	reader_buf = malloc(sizeof(char) * reader_buf_size);
+	/* The +2 below is to make sure we have zero terminators, in case we get invalid data */
+	reader_buf = calloc(reader_buf_size+2, sizeof(char));
 	if (!reader_buf) {
 		ret = SC_ERROR_OUT_OF_MEMORY;
 		goto out;
@@ -1629,6 +1631,7 @@ static int pcsc_wait_for_event(sc_context_t *ctx, unsigned int event_mask, sc_re
 	if (gpriv->pcsc_wait_ctx == (SCARDCONTEXT)-1) {
 		rv = gpriv->SCardEstablishContext(SCARD_SCOPE_USER, NULL, NULL, &gpriv->pcsc_wait_ctx);
 		if (rv != SCARD_S_SUCCESS) {
+			gpriv->pcsc_wait_ctx = -1;
 			PCSC_LOG(ctx, "SCardEstablishContext(wait) failed", rv);
 			r = pcsc_to_opensc_error(rv);
 			goto out;
@@ -1849,6 +1852,7 @@ static int part10_build_verify_pin_block(struct sc_reader *reader, u8 * buf, siz
 	sc_apdu_t *apdu = data->apdu;
 	u8 tmp;
 	unsigned int tmp16;
+	unsigned int off;
 	PIN_VERIFY_STRUCTURE *pin_verify  = (PIN_VERIFY_STRUCTURE *)buf;
 
 	/* PIN verification control message */
@@ -1860,10 +1864,13 @@ static int part10_build_verify_pin_block(struct sc_reader *reader, u8 * buf, siz
 	if (data->pin1.encoding == SC_PIN_ENCODING_ASCII) {
 		tmp |= SC_CCID_PIN_ENCODING_ASCII;
 
-		/* if the effective PIN length offset is specified, use it */
-		if (data->pin1.length_offset > 4) {
+		/* If the PIN offset is specified, use it, as long as it fits in 4 bits */
+		if (data->pin1.offset >= 5) {
+			off = data->pin1.offset - 5;
+			if (off > 15)
+				return SC_ERROR_NOT_SUPPORTED;
 			tmp |= SC_CCID_PIN_UNITS_BYTES;
-			tmp |= (data->pin1.length_offset - 5) << 3;
+			tmp |= off << 3;
 		}
 	} else if (data->pin1.encoding == SC_PIN_ENCODING_BCD) {
 		tmp |= SC_CCID_PIN_ENCODING_BCD;
@@ -1883,7 +1890,13 @@ static int part10_build_verify_pin_block(struct sc_reader *reader, u8 * buf, siz
 		/* GLP PIN length is encoded in 4 bits and block size is always 8 bytes */
 		tmp |= 0x40 | 0x08;
 	} else if (data->pin1.encoding == SC_PIN_ENCODING_ASCII && data->flags & SC_PIN_CMD_NEED_PADDING) {
-		tmp |= data->pin1.pad_length;
+		/*
+		 * Use fixed-size PIN frame if pad length is below the limit. If not, leave the
+		 * PIN frame size at 0, hoping for adaptive support by the reader (which includes
+		 * both a variable-length frame when Lc is 0 or a pre-padded frame when Lc != 0).
+		 */
+		if (data->pin1.pad_length <= 15)
+			tmp |= data->pin1.pad_length;
 	}
 	pin_verify->bmPINBlockString = tmp;
 
@@ -1952,12 +1965,6 @@ static int part10_build_modify_pin_block(struct sc_reader *reader, u8 * buf, siz
 	tmp = 0x00;
 	if (pin_ref->encoding == SC_PIN_ENCODING_ASCII) {
 		tmp |= SC_CCID_PIN_ENCODING_ASCII;
-
-		/* if the effective PIN length offset is specified, use it */
-		if (pin_ref->length_offset > 4) {
-			tmp |= SC_CCID_PIN_UNITS_BYTES;
-			tmp |= (pin_ref->length_offset - 5) << 3;
-		}
 	} else if (pin_ref->encoding == SC_PIN_ENCODING_BCD) {
 		tmp |= SC_CCID_PIN_ENCODING_BCD;
 		tmp |= SC_CCID_PIN_UNITS_BYTES;
@@ -1976,7 +1983,8 @@ static int part10_build_modify_pin_block(struct sc_reader *reader, u8 * buf, siz
 		/* GLP PIN length is encoded in 4 bits and block size is always 8 bytes */
 		tmp |= 0x40 | 0x08;
 	} else if (pin_ref->encoding == SC_PIN_ENCODING_ASCII && pin_ref->pad_length) {
-		tmp |= pin_ref->pad_length;
+		if (pin_ref->pad_length <= 15)
+			tmp |= pin_ref->pad_length;
 	}
 	pin_modify->bmPINBlockString = tmp; /* bmPINBlockString */
 
@@ -1988,14 +1996,9 @@ static int part10_build_modify_pin_block(struct sc_reader *reader, u8 * buf, siz
 	}
 	pin_modify->bmPINLengthFormat = tmp;	/* bmPINLengthFormat */
 
-	/* Set offsets if not Case 1 APDU */
-	if (pin_ref->length_offset != 4) {
-		pin_modify->bInsertionOffsetOld = data->pin1.offset - 5;
-		pin_modify->bInsertionOffsetNew = data->pin2.offset - 5;
-	} else {
-		pin_modify->bInsertionOffsetOld = 0x00;
-		pin_modify->bInsertionOffsetNew = 0x00;
-	}
+	/* Set offsets if available, otherwise default to 0 */
+	pin_modify->bInsertionOffsetOld = (data->pin1.offset >= 5 ? data->pin1.offset - 5 : 0);
+	pin_modify->bInsertionOffsetNew = (data->pin2.offset >= 5 ? data->pin2.offset - 5 : 0);
 
 	if (!pin_ref->min_length || !pin_ref->max_length)
 		return SC_ERROR_INVALID_ARGUMENTS;
@@ -2101,7 +2104,7 @@ part10_check_pin_min_max(sc_reader_t *reader, struct sc_pin_cmd_data *data)
 	struct pcsc_global_private_data *gpriv = (struct pcsc_global_private_data *) reader->ctx->reader_drv_data;
 	struct sc_pin_cmd_pin *pin_ref =
 		data->flags & SC_PIN_CMD_IMPLICIT_CHANGE ?
-		&data->pin1 : &data->pin2;
+		&data->pin2 : &data->pin1;
 
 	if (gpriv->fixed_pinlength != 0) {
 		pin_ref->min_length = gpriv->fixed_pinlength;
@@ -2131,11 +2134,11 @@ part10_check_pin_min_max(sc_reader_t *reader, struct sc_pin_cmd_data *data)
 	/* maximum pin size */
 	r = part10_find_property_by_tag(buffer, length,
 		PCSCv2_PART10_PROPERTY_bMaxPINSize);
-	if (r >= 0)
+	if (r > 0)
 	{
 		unsigned int value = r;
 
-		if (pin_ref->max_length > value)
+		if (!pin_ref->max_length || pin_ref->max_length > value)
 			pin_ref->max_length = r;
 	}
 

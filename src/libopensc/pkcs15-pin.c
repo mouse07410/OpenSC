@@ -614,6 +614,15 @@ int sc_pkcs15_unblock_pin(struct sc_pkcs15_card *p15card,
 	r = _validate_pin(p15card, puk_info, puklen);
 	LOG_TEST_RET(ctx, r, "PIN do not conforms PIN policy");
 
+	/*
+	 * With the current card driver interface we have no way of specifying different padding
+	 * flags for the PIN and the PUK. Therefore reject this case.
+	 */
+	if ((auth_info->attrs.pin.flags & SC_PKCS15_PIN_FLAG_NEEDS_PADDING) !=
+	    (puk_info->attrs.pin.flags & SC_PKCS15_PIN_FLAG_NEEDS_PADDING)) {
+		LOG_TEST_RET(ctx, r, "Padding mismatch for PIN/PUK");
+	}
+
 	r = sc_lock(card);
 	LOG_TEST_RET(ctx, r, "sc_lock() failed");
 
@@ -632,16 +641,16 @@ int sc_pkcs15_unblock_pin(struct sc_pkcs15_card *p15card,
 	data.puk_reference   = pukref;
 	data.pin1.data       = puk;
 	data.pin1.len        = puklen;
-	data.pin1.pad_char   = auth_info->attrs.pin.pad_char;
-	data.pin1.min_length = auth_info->attrs.pin.min_length;
-	data.pin1.max_length = auth_info->attrs.pin.max_length;
-	data.pin1.pad_length = auth_info->attrs.pin.stored_length;
+	data.pin1.pad_char   = puk_info->attrs.pin.pad_char;
+	data.pin1.min_length = puk_info->attrs.pin.min_length;
+	data.pin1.max_length = puk_info->attrs.pin.max_length;
+	data.pin1.pad_length = puk_info->attrs.pin.stored_length;
 	data.pin2.data       = newpin;
 	data.pin2.len        = newpinlen;
-	data.pin2.pad_char   = puk_info->attrs.pin.pad_char;
-	data.pin2.min_length = puk_info->attrs.pin.min_length;
-	data.pin2.max_length = puk_info->attrs.pin.max_length;
-	data.pin2.pad_length = puk_info->attrs.pin.stored_length;
+	data.pin2.pad_char   = auth_info->attrs.pin.pad_char;
+	data.pin2.min_length = auth_info->attrs.pin.min_length;
+	data.pin2.max_length = auth_info->attrs.pin.max_length;
+	data.pin2.pad_length = auth_info->attrs.pin.stored_length;
 
 	if (auth_info->attrs.pin.flags & SC_PKCS15_PIN_FLAG_NEEDS_PADDING)
 		data.flags |= SC_PIN_CMD_NEED_PADDING;
@@ -704,6 +713,13 @@ int sc_pkcs15_get_pin_info(struct sc_pkcs15_card *p15card,
 	if (pin_info->auth_type != SC_PKCS15_PIN_AUTH_TYPE_PIN)   {
 		r = SC_ERROR_INVALID_DATA;
 		goto out;
+	}
+
+	/* the path in the pin object is optional */
+	if ((pin_info->path.len > 0) || ((pin_info->path.aid.len > 0))) {
+		r = sc_select_file(card, &pin_info->path, NULL);
+		if (r)
+			goto out;
 	}
 
 	/* Try to update PIN info from card */
