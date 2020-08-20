@@ -204,9 +204,6 @@ struct sc_crt {
 typedef struct sc_acl_entry {
 	unsigned int method;	/* See SC_AC_* */
 	unsigned int key_ref;	/* SC_AC_KEY_REF_NONE or an integer */
-
-	struct sc_crt crts[SC_MAX_CRTS_IN_SE];
-
 	struct sc_acl_entry *next;
 } sc_acl_entry_t;
 
@@ -244,7 +241,7 @@ typedef struct sc_file {
 	int sid;	/* short EF identifier (1 byte) */
 	struct sc_acl_entry *acl[SC_MAX_AC_OPS]; /* Access Control List */
 
-	size_t record_length; /* In case of fixed-length or cyclic EF */
+	size_t record_length; /* max. length in case of record-oriented EF */
 	size_t record_count;  /* Valid, if not transparent EF or DF */
 
 	unsigned char *sec_attr;	/* security data in proprietary format. tag '86' */
