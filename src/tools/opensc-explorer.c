@@ -47,6 +47,7 @@
 #include "libopensc/cardctl.h"
 #include "libopensc/cards.h"
 #include "libopensc/log.h"
+#include "libopensc/internal.h"
 #include "common/compat_strlcpy.h"
 #include <getopt.h>
 #include "util.h"
@@ -145,8 +146,8 @@ static struct command	cmds[] = {
 		"cd",	"{.. | <file-id> | aid:<DF-name>}",
 		"change to another DF"			},
 	{ do_cat,
-		"cat",	"[<file-id> | sfi:<sfi-id>]"
-	,	"print the contents of an EF"		},
+		"cat",	"[{<file-id> | sfi:<sfi-id>} [<rec-no>]]"
+	,	"print the contents of [a record in] an EF"		},
 	{ do_info,
 		"info",	"[<file-id>]",
 		"display attributes of card file"	},
@@ -205,8 +206,8 @@ static struct command	cmds[] = {
 		"apdu",	"<data> ...",
 		"send a custom apdu command"		},
 	{ do_asn1,
-		"asn1",	"[<file-id>]",
-		"decode an ASN.1 file"			},
+		"asn1",	"[<file-id> [<rec-no>] [<offs>]]",
+		"decode an ASN.1 file or record"	},
 	{ do_sm,
 		"sm",	"{open|close}",
 		"call SM 'open' or 'close' handlers, if available"},
@@ -792,12 +793,13 @@ err:
 	return ret;
 }
 
-static int read_and_print_record_file(sc_file_t *file, unsigned char sfi)
+static int read_and_print_record_file(sc_file_t *file, unsigned char sfi, unsigned int wanted)
 {
 	u8 buf[SC_MAX_EXT_APDU_RESP_SIZE];
-	int rec, r;
+	int r;
+	unsigned int rec;
 
-	for (rec = 1; ; rec++) {
+	for (rec = (wanted > 0) ? wanted : 1; wanted == 0 || wanted == rec; rec++) {
 		r = sc_lock(card);
 		if (r == SC_SUCCESS)
 			r = sc_read_record(card, rec, buf, sizeof(buf),
@@ -805,7 +807,7 @@ static int read_and_print_record_file(sc_file_t *file, unsigned char sfi)
 		else
 			r = SC_ERROR_READER_LOCKED;
 		sc_unlock(card);
-		if (r == SC_ERROR_RECORD_NOT_FOUND)
+		if (r == SC_ERROR_RECORD_NOT_FOUND && wanted == 0)
 			return 0;
 		if (r < 0) {
 			check_ret(r, SC_AC_OP_READ, "Read failed", file);
@@ -821,13 +823,17 @@ static int read_and_print_record_file(sc_file_t *file, unsigned char sfi)
 static int do_cat(int argc, char **argv)
 {
 	int r, err = 1;
+	unsigned int rec = 0;
 	sc_path_t path;
 	sc_file_t *file = NULL;
 	int not_current = 1;
 	int sfi = 0;
 
-	if (argc > 1)
+	if (argc > 2)
 		return usage(do_cat);
+
+	if (argc > 1)
+		rec = (unsigned int) strtoul(argv[1], NULL, 10);
 
 	if (!argc) {
 		path = current_path;
@@ -871,10 +877,15 @@ static int do_cat(int argc, char **argv)
 		fprintf(stderr, "only working EFs may be read\n");
 		goto err;
 	}
-	if (file->ef_structure == SC_FILE_EF_TRANSPARENT && !sfi)
+	if (file->ef_structure == SC_FILE_EF_TRANSPARENT && !sfi) {
+		if (argc > 1) {
+			fprintf(stderr, "Transparent files do not have records\n");
+			goto err;
+		}
 		read_and_print_binary_file(file);
+	}
 	else
-		read_and_print_record_file(file, sfi);
+		read_and_print_record_file(file, sfi, rec);
 
 	err = 0;
 err:
@@ -2044,20 +2055,19 @@ static int do_apdu(int argc, char **argv)
 		fprintf(stderr, "Failure: %s\n", sc_strerror(r));
 	else
 		printf("Success!\n");
-
 	return 0;
 }
 
 static int do_asn1(int argc, char **argv)
 {
 	int r, err = 1;
+	unsigned int offs = 0;
 	sc_path_t path;
 	sc_file_t *file = NULL;
 	int not_current = 1;
-	size_t len;
-	unsigned char *buf = NULL;
+	u8 buf[SC_MAX_EXT_APDU_DATA_SIZE];
 
-	if (argc > 1)
+	if (argc > 3)
 		return usage(do_asn1);
 
 	/* select file */
@@ -2071,7 +2081,7 @@ static int do_asn1(int argc, char **argv)
 			r = sc_select_file(card, &path, &file);
 		sc_unlock(card);
 		if (r) {
-			check_ret(r, SC_AC_OP_SELECT, "unable to select file", current_file);
+			check_ret(r, SC_AC_OP_SELECT, "Unable to select file", current_file);
 			goto err;
 		}
 	} else {
@@ -2080,45 +2090,78 @@ static int do_asn1(int argc, char **argv)
 		not_current = 0;
 	}
 	if (file->type != SC_FILE_TYPE_WORKING_EF) {
-		fprintf(stderr, "only working EFs may be read\n");
+		fprintf(stderr, "Only working EFs may be read\n");
 		goto err;
 	}
 
 	/* read */
-	if (file->ef_structure != SC_FILE_EF_TRANSPARENT) {
-		fprintf(stderr, "only transparent file type is supported at the moment\n");
-		goto err;
+	if (file->ef_structure == SC_FILE_EF_TRANSPARENT) {
+		size_t size = (file->size > 0) ? file->size : sizeof(buf);
+
+		if (argc > 2) {
+			fprintf(stderr, "Transparent EFs do not have records\n");
+			goto err;
+		}
+
+		if (argc > 1)
+			offs = (unsigned int) strtoul(argv[1], NULL, 10);
+
+		r = sc_lock(card);
+		if (r == SC_SUCCESS)
+			r = sc_read_binary(card, 0, buf, MIN(size, sizeof(buf)), 0);
+		sc_unlock(card);
+		if (r < 0) {
+			check_ret(r, SC_AC_OP_READ, "read failed", file);
+			goto err;
+		}
+		if ((size_t) r != file->size) {
+			fprintf(stderr, "WARNING: expecting %"SC_FORMAT_LEN_SIZE_T"u, got %d bytes.\n",
+				 file->size, r);
+			/* some cards return a bogus value for file length.
+			 * As long as the actual length is not higher
+			 * than the expected length, continue */
+			if ((size_t) r > file->size)
+				goto err;
+		}
 	}
-	len = file->size;
-	buf = calloc(1, len);
-	if (!buf) {
-		goto err;
-	}
-	r = sc_lock(card);
-	if (r == SC_SUCCESS)
-		r = sc_read_binary(card, 0, buf, len, 0);
-	sc_unlock(card);
-	if (r < 0) {
-		check_ret(r, SC_AC_OP_READ, "read failed", file);
-		goto err;
-	}
-	if ((size_t)r != len) {
-		printf("WARNING: expecting %lu, got %d bytes.\n", (unsigned long) len, r);
-		/* some cards return a bogus value for file length. As
-		 * long as the actual length is not higher than the expected
-		 * length, continue */
-		if(r > (signed)len) {
+	else {	/* record-oriented file */
+		unsigned int rec = 0;
+
+		if (argc < 2) {
+			fprintf(stderr, "Record-oriented EFs require parameter record number.\n");
+			goto err;
+		}
+
+		rec = (unsigned int) strtoul(argv[1], NULL, 10);
+		if (argc > 2)
+			offs = (unsigned int) strtoul(argv[2], NULL, 10);
+
+		if (rec < 1 || rec > file->record_count) {
+			fprintf(stderr, "Invalid record number %u.\n", rec);
+			goto err;
+		}
+
+		r = sc_lock(card);
+		if (r == SC_SUCCESS)
+			r = sc_read_record(card, rec, buf, sizeof(buf), SC_RECORD_BY_REC_NR);
+		else
+			r = SC_ERROR_READER_LOCKED;
+		sc_unlock(card);
+		if (r < 0) {
+			check_ret(r, SC_AC_OP_READ, "Read failed", file);
 			goto err;
 		}
 	}
 
-	/* asn1 dump */
-	sc_asn1_print_tags(buf, r);
+	/* if offset does not exceed the length read from file/record, ... */
+	if (offs <= (unsigned int) r) {
+		/* ... perform the ASN.1 dump */
+		sc_asn1_print_tags(buf + offs, (unsigned int) r - offs);
 
-	err = 0;
+		err = 0;
+	}
+
 err:
-	if (buf)
-		free(buf);
 	if (not_current) {
 		sc_file_free(file);
 		select_current_path_or_die();
