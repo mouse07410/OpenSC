@@ -318,9 +318,10 @@
 						<replaceable>filename</replaceable>
 					</term>
 					<listitem>
-						<para>Test a Mozilla-like keypair generation and certificate request.
+						<para>Test a Mozilla-like key pair generation and certificate request.
 							Specify the <replaceable>filename</replaceable> to the certificate
-							file.</para>
+							file.
+                                                </para>
 					</listitem>
 				</varlistentry>
 
