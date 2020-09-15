@@ -85,6 +85,8 @@ parse_x509_cert(sc_context_t *ctx, struct sc_pkcs15_der *der, struct sc_pkcs15_c
 	const u8 *obj;
 	size_t objlen;
 
+	LOG_FUNC_CALLED(ctx);
+
 	memset(cert, 0, sizeof(*cert));
 	obj = sc_asn1_verify_tag(ctx, buf, buflen, SC_ASN1_TAG_SEQUENCE | SC_ASN1_CONS, &objlen);
 	if (obj == NULL)
@@ -106,7 +108,6 @@ parse_x509_cert(sc_context_t *ctx, struct sc_pkcs15_der *der, struct sc_pkcs15_c
 	if (!pubkey)
 		LOG_TEST_GOTO_ERR(ctx, SC_ERROR_INVALID_ASN1_OBJECT, "Unable to decode subjectPublicKeyInfo from cert");
 
-	sc_asn1_clear_algorithm_id(&sig_alg);
 
 	if (serial && serial_len)   {
 		sc_format_asn1_entry(asn1_serial_number + 0, serial, &serial_len, 1);
@@ -127,11 +128,13 @@ parse_x509_cert(sc_context_t *ctx, struct sc_pkcs15_der *der, struct sc_pkcs15_c
 	}
 
 err:
+	/* not used for anything */
+	sc_asn1_clear_algorithm_id(&sig_alg);
 	free(serial);
 	free(subject);
 	free(issuer);
 
-	return r;
+	LOG_FUNC_RETURN(ctx, r);
 }
 
 

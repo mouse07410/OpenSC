@@ -799,9 +799,7 @@ static void coolkey_free_private_data(coolkey_private_data_t *priv)
 	list_iterator_stop(l);
 
 	list_destroy(&priv->objects_list);
-	if (priv->token_name) {
-		free(priv->token_name);
-	}
+	free(priv->token_name);
 	free(priv);
 	return;
 }
@@ -1711,7 +1709,7 @@ static int coolkey_rsa_op(sc_card_t *card, const u8 * data, size_t datalen,
 
 		params_len = sizeof(params.init);
 
-		*crypt_out_p = NULL;
+		crypt_out_p = NULL;
 		crypt_out_len_p = 0;
 
 		ushort2bebytes(len_buf, datalen);
@@ -2063,6 +2061,7 @@ coolkey_process_combined_object(sc_card_t *card, coolkey_private_data_t *priv, u
 	}
 
 	/* store the token name in the priv structure so the emulator can set it */
+	free(priv->token_name);
 	priv->token_name = malloc(decompressed_header->token_name_length+1);
 	if (priv->token_name == NULL) {
 		r = SC_ERROR_OUT_OF_MEMORY;
