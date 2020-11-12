@@ -13,7 +13,17 @@ if [ "x$1" != "x" ]; then
       PREFIX="$1"
 fi
 echo "Destination for OpenSC is set to ${PREFIX}"
+
 #
+# Make sure everything for pkg-config is set up properly
+if [ -e ${PWD}/openssl_bin/$PREFIX/lib/pkgconfig ]; then
+        export PKG_CONFIG_PATH="$BUILDPATH/openssl_bin/$PREFIX/lib/pkgconfig:${PKG_CONFIG_PATH}"
+fi
+if [ -e ${PWD}/openpace_bin/$PREFIX/lib/pkgconfig ]; then
+        export PKG_CONFIG_PATH="$BUILDPATH/openpace_bin/$PREFIX/lib/pkgconfig:${PKG_CONFIG_PATH}"
+fi
+echo "MacOS-build: PKG_CONFIG_PATH=${PKG_CONFIG_PATH}"
+
 # configure once to set the version in build script
 ./configure --prefix=${PREFIX} --sysconfdir=${PREFIX}/etc --disable-silent-rules --disable-dependency-tracking --enable-shared --disable-static --enable-strict --disable-assert --enable-sm
 # build and package installer

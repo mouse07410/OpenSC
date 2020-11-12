@@ -191,7 +191,6 @@ fi
 
 # Create the symlink to OpenSC sources
 test -L OpenSC.tokend/build/opensc-src || ln -sf ${BUILDPATH}/src OpenSC.tokend/build/opensc-src
-#if (( xcodebuild -version | sed -En 's/Xcode[[:space:]]+([0-9]+)\.[0-9]*/\1/p' < 10 )); then
 ZZ="`xcodebuild -version | head -1`"
 if ((echo $ZZ | cut -d ' ' -f 2 | cut -d '.' -f 1 < 10)); then
     # Take care of the flags
@@ -238,6 +237,7 @@ cp ${BUILDPATH}/src/tools/org.opensc-project.mac.pkcs11-register.plist ${BUILDPA
 cp ${BUILDPATH}/src/tools/org.opensc-project.mac.opensc-notify.plist   ${BUILDPATH}/target_startup/Library/LaunchAgents
 
 # Build OpenSCToken if possible
+# let's block OpenSCToken build, because it's broken anyways
 if test -e OpenSCToken -a -n "${CODE_SIGN_IDENTITY}" -a -n "${DEVELOPMENT_TEAM}"; then
 	cd OpenSCToken
 	# make sure OpenSCToken builds with the same dependencies as before

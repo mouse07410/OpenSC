@@ -1135,6 +1135,8 @@ AC_CONFIG_FILES([
 	MacOSX/build-package
 	MacOSX/Distribution.xml
 	MacOSX/resources/Welcome.html
+	src/tools/org.opensc-project.mac.pkcs11-register.plist
+	src/tools/org.opensc-project.mac.opensc-notify.plist
 ])
 
 AC_OUTPUT
