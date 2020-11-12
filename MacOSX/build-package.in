@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Build the macOS installer for the tokend and command line tools.
 #
 # This is only tested and supported on macOS 10.10 or later, using Xcode 6.0.1.
@@ -119,8 +119,16 @@ if ! test -e $BUILDPATH/openpace_bin/$PREFIX/lib/pkgconfig; then
 	make DESTDIR=$BUILDPATH/openpace_bin install
 	cd ..
 fi
+
 export OPENPACE_CFLAGS="`env PKG_CONFIG_PATH=$BUILDPATH/openssl_bin/$PREFIX/lib/pkgconfig:$BUILDPATH/openpace_bin/$PREFIX/lib/pkgconfig PKG_CONFIG_SYSROOT_DIR=$BUILDPATH/openpace_bin pkg-config --static --cflags libeac` $OPENSSL_CFLAGS"
 export OPENPACE_LIBS="`  env PKG_CONFIG_PATH=$BUILDPATH/openssl_bin/$PREFIX/lib/pkgconfig:$BUILDPATH/openpace_bin/$PREFIX/lib/pkgconfig PKG_CONFIG_SYSROOT_DIR=$BUILDPATH/openpace_bin pkg-config --static --libs   libeac` $OPENSSL_LIBS"
+
+if [ -e $BUILDPATH/openssl_bin/$PREFIX/lib/pkgconfig ]; then
+	export PKG_CONFIG_PATH="$BUILDPATH/openssl_bin/$PREFIX/lib/pkgconfig:${PKG_CONFIG_PATH}"
+fi
+if [ -e $BUILDPATH/openpace_bin/$PREFIX/lib/pkgconfig ]; then
+	export PKG_CONFIG_PATH="$BUILDPATH/openpace_bin/$PREFIX/lib/pkgconfig:${PKG_CONFIG_PATH}"
+fi
 
 if ! test -e ${BUILDPATH}/target/$PREFIX/lib/pkgconfig; then
 	./configure --prefix=$PREFIX \
@@ -160,7 +168,6 @@ if ! test -e ${BUILDPATH}/target/$PREFIX/lib/pkgconfig; then
 	./MacOSX/libtool-bundle ${BUILDPATH}/target/$PREFIX/lib/opensc-pkcs11.so ${BUILDPATH}/target/$PREFIX/lib
 fi
 
-
 if ! test -e NotificationProxy; then
 	git clone http://github.com/frankmorgner/NotificationProxy.git
 fi
@@ -182,11 +189,14 @@ if ! test -e OpenSC.tokend; then
 	git clone http://github.com/mouse07410/OpenSC.tokend.git
 fi
 
-	# Create the symlink to OpenSC sources
-	test -L OpenSC.tokend/build/opensc-src || ln -sf ${BUILDPATH}/src OpenSC.tokend/build/opensc-src
-
-if (( xcodebuild -version | sed -En 's/Xcode[[:space:]]+([0-9]+)\.[0-9]*/\1/p' < 10 )); then
+# Create the symlink to OpenSC sources
+test -L OpenSC.tokend/build/opensc-src || ln -sf ${BUILDPATH}/src OpenSC.tokend/build/opensc-src
+#if (( xcodebuild -version | sed -En 's/Xcode[[:space:]]+([0-9]+)\.[0-9]*/\1/p' < 10 )); then
+ZZ="`xcodebuild -version | head -1`"
+if ((echo $ZZ | cut -d ' ' -f 2 | cut -d '.' -f 1 < 10)); then
     # Take care of the flags
+    XCODE_VVER="`xcodebuild -version`"
+    echo "Building OpenSC.tokend with older Xcode: ${XCODE_VVER} at ${SDK_PATH}"
     BACKUP_SDK_PATH="${SDK_PATH}"
     SDK_PATH="${TOKEND_SDK_PATH}"
     BACKUP_CFLAGS="${CFLAGS}"
@@ -201,12 +211,8 @@ if (( xcodebuild -version | sed -En 's/Xcode[[:space:]]+([0-9]+)\.[0-9]*/\1/p' <
     SDK_PATH="${BACKUP_SDK_PATH}"
     CFLAGS="${BACKUP_CFLAGS}"
 else
-	# https://github.com/OpenSC/OpenSC.tokend/issues/33
-	mkdir -p ${BUILDPATH}/target_tokend
-    # Check out OpenSCToken instead of OpenSC.tokend, if not already fetched.
-    #if ! test -e OpenSCToken; then
-    #	git clone http://github.com/mouse07410/OpenSCToken.git
-    #fi
+    # https://github.com/OpenSC/OpenSC.tokend/issues/33
+    mkdir -p ${BUILDPATH}/target_tokend
 fi
 
 #if ! test -e $BUILDPATH/target/Library/Security/tokend/OpenSC.tokend/Contents/Resources/Applications/terminal-notifier.app; then
@@ -228,8 +234,8 @@ cp MacOSX/opensc-uninstall ${BUILDPATH}/target/usr/local/bin
 
 # Prepare startup root
 mkdir -p ${BUILDPATH}/target_startup/Library/LaunchAgents
-cp src/tools/org.opensc-project.mac.pkcs11-register.plist ${BUILDPATH}/target_startup/Library/LaunchAgents
-cp src/tools/org.opensc-project.mac.opensc-notify.plist   ${BUILDPATH}/target_startup/Library/LaunchAgents
+cp ${BUILDPATH}/src/tools/org.opensc-project.mac.pkcs11-register.plist ${BUILDPATH}/target_startup/Library/LaunchAgents
+cp ${BUILDPATH}/src/tools/org.opensc-project.mac.opensc-notify.plist   ${BUILDPATH}/target_startup/Library/LaunchAgents
 
 # Build OpenSCToken if possible
 if test -e OpenSCToken -a -n "${CODE_SIGN_IDENTITY}" -a -n "${DEVELOPMENT_TEAM}"; then
