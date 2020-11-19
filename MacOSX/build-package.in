@@ -17,7 +17,7 @@ BUILDPATH=${PWD}
 SDK_PATH=$(xcrun --sdk macosx --show-sdk-path)
 
 # Set SDK path
-export CFLAGS="$CFLAGS -isysroot $SDK_PATH -arch x86_64"
+#export CFLAGS="$CFLAGS -isysroot $SDK_PATH -arch x86_64"
 
 ###################### Beginning of CDSA-related mucking ##################
 
@@ -27,7 +27,7 @@ export CFLAGS="$CFLAGS -isysroot $SDK_PATH -arch x86_64"
 
 # Determine version of the available SDK, and force Xcode-9.4.1
 # if what we have is 10.14+ (aka Xcode-10.x)
-SDK_VER=$(xcrun --show-sdk-version)
+SDK_VER=$(xcrun --sdk macosx --show-sdk-version)
 arrSDK_VER=(${SDK_VER//./ })
 
 if [ "${arrSDK_VER[0]}" \< "10" ]; then
@@ -172,9 +172,11 @@ if ! test -e NotificationProxy; then
 	git clone http://github.com/frankmorgner/NotificationProxy.git
 fi
 if test -n "${CODE_SIGN_IDENTITY}" -a -n "${DEVELOPMENT_TEAM}"; then
+	echo "-- Building NotificationProxy for ${DEVELOPMENT_TEAM}"
 	xcodebuild -target NotificationProxy -configuration Release -project NotificationProxy/NotificationProxy.xcodeproj install DSTROOT=$BUILDPATH/target/Library/OpenSC/ \
 		CODE_SIGN_IDENTITY="${CODE_SIGN_IDENTITY}" DEVELOPMENT_TEAM="${DEVELOPMENT_TEAM}" OTHER_CODE_SIGN_FLAGS="--timestamp --options=runtime" CODE_SIGN_INJECT_BASE_ENTITLEMENTS=NO CODE_SIGN_STYLE=Manual
 else
+	echo "-- Building NotificationProxy for ourselves"
 	xcodebuild -target NotificationProxy -configuration Release -project NotificationProxy/NotificationProxy.xcodeproj install DSTROOT=$BUILDPATH/target/Library/OpenSC/
 fi
 mkdir -p "$BUILDPATH/target/Applications/Utilities"
@@ -194,23 +196,25 @@ test -L OpenSC.tokend/build/opensc-src || ln -sf ${BUILDPATH}/src OpenSC.tokend/
 ZZ="`xcodebuild -version | head -1`"
 if ((echo $ZZ | cut -d ' ' -f 2 | cut -d '.' -f 1 < 10)); then
     # Take care of the flags
-    XCODE_VVER="`xcodebuild -version`"
-    echo "Building OpenSC.tokend with older Xcode: ${XCODE_VVER} at ${SDK_PATH}"
+    echo "Building OpenSC.tokend with older Xcode: ${ZZ} at ${SDK_PATH}"
     BACKUP_SDK_PATH="${SDK_PATH}"
     SDK_PATH="${TOKEND_SDK_PATH}"
     BACKUP_CFLAGS="${CFLAGS}"
     CFLAGS="${TOKEND_CFLAGS} -isysroot $SDK_PATH -arch x86_64"
 	# Build and copy OpenSC.tokend
 	if test -n "${CODE_SIGN_IDENTITY}" -a -n "${DEVELOPMENT_TEAM}"; then
+		echo "-- Building OpenSC.tokend for ${DEVELOPMENT_TEAM}"
 		xcodebuild -target OpenSC -configuration Deployment -project OpenSC.tokend/Tokend.xcodeproj install DSTROOT=${BUILDPATH}/target_tokend \
 		CODE_SIGN_IDENTITY="${CODE_SIGN_IDENTITY}" DEVELOPMENT_TEAM="${DEVELOPMENT_TEAM}" OTHER_CODE_SIGN_FLAGS="--timestamp --options=runtime" CODE_SIGN_INJECT_BASE_ENTITLEMENTS=NO CODE_SIGN_STYLE=Manual
 	else
+		echo "-- Building OpenSC.tokend for ourselves"
 		DEVELOPER_DIR="${DEVDIR}" /usr/bin/xcodebuild -target OpenSC -configuration Deployment -project OpenSC.tokend/Tokend.xcodeproj install DSTROOT=${BUILDPATH}/target_tokend
 	fi
     SDK_PATH="${BACKUP_SDK_PATH}"
     CFLAGS="${BACKUP_CFLAGS}"
 else
     # https://github.com/OpenSC/OpenSC.tokend/issues/33
+    echo "Xcode ${ZZ} at ${SDK_PATH} cannot build OpenSC.tokend "
     mkdir -p ${BUILDPATH}/target_tokend
 fi
 
@@ -260,6 +264,7 @@ if test -e OpenSCToken -a -n "${CODE_SIGN_IDENTITY}" -a -n "${DEVELOPMENT_TEAM}"
 	BP=${BUILDPATH}
 	./bootstrap
 	BUILDPATH=${BP}
+	echo "-- Building OpenSCTokenApp for ourselves"
 	xcodebuild -target OpenSCTokenApp -configuration Debug -project OpenSCTokenApp.xcodeproj install DSTROOT=${BUILDPATH}/target_token \
 		CODE_SIGN_IDENTITY="${CODE_SIGN_IDENTITY}" DEVELOPMENT_TEAM="${DEVELOPMENT_TEAM}" OTHER_CODE_SIGN_FLAGS="--timestamp --options=runtime" CODE_SIGN_INJECT_BASE_ENTITLEMENTS=NO CODE_SIGN_STYLE=Manual
 	cd ..
