@@ -63,6 +63,7 @@ addons:
     - ant
     - socat
     - cmake
+    - clang-tidy
 
 before_install:
   # homebrew is dead slow in older images due to the many updates it would need to download and build.
@@ -244,7 +245,7 @@ script:
       fi;
     fi
   - if [ -z "$HOST" -a "${DO_COVERITY_SCAN}" != "yes" -a -z "$DO_SIMULATION" ]; then
-      make check && make dist;
+      make check && make dist || cat tests/*log;
     fi
   - if [ ! -z "$HOST" -a "${DO_COVERITY_SCAN}" != "yes" ]; then
       make install;
