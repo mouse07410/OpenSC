@@ -69,7 +69,7 @@
 #endif
 
 #ifndef ENABLE_SHARED
-extern CK_FUNCTION_LIST pkcs11_function_list;
+extern CK_FUNCTION_LIST_3_0 pkcs11_function_list_3_0;
 #endif
 
 #define NEED_SESSION_RO	0x01
@@ -161,7 +161,8 @@ enum {
 	OPT_ALWAYS_AUTH,
 	OPT_ALLOWED_MECHANISMS,
 	OPT_OBJECT_INDEX,
-	OPT_ALLOW_SW
+	OPT_ALLOW_SW,
+	OPT_LIST_INTERFACES
 };
 
 static const struct option options[] = {
@@ -171,6 +172,7 @@ static const struct option options[] = {
 	{ "list-token-slots",	0, NULL,		'T' },
 	{ "list-mechanisms",	0, NULL,		'M' },
 	{ "list-objects",	0, NULL,		'O' },
+	{ "list-interfaces",	0, NULL,		OPT_LIST_INTERFACES },
 
 	{ "sign",		0, NULL,		's' },
 	{ "verify",		0, NULL,		OPT_VERIFY },
@@ -248,6 +250,7 @@ static const char *option_help[] = {
 	"List slots with tokens",
 	"List mechanisms supported by the token",
 	"Show objects on token",
+	"List interfaces of PKCS #11 3.0 library",
 
 	"Sign some data",
 	"Verify a signature of some data",
@@ -373,7 +376,7 @@ static int		opt_always_auth = 0;
 static CK_FLAGS		opt_allow_sw = CKF_HW;
 
 static void *module = NULL;
-static CK_FUNCTION_LIST_PTR p11 = NULL;
+static CK_FUNCTION_LIST_3_0_PTR p11 = NULL;
 static CK_SLOT_ID_PTR p11_slots = NULL;
 static CK_ULONG p11_num_slots = 0;
 static int suppress_warn = 0;
@@ -424,6 +427,7 @@ static void		list_slots(int, int, int);
 static void		show_token(CK_SLOT_ID);
 static void		list_mechs(CK_SLOT_ID);
 static void		list_objects(CK_SESSION_HANDLE, CK_OBJECT_CLASS);
+static void		list_interfaces(void);
 static int		login(CK_SESSION_HANDLE, int);
 static void		init_token(CK_SLOT_ID);
 static void		init_pin(CK_SLOT_ID, CK_SESSION_HANDLE);
@@ -433,6 +437,7 @@ static void		show_object(CK_SESSION_HANDLE, CK_OBJECT_HANDLE);
 static void		show_key(CK_SESSION_HANDLE, CK_OBJECT_HANDLE);
 static void		show_cert(CK_SESSION_HANDLE, CK_OBJECT_HANDLE);
 static void		show_dobj(CK_SESSION_HANDLE sess, CK_OBJECT_HANDLE obj);
+static void		show_profile(CK_SESSION_HANDLE sess, CK_OBJECT_HANDLE obj);
 static void		sign_data(CK_SLOT_ID, CK_SESSION_HANDLE, CK_OBJECT_HANDLE);
 static void		verify_signature(CK_SLOT_ID, CK_SESSION_HANDLE, CK_OBJECT_HANDLE);
 static void		decrypt_data(CK_SLOT_ID, CK_SESSION_HANDLE, CK_OBJECT_HANDLE);
@@ -550,6 +555,7 @@ ATTR_METHOD(KEY_TYPE, CK_KEY_TYPE);			/* getKEY_TYPE */
 ATTR_METHOD(CERTIFICATE_TYPE, CK_CERTIFICATE_TYPE);	/* getCERTIFICATE_TYPE */
 ATTR_METHOD(MODULUS_BITS, CK_ULONG);			/* getMODULUS_BITS */
 ATTR_METHOD(VALUE_LEN, CK_ULONG);			/* getVALUE_LEN */
+ATTR_METHOD(PROFILE_ID, CK_ULONG);			/* getPROFILE_ID */
 VARATTR_METHOD(LABEL, char);				/* getLABEL */
 VARATTR_METHOD(APPLICATION, char);			/* getAPPLICATION */
 VARATTR_METHOD(ID, unsigned char);			/* getID */
@@ -577,6 +583,7 @@ int main(int argc, char * argv[])
 	int list_token_slots = 0;
 	int do_list_mechs = 0;
 	int do_list_objects = 0;
+	int do_list_interfaces = 0;
 	int do_sign = 0;
 	int do_verify = 0;
 	int do_decrypt = 0;
@@ -950,6 +957,10 @@ int main(int argc, char * argv[])
 				s = strtok(NULL, ",");
 			}
 			break;
+		case OPT_LIST_INTERFACES:
+			do_list_interfaces = 1;
+			action_count++;
+			break;
 		default:
 			util_print_usage_and_die(app_name, options, option_help, NULL);
 		}
@@ -970,14 +981,18 @@ int main(int argc, char * argv[])
 
 #ifndef ENABLE_SHARED
 	if (strcmp(opt_module, DEFAULT_PKCS11_PROVIDER) == 0)
-		p11 = &pkcs11_function_list;
+		p11 = &pkcs11_function_list_3_0;
 	else
 #endif
 	{
-		module = C_LoadModule(opt_module, &p11);
+		module = C_LoadModule(opt_module, (CK_FUNCTION_LIST_PTR_PTR)&p11);
 		if (module == NULL)
 			util_fatal("Failed to load pkcs11 module");
 	}
+
+	/* This can be done even before initialization */
+	if (do_list_interfaces)
+		list_interfaces();
 
 	rv = p11->C_Initialize(NULL);
 	if (rv == CKR_CRYPTOKI_ALREADY_INITIALIZED)
@@ -1258,6 +1273,41 @@ static void show_cryptoki_info(void)
 			info.libraryVersion.minor);
 }
 
+static void list_interfaces(void)
+{
+	CK_ULONG count = 0, i;
+	CK_INTERFACE_PTR interfaces = NULL;
+	CK_RV rv;
+
+	if (p11->version.major < 3) {
+		fprintf(stderr, "Interfaces are supported only in PKCS #11 3.0 and newer\n");
+		exit(1);
+	}
+
+	rv = p11->C_GetInterfaceList(NULL, &count);
+	if (rv != CKR_OK) {
+		p11_fatal("C_GetInterfaceList(size inquire)", rv);
+	}
+
+	interfaces = malloc(count * sizeof(CK_INTERFACE));
+	if (interfaces == NULL) {
+			perror("malloc failed");
+			exit(1);
+	}
+	rv = p11->C_GetInterfaceList(interfaces, &count);
+	if (rv != CKR_OK) {
+		p11_fatal("C_GetInterfaceList", rv);
+	}
+	for (i = 0; i < count; i++) {
+		printf("Interface '%s'\n  version: %d.%d\n  funcs=%p\n  flags=0x%lu\n",
+			interfaces[i].pInterfaceName,
+			((CK_VERSION *)interfaces[i].pFunctionList)->major,
+			((CK_VERSION *)interfaces[i].pFunctionList)->minor,
+			interfaces[i].pFunctionList,
+			interfaces[i].flags);
+	}
+
+}
 static void list_slots(int tokens, int refresh, int print)
 {
 	CK_SLOT_INFO info;
@@ -3699,6 +3749,9 @@ static void show_object(CK_SESSION_HANDLE sess, CK_OBJECT_HANDLE obj)
 	case CKO_DATA:
 		show_dobj(sess, obj);
 		break;
+	case CKO_PROFILE:
+		show_profile(sess, obj);
+		break;
 	default:
 		printf("Object %u, type %u\n",
 				(unsigned int) obj,
@@ -4259,6 +4312,20 @@ static void show_dobj(CK_SESSION_HANDLE sess, CK_OBJECT_HANDLE obj)
 
 	printf ("\n");
 	suppress_warn = 0;
+}
+
+
+static void show_profile(CK_SESSION_HANDLE sess, CK_OBJECT_HANDLE obj)
+{
+	CK_ULONG    id = 0;
+
+	printf("Profile object %u\n", (unsigned int) obj);
+	printf("  profile_id:          ");
+	if ((id = getPROFILE_ID(sess, obj)) != 0) {
+		printf("'%lu'\n", id);
+	} else {
+		printf("<empty>\n");
+	}
 }
 
 
@@ -6245,7 +6312,7 @@ static CK_SESSION_HANDLE test_kpgen_certwrite(CK_SLOT_ID slot, CK_SESSION_HANDLE
 
 	printf("\n*** Loading the pkcs11 lib, opening a session and logging in ***\n");
 
-	module = C_LoadModule(opt_module, &p11);
+	module = C_LoadModule(opt_module, (CK_FUNCTION_LIST_PTR_PTR)&p11);
 	if (module == NULL)
 		util_fatal("Failed to load pkcs11 module");
 
