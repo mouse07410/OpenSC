@@ -475,7 +475,13 @@ CK_RV sc_pkcs11_verify_data(const unsigned char *pubkey, unsigned int pubkey_len
 		|| mech->mechanism == CKM_SHA224_RSA_PKCS
 		|| mech->mechanism == CKM_SHA256_RSA_PKCS
 		|| mech->mechanism == CKM_SHA384_RSA_PKCS
-		|| mech->mechanism == CKM_SHA512_RSA_PKCS)) {
+		|| mech->mechanism == CKM_SHA512_RSA_PKCS
+		|| mech->mechanism == CKM_ECDSA_SHA1
+		|| mech->mechanism == CKM_ECDSA_SHA224
+		|| mech->mechanism == CKM_ECDSA_SHA256
+		|| mech->mechanism == CKM_ECDSA_SHA384
+		|| mech->mechanism == CKM_ECDSA_SHA512
+		)) {
 		EVP_MD_CTX *md_ctx = DIGEST_CTX(md);
 
 		/* This does not really use the data argument, but the data
@@ -483,7 +489,22 @@ CK_RV sc_pkcs11_verify_data(const unsigned char *pubkey, unsigned int pubkey_len
 		 */
 		sc_log(context, "Trying to verify using EVP");
 		if (md_ctx) {
-			res = EVP_VerifyFinal(md_ctx, signat, signat_len, pkey);
+
+			if (EVP_PKEY_get0_EC_KEY(pkey)) {
+				unsigned char *signat_tmp = NULL;
+				size_t signat_len_tmp;
+				int r;
+				r = sc_asn1_sig_value_rs_to_sequence(NULL, signat,
+						signat_len, &signat_tmp, &signat_len_tmp);
+				if (r == 0) {
+					res = EVP_VerifyFinal(md_ctx, signat_tmp, signat_len_tmp, pkey);
+				} else {
+					sc_log(context, "sc_asn1_sig_value_rs_to_sequence failed r:%d",r);
+					res = -1;
+				}
+				free(signat_tmp);
+			} else 
+				res = EVP_VerifyFinal(md_ctx, signat, signat_len, pkey);
 		} else {
 			res = -1;
 		}
