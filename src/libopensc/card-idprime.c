@@ -195,16 +195,21 @@ static int idprime_process_index(sc_card_t *card, idprime_private_data_t *priv, 
 		if (((memcmp(&start[4], "ksc", 3) == 0) || memcmp(&start[4], "kxc", 3) == 0)
 			&& (memcmp(&start[12], "mscp", 5) == 0)) {
 			new_object.fd++;
-			if (card->type == SC_CARD_TYPE_IDPRIME_V2) {
-				/* The key reference starts from 0x11 and increments by the key id (ASCII) */
+			if (card->type == SC_CARD_TYPE_IDPRIME_V1) {
+				/* The key reference is one bigger than the value found here for some reason */
+				new_object.key_reference = start[8] + 1;
+			} else {
 				int key_id = 0;
 				if (start[8] >= '0' && start[8] <= '9') {
 					key_id = start[8] - '0';
 				}
-				new_object.key_reference = 0x11 + key_id;
-			} else {
-				/* The key reference is one bigger than the value found here for some reason */
-				new_object.key_reference = start[8] + 1;
+				if (card->type == SC_CARD_TYPE_IDPRIME_V2) {
+					/* The key reference starts from 0x11 and increments by the key id (ASCII) */
+					new_object.key_reference = 0x11 + key_id;
+				} else { /* V3 */
+					/* The key reference starts from 0xF7 and increments by the key id (ASCII) */
+					new_object.key_reference = 0xF7 + key_id;
+				}
 			}
 			sc_debug(card->ctx, SC_LOG_DEBUG_VERBOSE, "Found certificate with fd=%d, key_ref=%d",
 				new_object.fd, new_object.key_reference);
@@ -251,6 +256,10 @@ static int idprime_init(sc_card_t *card)
 		case 0x02:
 			card->type = SC_CARD_TYPE_IDPRIME_V2;
 			sc_log(card->ctx, "Detected IDPrime applet version 2");
+			break;
+		case 0x03:
+			card->type = SC_CARD_TYPE_IDPRIME_V3;
+			sc_log(card->ctx, "Detected IDPrime applet version 3");
 			break;
 		default:
 			sc_log(card->ctx, "Unknown OS version received: %d", rbuf[11]);
@@ -618,13 +627,13 @@ idprime_set_security_env(struct sc_card *card,
 	switch (env->operation) {
 	case SC_SEC_OPERATION_DECIPHER:
 		if (env->algorithm_flags & SC_ALGORITHM_RSA_PAD_OAEP) {
-			if (env->algorithm_flags & SC_ALGORITHM_RSA_HASH_SHA1) {
+			if (env->algorithm_flags & SC_ALGORITHM_MGF1_SHA1) {
 				new_env.algorithm_ref = 0x1D;
-			} else if (env->algorithm_flags & SC_ALGORITHM_RSA_HASH_SHA256) {
+			} else if (env->algorithm_flags & SC_ALGORITHM_MGF1_SHA256) {
 				new_env.algorithm_ref = 0x4D;
-			} else if (env->algorithm_flags & SC_ALGORITHM_RSA_HASH_SHA384) {
+			} else if (env->algorithm_flags & SC_ALGORITHM_MGF1_SHA384) {
 				new_env.algorithm_ref = 0x5D;
-			} else if (env->algorithm_flags & SC_ALGORITHM_RSA_HASH_SHA512) {
+			} else if (env->algorithm_flags & SC_ALGORITHM_MGF1_SHA512) {
 				new_env.algorithm_ref = 0x6D;
 			}
 		} else { /* RSA-PKCS without hashing */
@@ -633,19 +642,19 @@ idprime_set_security_env(struct sc_card *card,
 		break;
 	case SC_SEC_OPERATION_SIGN:
 		if (env->algorithm_flags & SC_ALGORITHM_RSA_PAD_PSS) {
-			if (env->algorithm_flags & SC_ALGORITHM_RSA_HASH_SHA256) {
+			if (env->algorithm_flags & SC_ALGORITHM_MGF1_SHA256) {
 				new_env.algorithm_ref = 0x45;
-			} else if (env->algorithm_flags & SC_ALGORITHM_RSA_HASH_SHA384) {
+			} else if (env->algorithm_flags & SC_ALGORITHM_MGF1_SHA384) {
 				new_env.algorithm_ref = 0x55;
-			} else if (env->algorithm_flags & SC_ALGORITHM_RSA_HASH_SHA512) {
+			} else if (env->algorithm_flags & SC_ALGORITHM_MGF1_SHA512) {
 				new_env.algorithm_ref = 0x65;
 			}
 		} else { /* RSA-PKCS */
-			if (env->algorithm_flags & SC_ALGORITHM_RSA_HASH_SHA256) {
+			if (env->algorithm_flags & SC_ALGORITHM_MGF1_SHA256) {
 				new_env.algorithm_ref = 0x42;
-			} else if (env->algorithm_flags & SC_ALGORITHM_RSA_HASH_SHA384) {
+			} else if (env->algorithm_flags & SC_ALGORITHM_MGF1_SHA384) {
 				new_env.algorithm_ref = 0x52;
-			} else if (env->algorithm_flags & SC_ALGORITHM_RSA_HASH_SHA512) {
+			} else if (env->algorithm_flags & SC_ALGORITHM_MGF1_SHA512) {
 				new_env.algorithm_ref = 0x62;
 			} else { /* RSA-PKCS without hashing */
 				new_env.algorithm_ref = 0x02;
