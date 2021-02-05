@@ -5023,9 +5023,15 @@ struct sc_pkcs11_object_ops pkcs15_dobj_ops = {
 
 /* PKCS#15 Data Object*/
 static void
-pkcs15_profile_release(void *object)
+pkcs15_profile_release(void *obj)
 {
-	__pkcs15_release_object((struct pkcs15_any_object *) object);
+	struct pkcs15_any_object *object = (struct pkcs15_any_object *) obj;
+	struct sc_pkcs15_object *p15_obj = object->p15_object;
+
+	if (__pkcs15_release_object((struct pkcs15_any_object *) obj) < 1) {
+		/* This is not a real pkcs15 object. We need to free it here */
+		free(p15_obj);
+	}
 }
 
 
@@ -5750,7 +5756,7 @@ static CK_RV register_ec_mechanisms(struct sc_pkcs11_card *p11card, int flags,
 	/* ADD ECDH mechanisms */
 	/* The PIV uses curves where CKM_ECDH1_DERIVE and CKM_ECDH1_COFACTOR_DERIVE produce the same results */
 	if(flags & SC_ALGORITHM_ECDH_CDH_RAW) {
-		mech_info.flags &= ~CKF_SIGN;
+		mech_info.flags &= ~(CKF_SIGN | CKF_VERIFY);
 		mech_info.flags |= CKF_DERIVE;
 
 		mt = sc_pkcs11_new_fw_mechanism(CKM_ECDH1_COFACTOR_DERIVE, &mech_info, CKK_EC, NULL, NULL);
