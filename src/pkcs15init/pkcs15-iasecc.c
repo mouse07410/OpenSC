@@ -1485,8 +1485,11 @@ iasecc_md_gemalto_unset_default(struct sc_pkcs15_card *p15card, struct sc_profil
 	rv = sc_pkcs15_read_data_object(p15card, (struct sc_pkcs15_data_info *)data_obj->data, &dod);
 	LOG_TEST_RET(ctx, rv, "Cannot read from 'CSP/'Default Key Container'");
 
-	if (guid_len != dod->data_len || memcmp(guid, dod->data, guid_len))
+	if (guid_len != dod->data_len || memcmp(guid, dod->data, guid_len)) {
+		sc_pkcs15_free_data_object(dod);
 		LOG_FUNC_RETURN(ctx, SC_SUCCESS);
+	}
+	sc_pkcs15_free_data_object(dod);
 
 	rv = sc_pkcs15_get_objects(p15card, SC_PKCS15_TYPE_PRKEY, key_objs, 32);
 	LOG_TEST_RET(ctx, rv, "Get private key PKCS#15 objects error");
@@ -1660,7 +1663,8 @@ iasecc_store_pubkey(struct sc_pkcs15_card *p15card, struct sc_profile *profile, 
 	pubkey_info->usage |= prkey_info->usage & SC_PKCS15_PRKEY_USAGE_DECRYPT ? SC_PKCS15_PRKEY_USAGE_ENCRYPT : 0;
 	pubkey_info->usage |= prkey_info->usage & SC_PKCS15_PRKEY_USAGE_UNWRAP ? SC_PKCS15_PRKEY_USAGE_WRAP : 0;
 
-	iasecc_pkcs15_add_access_rule(object, SC_PKCS15_ACCESS_RULE_MODE_READ, NULL);
+	rv = iasecc_pkcs15_add_access_rule(object, SC_PKCS15_ACCESS_RULE_MODE_READ, NULL);
+	LOG_TEST_RET(ctx, rv, "Too many access rules");
 
 	memcpy(&pubkey_info->algo_refs[0], &prkey_info->algo_refs[0], sizeof(pubkey_info->algo_refs));
 
