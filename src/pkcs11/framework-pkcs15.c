@@ -670,8 +670,10 @@ __pkcs15_create_cert_object(struct pkcs15_fw_data *fw_data, struct sc_pkcs15_obj
 {
 	struct sc_pkcs15_cert_info *p15_info = NULL;
 	struct sc_pkcs15_cert *p15_cert = NULL;
+	struct pkcs15_any_object *any_object = NULL;
 	struct pkcs15_cert_object *object = NULL;
 	struct pkcs15_pubkey_object *obj2 = NULL;
+	struct pkcs15_any_object *any_object2 = NULL;
 	int rv;
 
 	p15_info = (struct sc_pkcs15_cert_info *) cert->data;
@@ -686,8 +688,9 @@ __pkcs15_create_cert_object(struct pkcs15_fw_data *fw_data, struct sc_pkcs15_obj
 	}
 
 	/* Certificate object */
-	rv = __pkcs15_create_object(fw_data, (struct pkcs15_any_object **) &object,
+	rv = __pkcs15_create_object(fw_data, &any_object,
 			cert, &pkcs15_cert_ops, sizeof(struct pkcs15_cert_object));
+	object = (struct pkcs15_cert_object *) any_object;
 	if (rv < 0) {
 		if (p15_cert != NULL)
 			sc_pkcs15_free_certificate(p15_cert);
@@ -698,10 +701,11 @@ __pkcs15_create_cert_object(struct pkcs15_fw_data *fw_data, struct sc_pkcs15_obj
 	object->cert_data = p15_cert;
 
 	/* Corresponding public key */
-	rv = public_key_created(fw_data, &p15_info->id, (struct pkcs15_any_object **) &obj2);
+	rv = public_key_created(fw_data, &p15_info->id, &any_object2);
 	if (rv != SC_SUCCESS)
-		rv = __pkcs15_create_object(fw_data, (struct pkcs15_any_object **) &obj2,
+		rv = __pkcs15_create_object(fw_data, &any_object2,
 				NULL, &pkcs15_pubkey_ops, sizeof(struct pkcs15_pubkey_object));
+	obj2 = (struct pkcs15_pubkey_object *) any_object2;
 	if (rv < 0)
 		return rv;
 
@@ -720,7 +724,7 @@ __pkcs15_create_cert_object(struct pkcs15_fw_data *fw_data, struct sc_pkcs15_obj
 	pkcs15_cert_extract_label(object);
 
 	if (cert_object != NULL)
-		*cert_object = (struct pkcs15_any_object *) object;
+		*cert_object = any_object;
 
 	return 0;
 }
@@ -730,6 +734,7 @@ static int
 __pkcs15_create_pubkey_object(struct pkcs15_fw_data *fw_data,
 	struct sc_pkcs15_object *pubkey, struct pkcs15_any_object **pubkey_object)
 {
+	struct pkcs15_any_object *any_object = NULL;
 	struct pkcs15_pubkey_object *object = NULL;
 	struct sc_pkcs15_pubkey *p15_key = NULL;
 	int rv;
@@ -758,8 +763,9 @@ __pkcs15_create_pubkey_object(struct pkcs15_fw_data *fw_data,
 	}
 
 	/* Public key object */
-	rv = __pkcs15_create_object(fw_data, (struct pkcs15_any_object **) &object,
+	rv = __pkcs15_create_object(fw_data, &any_object,
 			pubkey, &pkcs15_pubkey_ops, sizeof(struct pkcs15_pubkey_object));
+	object = (struct pkcs15_pubkey_object *) any_object;
 	if (rv >= 0) {
 		object->pub_info = (struct sc_pkcs15_pubkey_info *) pubkey->data;
 		object->pub_data = p15_key;
@@ -773,7 +779,7 @@ __pkcs15_create_pubkey_object(struct pkcs15_fw_data *fw_data,
 			object->pub_data->alg_id->params = &((object->pub_data->u).gostr3410.params);
 	}
 	if (pubkey_object != NULL)
-		*pubkey_object = (struct pkcs15_any_object *) object;
+		*pubkey_object = any_object;
 
 	return rv;
 }
@@ -783,16 +789,18 @@ static int
 __pkcs15_create_prkey_object(struct pkcs15_fw_data *fw_data,
 	struct sc_pkcs15_object *prkey, struct pkcs15_any_object **prkey_object)
 {
+	struct pkcs15_any_object *any_object = NULL;
 	struct pkcs15_prkey_object *object = NULL;
 	int rv;
 
-	rv = __pkcs15_create_object(fw_data, (struct pkcs15_any_object **) &object,
+	rv = __pkcs15_create_object(fw_data, &any_object,
 			prkey, &pkcs15_prkey_ops, sizeof(struct pkcs15_prkey_object));
+	object = (struct pkcs15_prkey_object *) any_object;
 	if (rv >= 0)
 		object->prv_info = (struct sc_pkcs15_prkey_info *) prkey->data;
 
 	if (prkey_object != NULL)
-		*prkey_object = (struct pkcs15_any_object *) object;
+		*prkey_object = any_object;
 
 	return rv;
 }
@@ -802,18 +810,20 @@ static int
 __pkcs15_create_data_object(struct pkcs15_fw_data *fw_data,
 		struct sc_pkcs15_object *object, struct pkcs15_any_object **data_object)
 {
+	struct pkcs15_any_object *any_object = NULL;
 	struct pkcs15_data_object *dobj = NULL;
 	int rv;
 
-	rv = __pkcs15_create_object(fw_data, (struct pkcs15_any_object **) &dobj,
+	rv = __pkcs15_create_object(fw_data, &any_object,
 			object, &pkcs15_dobj_ops, sizeof(struct pkcs15_data_object));
+        dobj = (struct pkcs15_data_object *) any_object;
 	if (rv >= 0)   {
 		dobj->info = (struct sc_pkcs15_data_info *) object->data;
 		dobj->value = NULL;
 	}
 
 	if (data_object != NULL)
-		*data_object = (struct pkcs15_any_object *) dobj;
+		*data_object = any_object;
 
 	return rv;
 }
@@ -853,16 +863,18 @@ static int
 __pkcs15_create_secret_key_object(struct pkcs15_fw_data *fw_data,
 		struct sc_pkcs15_object *object, struct pkcs15_any_object **skey_object)
 {
+	struct pkcs15_any_object *any_object = NULL;
 	struct pkcs15_skey_object *skey = NULL;
 	int rv;
 
-	rv = __pkcs15_create_object(fw_data, (struct pkcs15_any_object **) &skey,
+	rv = __pkcs15_create_object(fw_data, &any_object,
 			object, &pkcs15_skey_ops, sizeof(struct pkcs15_skey_object));
+        skey = (struct pkcs15_skey_object *) any_object;
 	if (rv >= 0)
 		skey->info = (struct sc_pkcs15_skey_info *) object->data;
 
 	if (skey_object != NULL)
-		*skey_object = (struct pkcs15_any_object *) skey;
+		*skey_object = any_object;
 
 	return rv;
 }
@@ -2966,14 +2978,17 @@ set_gost3410_params(struct sc_pkcs15init_prkeyargs *prkey_args,
 	const CK_BYTE * gost_params_encoded_oid_from_template;
 	const CK_BYTE * gost_hash_params_encoded_oid_from_template;
 	size_t len, param_index, hash_index;
+	void *ptr = NULL;
 	CK_RV rv;
 
 	/* If template has CKA_GOSTR3410_PARAMS attribute, set param_index to
 	 * corresponding item's index in gostr3410_param_oid[] */
-	if (pPrivTpl && ulPrivCnt)
-		rv = attr_find_ptr2(pPubTpl, ulPubCnt, pPrivTpl, ulPrivCnt, CKA_GOSTR3410_PARAMS, (void **)&gost_params_encoded_oid_from_template, &len);
-	else
-		rv = attr_find_ptr(pPubTpl, ulPubCnt, CKA_GOSTR3410_PARAMS, (void **)&gost_params_encoded_oid_from_template, &len);
+	if (pPrivTpl && ulPrivCnt) {
+		rv = attr_find_ptr2(pPubTpl, ulPubCnt, pPrivTpl, ulPrivCnt, CKA_GOSTR3410_PARAMS, &ptr, &len);
+	} else {
+		rv = attr_find_ptr(pPubTpl, ulPubCnt, CKA_GOSTR3410_PARAMS, &ptr, &len);
+	}
+	gost_params_encoded_oid_from_template = (const CK_BYTE *) ptr;
 
 	if (rv == CKR_OK) {
 		size_t nn = sizeof(gostr3410_param_oid)/sizeof(gostr3410_param_oid[0]);
@@ -2996,10 +3011,12 @@ set_gost3410_params(struct sc_pkcs15init_prkeyargs *prkey_args,
 
 	/* If template has CKA_GOSTR3411_PARAMS attribute, set hash_index to
 	 * corresponding item's index in gostr3410_hash_param_oid[] */
-	if (pPrivTpl && ulPrivCnt)
-		rv = attr_find_ptr2(pPubTpl, ulPubCnt, pPrivTpl, ulPrivCnt, CKA_GOSTR3411_PARAMS, (void **)&gost_hash_params_encoded_oid_from_template, &len);
-	else
-		rv = attr_find_ptr(pPubTpl, ulPubCnt, CKA_GOSTR3411_PARAMS, (void **)&gost_hash_params_encoded_oid_from_template, &len);
+	if (pPrivTpl && ulPrivCnt) {
+		rv = attr_find_ptr2(pPubTpl, ulPubCnt, pPrivTpl, ulPrivCnt, CKA_GOSTR3411_PARAMS, &ptr, &len);
+	} else {
+		rv = attr_find_ptr(pPubTpl, ulPubCnt, CKA_GOSTR3411_PARAMS, &ptr, &len);
+	}
+	gost_hash_params_encoded_oid_from_template = ptr;
 
 	if (rv == CKR_OK) {
 		size_t nn = sizeof(gostr3410_hash_param_oid)/sizeof(gostr3410_hash_param_oid[0]);
@@ -3146,9 +3163,11 @@ pkcs15_gen_keypair(struct sc_pkcs11_slot *slot, CK_MECHANISM_PTR pMechanism,
 	}
 	else if (keytype == CKK_EC)   {
 		struct sc_lv_data *der = &keygen_args.prkey_args.key.u.ec.params.der;
+		void *ptr = NULL;
 
 		der->len = sizeof(struct sc_object_id);
-		rv = attr_find_and_allocate_ptr(pPubTpl, ulPubCnt, CKA_EC_PARAMS, (void **)&der->value, &der->len);
+		rv = attr_find_and_allocate_ptr(pPubTpl, ulPubCnt, CKA_EC_PARAMS, &ptr, &der->len);
+		der->value = (unsigned char *) ptr;
 		if (rv != CKR_OK)   {
 			sc_unlock(p11card->card);
 			return sc_to_cryptoki_error(rc, "C_GenerateKeyPair");

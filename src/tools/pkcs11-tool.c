@@ -6341,11 +6341,12 @@ static CK_SESSION_HANDLE test_kpgen_certwrite(CK_SLOT_ID slot, CK_SESSION_HANDLE
 		return session;
 	}
 
-	tmp = getID(session, priv_key, (CK_ULONG *) &opt_object_id_len);
-	if (opt_object_id_len == 0) {
+	tmp = getID(session, priv_key, &i);
+	if (i == 0) {
 		fprintf(stderr, "ERR: newly generated private key has no (or an empty) CKA_ID\n");
 		return session;
 	}
+	opt_object_id_len = (size_t) i;
 	memcpy(opt_object_id, tmp, opt_object_id_len);
 
 	/* This is done in NSS */
@@ -6527,11 +6528,12 @@ static void test_ec(CK_SLOT_ID slot, CK_SESSION_HANDLE session)
 		return;
 	}
 
-	tmp = getID(session, priv_key, (CK_ULONG *) &opt_object_id_len);
-	if (opt_object_id_len == 0) {
+	tmp = getID(session, priv_key, &i);
+	if (i == 0) {
 		printf("ERR: newly generated private key has no (or an empty) CKA_ID\n");
 		return;
 	}
+	i = (size_t) opt_object_id_len;
 	memcpy(opt_object_id, tmp, opt_object_id_len);
 
 	/* This is done in NSS */
