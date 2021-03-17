@@ -95,6 +95,18 @@ static const struct sc_atr_table iasecc_known_atrs[] = {
 		"IAS/ECC v1.0.1 Amos", SC_CARD_TYPE_IASECC_AMOS, 0, NULL },
 	{ "3B:DC:18:FF:81:91:FE:1F:C3:80:73:C8:21:13:66:01:0B:03:52:00:05:38", NULL,
 		"IAS/ECC v1.0.1 Amos", SC_CARD_TYPE_IASECC_AMOS, 0, NULL },
+	{
+		.atr     = "3B:AC:00:40:2A:00:12:25:00:64:80:00:03:10:00:90:00",
+		.atrmask = "FF:00:00:00:00:FF:FF:FF:FF:FF:FF:00:00:00:FF:FF:FF",
+		.name = "IAS/ECC CPx",
+		.type = SC_CARD_TYPE_IASECC_CPX,
+	},
+	{
+		.atr     = "2B:8F:80:01:00:31:B8:64:04:B0:EC:C1:73:94:01:80:82:90:00:0E",
+		.atrmask = "FF:FF:FF:FF:FF:FF:FF:FF:00:00:FF:C0:FF:FF:FF:FF:FF:FF:FF:FF",
+		.name = "IAS/ECC CPxCL",
+		.type = SC_CARD_TYPE_IASECC_CPXCL,
+	},
 	{ NULL, NULL, NULL, 0, 0, NULL }
 };
 
@@ -409,6 +421,9 @@ static int iasecc_parse_ef_atr(struct sc_card *card)
 	sizes->recv =	 card->ef_atr->issuer_data[10] * 0x100 + card->ef_atr->issuer_data[11];
 	sizes->recv_sc = card->ef_atr->issuer_data[14] * 0x100 + card->ef_atr->issuer_data[15];
 
+	sc_log(ctx, "EF.ATR: IO Buffer Size send/sc %ld/%ld recv/sc %ld/%ld",
+		sizes->send, sizes->send_sc, sizes->recv, sizes->recv_sc);
+
 	card->max_send_size = sizes->send;
 	card->max_recv_size = sizes->recv;
 
@@ -595,6 +610,45 @@ iasecc_init_amos_or_sagem(struct sc_card *card)
 	LOG_FUNC_RETURN(ctx, SC_SUCCESS);
 }
 
+inline static int
+iasecc_is_cpx(const struct sc_card *card)
+{
+	switch(card->type) {
+		case SC_CARD_TYPE_IASECC_CPX:
+		case SC_CARD_TYPE_IASECC_CPXCL:
+			return 1;
+		default:
+			return 0;
+	}
+
+	return 0;
+}
+
+static int
+iasecc_init_cpx(struct sc_card *card)
+{
+	struct sc_context *ctx = card->ctx;
+	unsigned int flags; /* TBC it is not IASECC_CARD_DEFAULT_FLAGS */
+
+	LOG_FUNC_CALLED(ctx);
+
+	card->caps = SC_CARD_CAP_RNG; /* TBC it is not IASECC_CARD_DEFAULT_CAPS */
+
+	flags = SC_ALGORITHM_RSA_PAD_PKCS1;
+	flags |= SC_ALGORITHM_RSA_RAW;
+
+	flags |= SC_ALGORITHM_RSA_HASH_SHA1    |
+	         SC_ALGORITHM_RSA_HASH_SHA256;
+
+	_sc_card_add_rsa_alg(card, 512, flags, 0);
+	_sc_card_add_rsa_alg(card, 1024, flags, 0);
+	_sc_card_add_rsa_alg(card, 2048, flags, 0);
+
+	LOG_TEST_RET(ctx, sc_enum_apps(card), "Enumerate apps failed");
+
+	LOG_FUNC_RETURN(ctx, SC_SUCCESS);
+}
+
 
 static int
 iasecc_init(struct sc_card *card)
@@ -622,6 +676,8 @@ iasecc_init(struct sc_card *card)
 		rv = iasecc_init_amos_or_sagem(card);
 	else if (card->type == SC_CARD_TYPE_IASECC_MI)
 		rv = iasecc_init_amos_or_sagem(card);
+	else if (iasecc_is_cpx(card))
+		rv = iasecc_init_cpx(card);
 	else {
 		LOG_TEST_GOTO_ERR(ctx, SC_ERROR_INVALID_CARD, "");
 	}
@@ -861,9 +917,10 @@ iasecc_select_file(struct sc_card *card, const struct sc_path *path,
 	sc_log(ctx, "iasecc_select_file() path:%s", sc_print_path(path));
 
 	sc_print_cache(card);
-	if (path->type != SC_PATH_TYPE_DF_NAME
+	if ((!iasecc_is_cpx(card)) &&
+	    (path->type != SC_PATH_TYPE_DF_NAME
 			&& lpath.len >= 2
-			&& lpath.value[0] == 0x3F && lpath.value[1] == 0x00)   {
+			&& lpath.value[0] == 0x3F && lpath.value[1] == 0x00))   {
 		sc_log(ctx, "EF.ATR(aid:'%s')", card->ef_atr ? sc_dump_hex(card->ef_atr->aid.value, card->ef_atr->aid.len) : "");
 
 		rv = iasecc_select_mf(card, file_out);
@@ -944,7 +1001,8 @@ iasecc_select_file(struct sc_card *card, const struct sc_path *path,
 				&& card->type != SC_CARD_TYPE_IASECC_SAGEM
 				&& card->type != SC_CARD_TYPE_IASECC_AMOS
 				&& card->type != SC_CARD_TYPE_IASECC_MI
-				&& card->type != SC_CARD_TYPE_IASECC_MI2) {
+				&& card->type != SC_CARD_TYPE_IASECC_MI2
+				&& !iasecc_is_cpx(card)) {
 			rv = SC_ERROR_NOT_SUPPORTED;
 			LOG_TEST_GOTO_ERR(ctx, rv, "Unsupported card");
 		}
@@ -956,7 +1014,9 @@ iasecc_select_file(struct sc_card *card, const struct sc_path *path,
 			if (card->type == SC_CARD_TYPE_IASECC_OBERTHUR ||
 			    card->type == SC_CARD_TYPE_IASECC_AMOS ||
 			    card->type == SC_CARD_TYPE_IASECC_MI ||
-			    card->type == SC_CARD_TYPE_IASECC_MI2)   {
+			    card->type == SC_CARD_TYPE_IASECC_MI2 ||
+			    iasecc_is_cpx(card)
+			    )   {
 				apdu.p2 = 0x04;
 			}
 		}
@@ -965,7 +1025,8 @@ iasecc_select_file(struct sc_card *card, const struct sc_path *path,
 			if (card->type == SC_CARD_TYPE_IASECC_OBERTHUR ||
 			    card->type == SC_CARD_TYPE_IASECC_AMOS ||
 			    card->type == SC_CARD_TYPE_IASECC_MI ||
-			    card->type == SC_CARD_TYPE_IASECC_MI2)   {
+			    card->type == SC_CARD_TYPE_IASECC_MI2 ||
+			    iasecc_is_cpx(card)) {
 				apdu.p2 = 0x04;
 			}
 		}
