@@ -1079,6 +1079,8 @@ pkcs15_add_object(struct sc_pkcs11_slot *slot, struct pkcs15_any_object *obj,
 	case SC_PKCS15_TYPE_PRKEY_RSA:
 	case SC_PKCS15_TYPE_PRKEY_GOSTR3410:
 	case SC_PKCS15_TYPE_PRKEY_EC:
+	case SC_PKCS15_TYPE_PRKEY_EDDSA:
+	case SC_PKCS15_TYPE_PRKEY_XEDDSA:
 		if (slot->p11card != NULL) {
 			pkcs15_add_object(slot, (struct pkcs15_any_object *) obj->related_pubkey, NULL);
 			if (!slot->p11card)
@@ -1265,6 +1267,26 @@ _pkcs15_create_typed_objects(struct pkcs15_fw_data *fw_data)
 		return rv;
 
 	rv = pkcs15_create_pkcs11_objects(fw_data, SC_PKCS15_TYPE_PUBKEY_EC, "EC public key",
+			__pkcs15_create_pubkey_object);
+	if (rv < 0)
+		return rv;
+
+	rv = pkcs15_create_pkcs11_objects(fw_data, SC_PKCS15_TYPE_PRKEY_EDDSA, "EdDSA private key",
+			__pkcs15_create_prkey_object);
+	if (rv < 0)
+		return rv;
+
+	rv = pkcs15_create_pkcs11_objects(fw_data, SC_PKCS15_TYPE_PUBKEY_EDDSA, "EdDSA public key",
+			__pkcs15_create_pubkey_object);
+	if (rv < 0)
+		return rv;
+
+	rv = pkcs15_create_pkcs11_objects(fw_data, SC_PKCS15_TYPE_PRKEY_XEDDSA, "XEdDSA private key",
+			__pkcs15_create_prkey_object);
+	if (rv < 0)
+		return rv;
+
+	rv = pkcs15_create_pkcs11_objects(fw_data, SC_PKCS15_TYPE_PUBKEY_XEDDSA, "XEdDSA public key",
 			__pkcs15_create_pubkey_object);
 	if (rv < 0)
 		return rv;
@@ -1512,7 +1534,7 @@ _add_public_objects(struct sc_pkcs11_slot *slot, struct pkcs15_fw_data *fw_data)
 		/* PKCS#15 4.1.3 is a little vague, but implies if not PRIVATE it is readable
 		 * even if there is an auth_id to allow writing for example.
 		 * See bug issue #291
-		 * treat pubkey and cert as readable.a
+		 * treat pubkey and cert as readable.
 		 */
 		if (obj->p15_object->auth_id.len && !(is_pubkey(obj) || is_cert(obj)))
 			continue;
@@ -2220,6 +2242,14 @@ pkcs15_create_private_key(struct sc_pkcs11_slot *slot, struct sc_profile *profil
 			args.key.algorithm = SC_ALGORITHM_GOSTR3410;
 			gost = &args.key.u.gostr3410;
 			break;
+		case CKK_EC_EDWARDS:
+			args.key.algorithm = SC_ALGORITHM_EDDSA;
+			/* TODO */
+			return CKR_ATTRIBUTE_VALUE_INVALID;
+		case CKK_EC_MONTGOMERY:
+			args.key.algorithm = SC_ALGORITHM_XEDDSA;
+			/* TODO */
+			return CKR_ATTRIBUTE_VALUE_INVALID;
 		case CKK_EC:
 			args.key.algorithm = SC_ALGORITHM_EC;
 			/* TODO: -DEE Do not have PKCS15 card with EC to test this */
@@ -2564,6 +2594,8 @@ pkcs15_create_public_key(struct sc_pkcs11_slot *slot, struct sc_profile *profile
 			rsa = &args.key.u.rsa;
 			break;
 		case CKK_EC:
+		case CKK_EC_EDWARDS:
+		case CKK_EC_MONTGOMERY:
 			/* TODO: -DEE Do not have real pkcs15 card with EC */
 			/* fall through */
 		default:
@@ -3094,7 +3126,9 @@ pkcs15_gen_keypair(struct sc_pkcs11_slot *slot, CK_MECHANISM_PTR pMechanism,
 
 	if (pMechanism->mechanism != CKM_RSA_PKCS_KEY_PAIR_GEN
 			&& pMechanism->mechanism != CKM_GOSTR3410_KEY_PAIR_GEN
-			&& pMechanism->mechanism != CKM_EC_KEY_PAIR_GEN)
+			&& pMechanism->mechanism != CKM_EC_KEY_PAIR_GEN
+			&& pMechanism->mechanism != CKM_EC_EDWARDS_KEY_PAIR_GEN
+			&& pMechanism->mechanism != CKM_EC_MONTGOMERY_KEY_PAIR_GEN)
 		return CKR_MECHANISM_INVALID;
 
 	if (!p11card)
@@ -3138,6 +3172,10 @@ pkcs15_gen_keypair(struct sc_pkcs11_slot *slot, CK_MECHANISM_PTR pMechanism,
 		keytype = CKK_RSA;
 	else if (rv != CKR_OK && pMechanism->mechanism == CKM_EC_KEY_PAIR_GEN)
 		keytype = CKK_EC;
+	else if (rv != CKR_OK && pMechanism->mechanism == CKM_EC_EDWARDS_KEY_PAIR_GEN)
+		keytype = CKK_EC_EDWARDS;
+	else if (rv != CKR_OK && pMechanism->mechanism == CKM_EC_MONTGOMERY_KEY_PAIR_GEN)
+		keytype = CKK_EC_MONTGOMERY;
 	else if (rv != CKR_OK && pMechanism->mechanism == CKM_GOSTR3410_KEY_PAIR_GEN)
 		keytype = CKK_GOSTR3410;
 	else if (rv != CKR_OK)
@@ -3171,11 +3209,29 @@ pkcs15_gen_keypair(struct sc_pkcs11_slot *slot, CK_MECHANISM_PTR pMechanism,
 		der->value = (unsigned char *) ptr;
 		if (rv != CKR_OK)   {
 			sc_unlock(p11card->card);
-			return sc_to_cryptoki_error(rc, "C_GenerateKeyPair");
+			return sc_to_cryptoki_error(rv, "C_GenerateKeyPair");
 		}
 
 		keygen_args.prkey_args.key.algorithm = SC_ALGORITHM_EC;
 		pub_args.key.algorithm               = SC_ALGORITHM_EC;
+	}
+	else if (keytype == CKK_EC_EDWARDS) {
+		/* TODO Validate EC_PARAMS contains curveName "edwards25519" or "edwards448" (from RFC 8032)
+		 * or id-Ed25519 or id-Ed448 (or equivalent OIDs in oId field) (from RFC 8410)
+		 * otherwise return CKR_CURVE_NOT_SUPPORTED
+		 */
+		keygen_args.prkey_args.key.algorithm = SC_ALGORITHM_EDDSA;
+		pub_args.key.algorithm               = SC_ALGORITHM_EDDSA;
+		return CKR_CURVE_NOT_SUPPORTED;
+	}
+	else if (keytype == CKK_EC_MONTGOMERY) {
+		/* TODO Validate EC_PARAMS contains curveName "curve25519" or "curve448" (from RFC 7748)
+		 * or id-X25519 or id-X448 (or equivalent OIDs in oId field) (from RFC 8410)
+		 * otherwise return CKR_CURVE_NOT_SUPPORTED
+		 */
+		keygen_args.prkey_args.key.algorithm = SC_ALGORITHM_XEDDSA;
+		pub_args.key.algorithm               = SC_ALGORITHM_XEDDSA;
+		return CKR_CURVE_NOT_SUPPORTED;
 	}
 	else   {
 		/* CKA_KEY_TYPE is set, but keytype isn't correct */
@@ -3789,7 +3845,7 @@ pkcs15_prkey_get_attribute(struct sc_pkcs11_session *session,
 	 */
 	if ((attr->type == CKA_MODULUS) || (attr->type == CKA_PUBLIC_EXPONENT) ||
 		((attr->type == CKA_MODULUS_BITS) && (prkey->prv_p15obj->type == SC_PKCS15_TYPE_PRKEY_EC)) ||
-		(attr->type == CKA_ECDSA_PARAMS)) {
+		(attr->type == CKA_EC_PARAMS)) {
 		/* First see if we have an associated public key */
 		if (prkey->pub_data) {
 			key = prkey->pub_data;
@@ -3887,6 +3943,12 @@ pkcs15_prkey_get_attribute(struct sc_pkcs11_session *session,
 			case SC_PKCS15_TYPE_PRKEY_GOSTR3410:
 				*(CK_KEY_TYPE*)attr->pValue = CKK_GOSTR3410;
 				break;
+			case SC_PKCS15_TYPE_PRKEY_EDDSA:
+				*(CK_KEY_TYPE*)attr->pValue = CKK_EC_EDWARDS;
+				break;
+			case SC_PKCS15_TYPE_PRKEY_XEDDSA:
+				*(CK_KEY_TYPE*)attr->pValue = CKK_EC_MONTGOMERY;
+				break;
 			case SC_PKCS15_TYPE_PRKEY_EC:
 				*(CK_KEY_TYPE*)attr->pValue = CKK_EC;
 				break;
@@ -3918,6 +3980,11 @@ pkcs15_prkey_get_attribute(struct sc_pkcs11_session *session,
 	case CKA_MODULUS_BITS:
 		check_attribute_buffer(attr, sizeof(CK_ULONG));
 		switch (prkey->prv_p15obj->type) {
+			case SC_PKCS15_TYPE_PRKEY_EDDSA:
+			case SC_PKCS15_TYPE_PRKEY_XEDDSA:
+				/* TODO where to get field length ? */
+				*(CK_ULONG *) attr->pValue = 255;
+				return CKR_OK;
 			case SC_PKCS15_TYPE_PRKEY_EC:
 				if (key) {
 					if (key->u.ec.params.field_length > 0)
@@ -4134,6 +4201,12 @@ pkcs15_prkey_sign(struct sc_pkcs11_session *session, void *obj,
 	case CKM_GOSTR3410_WITH_GOSTR3411:
 		flags = SC_ALGORITHM_GOSTR3410_HASH_GOSTR3411;
 		break;
+	case CKM_EDDSA:
+		flags = SC_ALGORITHM_EDDSA_RAW;
+		break;
+	case CKM_XEDDSA:
+		flags = SC_ALGORITHM_XEDDSA_RAW;
+		break;
 	case CKM_ECDSA:
 		flags = SC_ALGORITHM_ECDSA_HASH_NONE;
 		break;
@@ -4201,7 +4274,7 @@ pkcs15_prkey_unwrap(struct sc_pkcs11_session *session, void *obj,
 	struct	pkcs15_fw_data *fw_data = NULL;
 	struct	pkcs15_prkey_object *prkey = (struct pkcs15_prkey_object *) obj;
 	struct	pkcs15_any_object *targetKeyObj = (struct pkcs15_any_object *) targetKey;
-	int	rv;	
+	int	rv;
 
 	sc_log(context, "Initiating unwrapping with private key.");
 
@@ -4414,6 +4487,7 @@ pkcs15_prkey_derive(struct sc_pkcs11_session *session, void *obj,
 	 */
 	switch (prkey->base.p15_object->type) {
 		case SC_PKCS15_TYPE_PRKEY_EC:
+		case SC_PKCS15_TYPE_PRKEY_XEDDSA:
 		{
 			CK_ECDH1_DERIVE_PARAMS * ecdh_params = (CK_ECDH1_DERIVE_PARAMS *) pParameters;
 			ulSeedDataLen = ecdh_params->ulPublicDataLen;
@@ -4457,19 +4531,28 @@ pkcs15_prkey_can_do(struct sc_pkcs11_session *session, void *obj,
 	struct sc_supported_algo_info *token_algos = NULL;
 	int ii, jj;
 
+	LOG_FUNC_CALLED(context);
+	sc_log(context, "check hardware capabilities: CK_MECHANISM_TYPE=0x%lx (CKM) and CKF_xxx=0x%x", mech_type, flags);
+
 	if (!prkey || !prkey->prv_info)
-		return CKR_KEY_FUNCTION_NOT_PERMITTED;
+		LOG_FUNC_RETURN(context, CKR_KEY_FUNCTION_NOT_PERMITTED);
 
 	pkinfo = prkey->prv_info;
 	/* Return if there are no usage algorithms specified for this key. */
 	if (!pkinfo->algo_refs[0])
-		return CKR_FUNCTION_NOT_SUPPORTED;
+		LOG_FUNC_RETURN(context, CKR_FUNCTION_NOT_SUPPORTED);
 
 	if (!p11card)
-		return CKR_TOKEN_NOT_RECOGNIZED;
+// /* Old */
+//		return CKR_TOKEN_NOT_RECOGNIZED;
+//	fw_data = (struct pkcs15_fw_data *) p11card->fws_data[session->slot->fw_data_idx];
+//	if (!fw_data->p15_card)
+//		return CKR_TOKEN_NOT_RECOGNIZED;
+// /* end Old */
+		LOG_FUNC_RETURN(context, CKR_FUNCTION_NOT_SUPPORTED);
 	fw_data = (struct pkcs15_fw_data *) p11card->fws_data[session->slot->fw_data_idx];
 	if (!fw_data->p15_card)
-		return CKR_TOKEN_NOT_RECOGNIZED;
+		LOG_FUNC_RETURN(context, CKR_FUNCTION_NOT_SUPPORTED);
 	token_algos = &fw_data->p15_card->tokeninfo->supported_algos[0];
 
 	for (ii=0;ii<SC_MAX_SUPPORTED_ALGORITHMS && pkinfo->algo_refs[ii];ii++)   {
@@ -4478,7 +4561,7 @@ pkcs15_prkey_can_do(struct sc_pkcs11_session *session, void *obj,
 			if (pkinfo->algo_refs[ii] == (token_algos + jj)->reference)
 				break;
 		if ((jj == SC_MAX_SUPPORTED_ALGORITHMS) || !(token_algos + jj)->reference)
-			return CKR_GENERAL_ERROR;
+			LOG_FUNC_RETURN(context, CKR_GENERAL_ERROR);
 
 		if ((token_algos + jj)->mechanism != mech_type)
 			continue;
@@ -4493,9 +4576,9 @@ pkcs15_prkey_can_do(struct sc_pkcs11_session *session, void *obj,
 	}
 
 	if (ii == SC_MAX_SUPPORTED_ALGORITHMS || !pkinfo->algo_refs[ii])
-		return CKR_MECHANISM_INVALID;
+		LOG_FUNC_RETURN(context, CKR_MECHANISM_INVALID);
 
-	return CKR_OK;
+	LOG_FUNC_RETURN(context, CKR_OK);
 }
 
 
@@ -4734,6 +4817,10 @@ pkcs15_pubkey_get_attribute(struct sc_pkcs11_session *session, void *object, CK_
 		/* even if we do not, we should not assume RSA */
 		if (pubkey->pub_data && pubkey->pub_data->algorithm == SC_ALGORITHM_GOSTR3410)
 			*(CK_KEY_TYPE*)attr->pValue = CKK_GOSTR3410;
+		else if (pubkey->pub_data && pubkey->pub_data->algorithm == SC_ALGORITHM_EDDSA)
+			*(CK_KEY_TYPE*)attr->pValue = CKK_EC_EDWARDS;
+		else if (pubkey->pub_data && pubkey->pub_data->algorithm == SC_ALGORITHM_XEDDSA)
+			*(CK_KEY_TYPE*)attr->pValue = CKK_EC_MONTGOMERY;
 		else if (pubkey->pub_data && pubkey->pub_data->algorithm == SC_ALGORITHM_EC)
 			*(CK_KEY_TYPE*)attr->pValue = CKK_EC;
 		else
@@ -5484,6 +5571,10 @@ static CK_RV
 get_ec_pubkey_params(struct sc_pkcs15_pubkey *key, CK_ATTRIBUTE_PTR attr)
 {
 	struct sc_ec_parameters *ecp;
+	unsigned long value_len = 0;
+	unsigned char *value = NULL;
+
+	int r;
 
 	if (key == NULL)
 		return CKR_ATTRIBUTE_TYPE_INVALID;
@@ -5491,6 +5582,27 @@ get_ec_pubkey_params(struct sc_pkcs15_pubkey *key, CK_ATTRIBUTE_PTR attr)
 		return CKR_ATTRIBUTE_TYPE_INVALID;
 
 	switch (key->algorithm) {
+	case SC_ALGORITHM_EDDSA:
+	case SC_ALGORITHM_XEDDSA:
+		r = sc_encode_oid(context, &key->alg_id->oid, &value, (size_t *)&value_len);
+		if (r != SC_SUCCESS) {
+			return sc_to_cryptoki_error(r, NULL);
+		}
+
+		attr->ulValueLen = value_len;
+		if (attr->pValue == NULL_PTR) {
+			free(value);
+			return CKR_OK;
+		}
+		if (attr->ulValueLen < value_len) {
+			free(value);
+			return CKR_BUFFER_TOO_SMALL;
+		}
+
+		memcpy(attr->pValue, value, value_len);
+		free(value);
+		return CKR_OK;
+
 	case SC_ALGORITHM_EC:
 		/* TODO parms should not be in two places */
 		/* ec_params may be in key->alg_id or in key->u.ec */
@@ -5522,6 +5634,28 @@ get_ec_pubkey_point(struct sc_pkcs15_pubkey *key, CK_ATTRIBUTE_PTR attr)
 		return CKR_ATTRIBUTE_TYPE_INVALID;
 
 	switch (key->algorithm) {
+	case SC_ALGORITHM_EDDSA:
+	case SC_ALGORITHM_XEDDSA:
+		rc = sc_pkcs15_encode_pubkey_eddsa(context, &key->u.eddsa, &value, &value_len);
+		if (rc != SC_SUCCESS)
+			return sc_to_cryptoki_error(rc, NULL);
+
+		if (attr->pValue == NULL_PTR) {
+			attr->ulValueLen = value_len;
+			free(value);
+			return CKR_OK;
+		}
+		if (attr->ulValueLen < value_len) {
+			attr->ulValueLen = value_len;
+			free(value);
+			return CKR_BUFFER_TOO_SMALL;
+		}
+		attr->ulValueLen = value_len;
+
+		memcpy(attr->pValue, value, value_len);
+		free(value);
+		return CKR_OK;
+
 	case SC_ALGORITHM_EC:
 		rc = sc_pkcs15_encode_pubkey_ec(context, &key->u.ec, &value, &value_len);
 		if (rc != SC_SUCCESS)
@@ -5686,46 +5820,53 @@ static CK_RV register_ec_mechanisms(struct sc_pkcs11_card *p11card, int flags,
 		mt = sc_pkcs11_new_fw_mechanism(CKM_ECDSA, &mech_info, CKK_EC, NULL, NULL);
 		if (!mt)
 			return CKR_HOST_MEMORY;
-		rc = sc_pkcs11_register_mechanism(p11card, mt);
-		if (rc != CKR_OK)
-			return rc;
-	}
-	
+		if (flags & SC_ALGORITHM_ECDSA_HASH_NONE) {
+			rc = sc_pkcs11_register_mechanism(p11card, mt);
+			if (rc != CKR_OK)
+				return rc;
+		}
+
 #ifdef ENABLE_OPENSSL
-	/* if card supports RAW add sign_and_hash using RAW for mechs  card does not support */
+		/* if card supports RAW add sign_and_hash using RAW for mechs  card does not support */
 
-	if (flags & SC_ALGORITHM_ECDSA_RAW) {
-		if (!(flags & SC_ALGORITHM_ECDSA_HASH_SHA1)) {
-			rc = sc_pkcs11_register_sign_and_hash_mechanism(p11card, CKM_ECDSA_SHA1, CKM_SHA_1, mt);
-			if (rc != CKR_OK)
-				return rc;
-		}
+		if (flags & SC_ALGORITHM_ECDSA_RAW) {
+			if (!(flags & SC_ALGORITHM_ECDSA_HASH_SHA1)) {
+				rc = sc_pkcs11_register_sign_and_hash_mechanism(p11card,
+					CKM_ECDSA_SHA1, CKM_SHA_1, mt);
+				if (rc != CKR_OK)
+					return rc;
+			}
 
-		if (!(flags & SC_ALGORITHM_ECDSA_HASH_SHA224)) {
-			rc = sc_pkcs11_register_sign_and_hash_mechanism(p11card, CKM_ECDSA_SHA224, CKM_SHA224, mt);
-			if (rc != CKR_OK)
-				return rc;
-		}
+			if (!(flags & SC_ALGORITHM_ECDSA_HASH_SHA224)) {
+				rc = sc_pkcs11_register_sign_and_hash_mechanism(p11card,
+					CKM_ECDSA_SHA224, CKM_SHA224, mt);
+				if (rc != CKR_OK)
+					return rc;
+			}
 
-		if (!(flags & SC_ALGORITHM_ECDSA_HASH_SHA256)) {
-			rc = sc_pkcs11_register_sign_and_hash_mechanism(p11card, CKM_ECDSA_SHA256, CKM_SHA256, mt);
-			if (rc != CKR_OK)
-				return rc;
-		}
+			if (!(flags & SC_ALGORITHM_ECDSA_HASH_SHA256)) {
+				rc = sc_pkcs11_register_sign_and_hash_mechanism(p11card,
+					CKM_ECDSA_SHA256, CKM_SHA256, mt);
+				if (rc != CKR_OK)
+					return rc;
+			}
 
-		if (!(flags & SC_ALGORITHM_ECDSA_HASH_SHA384)) {
-			rc = sc_pkcs11_register_sign_and_hash_mechanism(p11card, CKM_ECDSA_SHA384, CKM_SHA384, mt);
-			if (rc != CKR_OK)
-				return rc;
-		}
+			if (!(flags & SC_ALGORITHM_ECDSA_HASH_SHA384)) {
+				rc = sc_pkcs11_register_sign_and_hash_mechanism(p11card,
+					CKM_ECDSA_SHA384, CKM_SHA384, mt);
+				if (rc != CKR_OK)
+					return rc;
+			}
 
-		if (!(flags & SC_ALGORITHM_ECDSA_HASH_SHA512)) {
-			rc = sc_pkcs11_register_sign_and_hash_mechanism(p11card, CKM_ECDSA_SHA512, CKM_SHA512, mt);
-			if (rc != CKR_OK)
-				return rc;
+			if (!(flags & SC_ALGORITHM_ECDSA_HASH_SHA512)) {
+				rc = sc_pkcs11_register_sign_and_hash_mechanism(p11card,
+					CKM_ECDSA_SHA512, CKM_SHA512, mt);
+				if (rc != CKR_OK)
+					return rc;
+			}
 		}
-	}
 #endif
+	}
 
 	if (flags & SC_ALGORITHM_ECDSA_HASH_SHA1) {
 		mt = sc_pkcs11_new_fw_mechanism(CKM_ECDSA_SHA1, &mech_info, CKK_EC, NULL, NULL);
@@ -5775,7 +5916,7 @@ static CK_RV register_ec_mechanisms(struct sc_pkcs11_card *p11card, int flags,
 
 	/* ADD ECDH mechanisms */
 	/* The PIV uses curves where CKM_ECDH1_DERIVE and CKM_ECDH1_COFACTOR_DERIVE produce the same results */
-	if(flags & SC_ALGORITHM_ECDH_CDH_RAW) {
+	if (flags & SC_ALGORITHM_ECDH_CDH_RAW) {
 		mech_info.flags &= ~(CKF_SIGN | CKF_VERIFY);
 		mech_info.flags |= CKF_DERIVE;
 
@@ -5798,6 +5939,87 @@ static CK_RV register_ec_mechanisms(struct sc_pkcs11_card *p11card, int flags,
 		mech_info.flags = CKF_HW | CKF_GENERATE_KEY_PAIR;
 		mech_info.flags |= ec_flags;
 		mt = sc_pkcs11_new_fw_mechanism(CKM_EC_KEY_PAIR_GEN, &mech_info, CKK_EC, NULL, NULL);
+		if (!mt)
+			return CKR_HOST_MEMORY;
+		rc = sc_pkcs11_register_mechanism(p11card, mt);
+		if (rc != CKR_OK)
+			return rc;
+	}
+
+	return CKR_OK;
+}
+
+static CK_RV register_eddsa_mechanisms(struct sc_pkcs11_card *p11card, int flags,
+		CK_ULONG min_key_size, CK_ULONG max_key_size)
+{
+	CK_MECHANISM_INFO mech_info;
+	sc_pkcs11_mechanism_type_t *mt;
+	CK_RV rc;
+
+	mech_info.flags = CKF_HW | CKF_SIGN;
+	mech_info.ulMinKeySize = min_key_size;
+	mech_info.ulMaxKeySize = max_key_size;
+
+	if (flags & SC_ALGORITHM_EDDSA_RAW) {
+		mt = sc_pkcs11_new_fw_mechanism(CKM_EDDSA, &mech_info, CKK_EC_EDWARDS, NULL, NULL);
+		if (!mt)
+			return CKR_HOST_MEMORY;
+		rc = sc_pkcs11_register_mechanism(p11card, mt);
+		if (rc != CKR_OK)
+			return rc;
+	}
+
+	if (flags & SC_ALGORITHM_ONBOARD_KEY_GEN) {
+		mech_info.flags = CKF_HW | CKF_GENERATE_KEY_PAIR;
+		mt = sc_pkcs11_new_fw_mechanism(CKM_EC_EDWARDS_KEY_PAIR_GEN,
+			&mech_info, CKK_EC_EDWARDS, NULL, NULL);
+		if (!mt)
+			return CKR_HOST_MEMORY;
+		rc = sc_pkcs11_register_mechanism(p11card, mt);
+		if (rc != CKR_OK)
+			return rc;
+	}
+
+	return CKR_OK;
+}
+
+static CK_RV register_xeddsa_mechanisms(struct sc_pkcs11_card *p11card, int flags,
+		CK_ULONG min_key_size, CK_ULONG max_key_size)
+{
+	CK_MECHANISM_INFO mech_info;
+	sc_pkcs11_mechanism_type_t *mt;
+	CK_RV rc;
+
+	mech_info.flags = CKF_HW | CKF_SIGN | CKF_DERIVE;
+	mech_info.ulMinKeySize = min_key_size;
+	mech_info.ulMaxKeySize = max_key_size;
+
+	if (flags & SC_ALGORITHM_XEDDSA_RAW) {
+		mt = sc_pkcs11_new_fw_mechanism(CKM_XEDDSA, &mech_info, CKK_EC_MONTGOMERY, NULL, NULL);
+		if (!mt)
+			return CKR_HOST_MEMORY;
+		rc = sc_pkcs11_register_mechanism(p11card, mt);
+		if (rc != CKR_OK)
+			return rc;
+	}
+
+	/* ADD ECDH mechanisms */
+	if (flags & SC_ALGORITHM_ECDH_CDH_RAW) {
+		mech_info.flags &= ~CKF_SIGN;
+		mech_info.flags |= CKF_DERIVE;
+
+		/* Montgomery curves derive function is defined only for CKM_ECDH1_DERIVE mechanism */
+		mt = sc_pkcs11_new_fw_mechanism(CKM_ECDH1_DERIVE, &mech_info, CKK_EC_MONTGOMERY, NULL, NULL);
+		if (!mt)
+			return CKR_HOST_MEMORY;
+		rc = sc_pkcs11_register_mechanism(p11card, mt);
+		if (rc != CKR_OK)
+			return rc;
+	}
+
+	if (flags & SC_ALGORITHM_ONBOARD_KEY_GEN) {
+		mech_info.flags = CKF_HW | CKF_GENERATE_KEY_PAIR;
+		mt = sc_pkcs11_new_fw_mechanism(CKM_EC_MONTGOMERY_KEY_PAIR_GEN, &mech_info, CKK_EC_MONTGOMERY, NULL, NULL);
 		if (!mt)
 			return CKR_HOST_MEMORY;
 		rc = sc_pkcs11_register_mechanism(p11card, mt);
@@ -5865,8 +6087,8 @@ register_mechanisms(struct sc_pkcs11_card *p11card)
 	unsigned long ec_ext_flags;
 	sc_pkcs11_mechanism_type_t *mt;
 	unsigned int num;
-	int rsa_flags = 0, ec_flags = 0, gostr_flags = 0, aes_flags = 0;
-	int ec_found;
+	int rsa_flags = 0, ec_flags = 0, eddsa_flags = 0, xeddsa_flags = 0;
+	int ec_found = 0, gostr_flags = 0, aes_flags = 0;
 	CK_RV rc;
 
 	/* Register generic mechanisms */
@@ -5886,7 +6108,6 @@ register_mechanisms(struct sc_pkcs11_card *p11card)
 	mech_info.ulMaxKeySize = 0;
 	ec_min_key_size = ~0;
 	ec_max_key_size = 0;
-	ec_found = 0;
 	aes_min_key_size = ~0;
 	aes_max_key_size = 0;
 
@@ -5915,6 +6136,12 @@ register_mechanisms(struct sc_pkcs11_card *p11card)
 				ec_ext_flags |= alg_info->u._ec.ext_flags;
 				ec_found = 1;
 				break;
+			case SC_ALGORITHM_EDDSA:
+				eddsa_flags |= alg_info->flags;
+				break;
+			case SC_ALGORITHM_XEDDSA:
+				xeddsa_flags |= alg_info->flags;
+				break;
 			case SC_ALGORITHM_GOSTR3410:
 				gostr_flags |= alg_info->flags;
 				break;
@@ -5936,6 +6163,18 @@ register_mechanisms(struct sc_pkcs11_card *p11card)
 	 */
 	if (ec_found) {
 		rc = register_ec_mechanisms(p11card, ec_flags, ec_ext_flags, ec_min_key_size, ec_max_key_size);
+		if (rc != CKR_OK)
+			return rc;
+	}
+
+	if (eddsa_flags & SC_ALGORITHM_EDDSA_RAW) {
+		rc = register_eddsa_mechanisms(p11card, eddsa_flags, 255, 255);
+		if (rc != CKR_OK)
+			return rc;
+	}
+
+	if (xeddsa_flags & (SC_ALGORITHM_XEDDSA_RAW | SC_ALGORITHM_ECDH_CDH_RAW)) {
+		rc = register_xeddsa_mechanisms(p11card, xeddsa_flags, 255, 255);
 		if (rc != CKR_OK)
 			return rc;
 	}
