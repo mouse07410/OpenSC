@@ -24,6 +24,10 @@
 #include <config.h>
 #endif
 
+#ifndef FIX_UNUSED
+#define FIX_UNUSED(X) (void) (X) /* avoid warnings for unused params */
+#endif
+
 #ifdef ENABLE_OPENSSL   /* empty file without openssl */
 
 #include <stdlib.h>
@@ -778,7 +782,7 @@ iasecc_pkcs15_fix_file_access(struct sc_pkcs15_card *p15card, struct sc_file *fi
 }
 
 
-static int
+int
 iasecc_pkcs15_encode_supported_algos(struct sc_pkcs15_card *p15card, struct sc_pkcs15_object *object)
 {
 	struct sc_context *ctx = p15card->card->ctx;
@@ -797,7 +801,8 @@ iasecc_pkcs15_encode_supported_algos(struct sc_pkcs15_card *p15card, struct sc_p
 			LOG_TEST_RET(ctx, rv, "cannot add supported algorithm DECIPHER:CKM_RSA_PKCS");
 		}
 
-		if (prkey_info->usage & SC_PKCS15_PRKEY_USAGE_SIGN)   {
+		if (prkey_info->usage & (SC_PKCS15_PRKEY_USAGE_SIGN |
+		                         SC_PKCS15_PRKEY_USAGE_NONREPUDIATION))   {
 			if (prkey_info->usage & SC_PKCS15_PRKEY_USAGE_NONREPUDIATION)   {
 				algo = sc_pkcs15_get_supported_algo(p15card, SC_PKCS15_ALGO_OP_COMPUTE_SIGNATURE, CKM_SHA1_RSA_PKCS);
 				rv = sc_pkcs15_add_supported_algo_ref(object, algo);
@@ -1879,6 +1884,21 @@ struct sc_pkcs15init_operations *
 sc_pkcs15init_get_iasecc_ops(void)
 {
 	return &sc_pkcs15init_iasecc_operations;
+}
+
+#else /* ENABLE_OPENSSL */
+#include "../libopensc/log.h"
+#include "pkcs15-init.h"
+
+int
+iasecc_pkcs15_encode_supported_algos(struct sc_pkcs15_card *p15card, struct sc_pkcs15_object *object)
+{
+	struct sc_context *ctx = p15card->card->ctx;
+	FIX_UNUSED(object);
+
+	LOG_FUNC_CALLED(ctx);
+	sc_log(ctx, "OpenSC was built without OpenSSL support: skipping");
+	LOG_FUNC_RETURN(ctx, SC_ERROR_NOT_IMPLEMENTED);
 }
 
 #endif /* ENABLE_OPENSSL */

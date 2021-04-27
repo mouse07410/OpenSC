@@ -630,21 +630,23 @@ static int
 iasecc_init_cpx(struct sc_card *card)
 {
 	struct sc_context *ctx = card->ctx;
-	unsigned int flags; /* TBC it is not IASECC_CARD_DEFAULT_FLAGS */
+	unsigned int flags;
+	int rv = 0;
 
 	LOG_FUNC_CALLED(ctx);
 
-	card->caps = SC_CARD_CAP_RNG; /* TBC it is not IASECC_CARD_DEFAULT_CAPS */
+	card->caps = IASECC_CARD_DEFAULT_CAPS;
 
-	flags = SC_ALGORITHM_RSA_PAD_PKCS1;
-	flags |= SC_ALGORITHM_RSA_RAW;
-
-	flags |= SC_ALGORITHM_RSA_HASH_SHA1    |
-	         SC_ALGORITHM_RSA_HASH_SHA256;
+	flags = IASECC_CARD_DEFAULT_FLAGS;
 
 	_sc_card_add_rsa_alg(card, 512, flags, 0);
 	_sc_card_add_rsa_alg(card, 1024, flags, 0);
 	_sc_card_add_rsa_alg(card, 2048, flags, 0);
+
+	rv = iasecc_parse_ef_atr(card);
+	if (rv)
+		sc_invalidate_cache(card); /* avoid memory leakage */
+	LOG_TEST_RET(ctx, rv, "Parse EF.ATR");
 
 	LOG_FUNC_RETURN(ctx, SC_SUCCESS);
 }
@@ -918,6 +920,7 @@ iasecc_select_file(struct sc_card *card, const struct sc_path *path,
 
 	sc_print_cache(card);
 	if ((!iasecc_is_cpx(card)) &&
+	    (card->type != SC_CARD_TYPE_IASECC_GEMALTO) &&
 	    (path->type != SC_PATH_TYPE_DF_NAME
 			&& lpath.len >= 2
 			&& lpath.value[0] == 0x3F && lpath.value[1] == 0x00))   {
@@ -1015,6 +1018,7 @@ iasecc_select_file(struct sc_card *card, const struct sc_path *path,
 			    card->type == SC_CARD_TYPE_IASECC_AMOS ||
 			    card->type == SC_CARD_TYPE_IASECC_MI ||
 			    card->type == SC_CARD_TYPE_IASECC_MI2 ||
+			    card->type == SC_CARD_TYPE_IASECC_GEMALTO ||
 			    iasecc_is_cpx(card)
 			    )   {
 				apdu.p2 = 0x04;
@@ -1026,6 +1030,7 @@ iasecc_select_file(struct sc_card *card, const struct sc_path *path,
 			    card->type == SC_CARD_TYPE_IASECC_AMOS ||
 			    card->type == SC_CARD_TYPE_IASECC_MI ||
 			    card->type == SC_CARD_TYPE_IASECC_MI2 ||
+			    card->type == SC_CARD_TYPE_IASECC_GEMALTO ||
 			    iasecc_is_cpx(card)) {
 				apdu.p2 = 0x04;
 			}
@@ -1040,6 +1045,7 @@ iasecc_select_file(struct sc_card *card, const struct sc_path *path,
 			if (card->type == SC_CARD_TYPE_IASECC_AMOS ||
 			    card->type == SC_CARD_TYPE_IASECC_MI2 ||
 			    card->type == SC_CARD_TYPE_IASECC_OBERTHUR ||
+			    card->type == SC_CARD_TYPE_IASECC_GEMALTO ||
 			    iasecc_is_cpx(card)) {
 				apdu.p2 = 0x04;
 			}
@@ -1711,6 +1717,11 @@ iasecc_se_get_info(struct sc_card *card, struct iasecc_se_info *se)
 	int rv;
 
 	LOG_FUNC_CALLED(ctx);
+
+	if (iasecc_is_cpx(card)) {
+		rv = iasecc_select_mf(card, NULL);
+		LOG_TEST_RET(ctx, rv, "MF invalid");
+	}
 
 	if (se->reference > IASECC_SE_REF_MAX)
                 LOG_FUNC_RETURN(ctx, SC_ERROR_INVALID_ARGUMENTS);
@@ -2867,6 +2878,34 @@ iasecc_sdo_get_tagged_data(struct sc_card *card, int sdo_tag, struct iasecc_sdo 
 	int rv;
 
 	LOG_FUNC_CALLED(ctx);
+
+	sc_log(ctx, "sdo_tag=0x%x sdo_ref=0x%x sdo_class=0x%x", sdo_tag,
+			sdo->sdo_ref, sdo->sdo_class);
+
+	/* XXX: for the CPx, the SDO are available from some specific path */
+	if (iasecc_is_cpx(card)) {
+		struct sc_path path;
+		char *path_str = NULL;
+		switch(sdo_tag) {
+			case IASECC_SDO_PRVKEY_TAG:
+			/* APDU 00 CB 3F FF 0B 4D 09 70 07 BF 90 02 03 7F 48 80 */
+			path_str = "3F00:0001";
+			break;
+			case IASECC_SDO_CHV_TAG:
+			/* APDU 00 CB 3F FF 0B 4D 09 70 07 BF 81 01 03 7F 41 80 */
+			path_str = "3F00";
+			break;
+			default:
+			path_str = NULL;
+			break;
+		}
+		if (path_str) {
+			sc_log(ctx, "Warning: Enforce the path=%s", path_str);
+			sc_format_path(path_str, &path);
+			rv = iasecc_select_file(card, &path, NULL);
+			LOG_TEST_RET(ctx, rv, "path error");
+		}
+	}
 
 	sbuf[offs--] = 0x80;
 	sbuf[offs--] = sdo_tag & 0xFF;
