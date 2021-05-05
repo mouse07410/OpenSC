@@ -1,6 +1,7 @@
 #!/bin/bash
+SOURCE_PATH=${SOURCE_PATH:-../}
 
-source common.sh
+source $SOURCE_PATH/tests/common.sh
 
 echo "======================================================="
 echo "Setup SoftHSM"
@@ -47,6 +48,6 @@ echo "Cleanup"
 echo "======================================================="
 softhsm_cleanup
 
-rm objects.list 
+rm objects.list sign.log
 
 exit $ERRORS
