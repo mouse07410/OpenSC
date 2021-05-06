@@ -48,27 +48,29 @@ env:
     # - secure: "UkHn7wy4im8V1nebCWbAetnDSOLRUbOlF6++ovk/7Bnso1/lnhXHelyzgRxfD/oI68wm9nnRV+RQEZ9+72Ug1CyvHxyyxxkwal/tPeHH4B/L+aGdPi0id+5OZSKIm77VP3m5s102sJMJgH7DFd03+nUd0K26p0tk8ad4j1geV4c="
     - secure: "ERhjW0yhfQtjLoGS/VDyiGPq/dwtLNGv8SVK0r3BJKM75ZwxtVwHJBYlMmI9awKFL1nHMTolDMQeNZP6ie+EFj1T2HU09GEUVioC2ME0k6ajKl0PjKrwvWrqWhNW5nEmsjvJJ4NRWH1oeBnsm5b0WpqY9dvu50g9TeSKczybjo9jdn9s7+i5rVf5CR0DAetQR7COBNHhYBW04LPSsX/wo/NVvZr77cqA4SUxzz7MvbNunP4/STetO8tnEvopBRP7vldBWMBYChS2NzHABjbRNOdUhRxEryODp5qE/IfyvOBiExtPVStNiEPOli0Iv75g53ePXLF41N/kAmrVccbxj+JP9z5KW/Bsude6ZHB2amHAwd2kA1QMl2z7+eyN7WeYgxRP0CUOZ2UogfDAjbQznTkRKmHI+W41tqUJ9C0hDx0miqwvY5wfndcMDpoIOv3TUOkf8kLd+tUhLw9J46TmUSl3Ip8dZHw67j/cPzS7jGZLDD00AKizcufIsglqecKDByoQobClJz+o/Di00P7H1B2bvbI+i+l9vJbjBSTViZgxlKjOMmtBjaTtpWbZ9ZWZ8HjpZdmEjvLntVM+lPh8cI/CbPjz9SKHtyK+alwvWOs3pfwKFz7NdZ7+deRAcA/jqiyIBW7Ej6wXhMyIdiLIuOsO91x7lYhGoadKmiX6PcM="
 
-addons:
-  apt_packages:
-    - binutils-mingw-w64-i686
-    - binutils-mingw-w64-x86-64
-    - docbook-xsl
-    - gcc-mingw-w64-i686
-    - gcc-mingw-w64-x86-64
-    - libpcsclite-dev
-    - mingw-w64
-    - xsltproc
-    - gengetopt
-    - libcmocka-dev
-    - help2man
-    - pcscd
-    - pcsc-tools
-    - check
-    - ant
-    - socat
-    - cmake
-    - clang-tidy
-    - softhsm2
+# Commented out because of a bug in travis images for Focal:
+# https://travis-ci.community/t/clang-10-was-recently-broken-on-linux-unmet-dependencies-for-clang-10-clang-tidy-10-valgrind/11527
+#addons:
+#  apt_packages:
+#    - binutils-mingw-w64-i686
+#    - binutils-mingw-w64-x86-64
+#    - docbook-xsl
+#    - gcc-mingw-w64-i686
+#    - gcc-mingw-w64-x86-64
+#    - libpcsclite-dev
+#    - mingw-w64
+#    - xsltproc
+#    - gengetopt
+#    - libcmocka-dev
+#    - help2man
+#    - pcscd
+#    - pcsc-tools
+#    - check
+#    - ant
+#    - socat
+#    - cmake
+#    - clang-tidy
+#    - softhsm2
 
 before_install:
   # homebrew is dead slow in older images due to the many updates it would need to download and build.
@@ -110,6 +112,12 @@ before_install:
     fi
   - if [ -n "${HOST}" ]; then
         sudo apt-get install -y wine;
+    fi
+  - if [ "$TRAVIS_DIST" == "focal" ]; then
+        sudo apt-get install -yq --allow-downgrades libc6=2.31-0ubuntu9.2 libc6-dev=2.31-0ubuntu9.2;
+    fi
+  - if [ "$TRAVIS_OS_NAME" == "linux" ]; then
+        sudo -E apt-get -yq --no-install-suggests --no-install-recommends --allow-downgrades --allow-remove-essential --allow-change-held-packages install binutils-mingw-w64-i686 binutils-mingw-w64-x86-64 docbook-xsl gcc-mingw-w64-i686 gcc-mingw-w64-x86-64 libpcsclite-dev mingw-w64 xsltproc gengetopt libcmocka-dev help2man pcscd pcsc-tools check ant socat cmake clang-tidy softhsm2;
     fi
 
 before_script:
