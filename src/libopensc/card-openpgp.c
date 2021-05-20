@@ -87,8 +87,11 @@ static struct sc_card_driver pgp_drv = {
 };
 
 
-/* v3.0+ supports: [RFC 4880 & 6637] 0x12 = ECDH, 0x13 = ECDSA */
-static pgp_ec_curves_t	ec_curves_openpgp[] = {
+static pgp_ec_curves_t  ec_curves_openpgp34[] = {
+	/* OpenPGP 3.4+ Ed25519 and Curve25519 */
+	{{{1, 3, 6, 1, 4, 1, 3029, 1, 5, 1, -1}}, 256}, /* curve25519 for encryption => CKK_EC_MONTGOMERY */
+	{{{1, 3, 6, 1, 4, 1, 11591, 15, 1, -1}}, 256}, /* ed25519 for signatures => CKK_EC_EDWARDS */
+	/* v3.0+ supports: [RFC 4880 & 6637] 0x12 = ECDH, 0x13 = ECDSA */
 	{{{1, 2, 840, 10045, 3, 1, 7, -1}}, 256}, /* ansiX9p256r1 */
 	{{{1, 3, 132, 0, 34, -1}}, 384}, /* ansiX9p384r1 */
 	{{{1, 3, 132, 0, 35, -1}}, 521}, /* ansiX9p521r1 */
@@ -97,6 +100,8 @@ static pgp_ec_curves_t	ec_curves_openpgp[] = {
 	{{{1, 3, 36, 3, 3, 2, 8, 1, 1, 13, -1}}, 512}, /* brainpoolP512r1 */
 	{{{-1}}, 0} /* This entry must not be touched. */
 };
+
+static pgp_ec_curves_t *ec_curves_openpgp = ec_curves_openpgp34 + 2;
 
 struct sc_object_id curve25519_oid = {{1, 3, 6, 1, 4, 1, 3029, 1, 5, 1, -1}};
 
@@ -455,6 +460,8 @@ pgp_init(sc_card_t *card)
 	/* With gnuk, we use different curves */
 	if (card->type == SC_CARD_TYPE_OPENPGP_GNUK) {
 		priv->ec_curves = ec_curves_gnuk;
+	} else if (priv->bcd_version >= OPENPGP_CARD_3_4) {
+		priv->ec_curves = ec_curves_openpgp34;
 	} else {
 		priv->ec_curves = ec_curves_openpgp;
 	}
@@ -606,7 +613,7 @@ pgp_parse_algo_attr_blob(sc_card_t *card, const pgp_blob_t *blob,
 			/* SC_OPENPGP_KEYALGO_ECDH || SC_OPENPGP_KEYALGO_ECDSA || SC_OPENPGP_KEYALGO_EDDSA */
 			key_info->algorithm = blob->data[0];
 
-			/* last byte is only set if pubkey import is supported, empty otherwise*/
+			/* last byte is set to 0xFF if pubkey import is supported */
 			if (blob->data[blob->len-1] == SC_OPENPGP_KEYFORMAT_EC_STDPUB){
 				if (blob->len < 3)
 					return SC_ERROR_INCORRECT_PARAMETERS;
@@ -614,9 +621,14 @@ pgp_parse_algo_attr_blob(sc_card_t *card, const pgp_blob_t *blob,
 				key_info->u.ec.keyformat = SC_OPENPGP_KEYFORMAT_EC_STDPUB;
 			}
 			else {
+				/* otherwise, last byte could be 00, so let's ignore it, as
+				 * it is not part of OID */
 				if (blob->len < 2)
 					return SC_ERROR_INCORRECT_PARAMETERS;
-				key_info->u.ec.oid_len = blob->len - 1;
+				if (blob->data[blob->len-1] == SC_OPENPGP_KEYFORMAT_EC_STD)
+					key_info->u.ec.oid_len = blob->len - 2;
+				else
+					key_info->u.ec.oid_len = blob->len - 1;
 				key_info->u.ec.keyformat = SC_OPENPGP_KEYFORMAT_EC_STD;
 			}
 
@@ -1628,7 +1640,6 @@ pgp_get_pubkey_pem(sc_card_t *card, unsigned int tag, u8 *buf, size_t buf_len)
 				/* PKCS#11 3.0: 2.3.5 Edwards EC public keys only support the use
 				 * of the curveName selection to specify a curve name as defined
 				 * in [RFC 8032] */
-
 				r = sc_pkcs15_encode_pubkey_as_spki(card->ctx, &p15pubkey, &data, &len);
 				break;
 			case SC_OPENPGP_KEYALGO_ECDH:
