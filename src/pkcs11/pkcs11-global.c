@@ -156,6 +156,8 @@ static CK_C_INITIALIZE_ARGS _def_locks = {
 #endif /* PKCS11_THREAD_LOCKING */
 
 static CK_C_INITIALIZE_ARGS_PTR	global_locking;
+static CK_C_INITIALIZE_ARGS app_locking = {
+	NULL, NULL, NULL, NULL, 0, NULL };
 static void *global_lock = NULL;
 #ifdef HAVE_OS_LOCKING
 static CK_C_INITIALIZE_ARGS_PTR default_mutex_funcs = &_def_locks;
@@ -810,7 +812,7 @@ out:
  */
 #define NUM_INTERFACES 2
 #define DEFAULT_INTERFACE 0
-ck_interface interfaces[NUM_INTERFACES] = {
+CK_INTERFACE interfaces[NUM_INTERFACES] = {
 	{"PKCS 11", (void *)&pkcs11_function_list_3_0, 0},
 	{"PKCS 11", (void *)&pkcs11_function_list, 0}
 };
@@ -914,6 +916,8 @@ sc_pkcs11_init_lock(CK_C_INITIALIZE_ARGS_PTR args)
 	if (args->pReserved != NULL_PTR)
 		return CKR_ARGUMENTS_BAD;
 
+	app_locking = *args;
+
 	/* If the app tells us OS locking is okay,
 	 * use that. Otherwise use the supplied functions.
 	 */
@@ -929,13 +933,13 @@ sc_pkcs11_init_lock(CK_C_INITIALIZE_ARGS_PTR args)
 	/* Based on PKCS#11 v2.11 11.4 */
 	if (applock && oslock) {
 		/* Shall be used in threaded environment, prefer app provided locking */
-		global_locking = args;
+		global_locking = &app_locking;
 	} else if (!applock && oslock) {
 		/* Shall be used in threaded environment, must use operating system locking */
 		global_locking = default_mutex_funcs;
 	} else if (applock && !oslock) {
 		/* Shall be used in threaded environment, must use app provided locking */
-		global_locking = args;
+		global_locking = &app_locking;
 	} else if (!applock && !oslock) {
 		/* Shall not be used in threaded environment, use operating system locking */
 		global_locking = default_mutex_funcs;
