@@ -141,7 +141,8 @@ print_generic(FILE *f, CK_LONG type, CK_VOID_PTR value, CK_ULONG size, CK_VOID_P
 	CK_ULONG i;
 
 	if((CK_LONG)size != -1 && value != NULL) {
-		char hex[16*3+1], ascii[16+1];
+		char hex[16*3+1] = {0};
+		char ascii[16+1];
 		char *hex_ptr = hex, *ascii_ptr = ascii;
 		int offset = 0;
 
@@ -1035,6 +1036,9 @@ print_attribute_list(FILE *f, CK_ATTRIBUTE_PTR pTemplate, CK_ULONG  ulCount)
 	CK_ULONG j, k;
 	int found;
 
+	if (!pTemplate)
+		return;
+
 	for(j = 0; j < ulCount ; j++) {
 		found = 0;
 		for(k = 0; k < ck_attribute_num; k++) {
@@ -1065,6 +1069,9 @@ print_attribute_list_req(FILE *f, CK_ATTRIBUTE_PTR pTemplate, CK_ULONG  ulCount)
 {
 	CK_ULONG j, k;
 	int found;
+
+	if (!pTemplate)
+		return;
 
 	for(j = 0; j < ulCount ; j++) {
 		found = 0;
