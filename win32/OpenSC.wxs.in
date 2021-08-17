@@ -231,14 +231,8 @@
                 <Component Id="gpk.profile" Guid="*" Win64="$(var.Win64YesNo)">
                   <File Source="$(var.SOURCE_DIR)\src\pkcs15init\gpk.profile"/>
                 </Component>
-                <Component Id="miocos.profile" Guid="*" Win64="$(var.Win64YesNo)">
-                  <File Source="$(var.SOURCE_DIR)\src\pkcs15init\miocos.profile"/>
-                </Component>
                 <Component Id="incrypto34.profile" Guid="*" Win64="$(var.Win64YesNo)">
                   <File Source="$(var.SOURCE_DIR)\src\pkcs15init\incrypto34.profile"/>
-                </Component>
-                <Component Id="jcop.profile" Guid="*" Win64="$(var.Win64YesNo)">
-                  <File Source="$(var.SOURCE_DIR)\src\pkcs15init\jcop.profile"/>
                 </Component>
                 <Component Id="muscle.profile" Guid="*" Win64="$(var.Win64YesNo)">
                   <File Source="$(var.SOURCE_DIR)\src\pkcs15init\muscle.profile"/>
@@ -414,9 +408,7 @@
           <ComponentRef Id="cyberflex.profile"/>
           <ComponentRef Id="flex.profile"/>
           <ComponentRef Id="gpk.profile"/>
-          <ComponentRef Id="miocos.profile"/>
           <ComponentRef Id="incrypto34.profile"/>
-          <ComponentRef Id="jcop.profile"/>
           <ComponentRef Id="muscle.profile"/>
           <ComponentRef Id="pkcs15.profile"/>
           <ComponentRef Id="asepcos.profile"/>

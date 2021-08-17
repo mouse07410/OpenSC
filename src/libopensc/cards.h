@@ -68,10 +68,6 @@ enum {
 	SC_CARD_TYPE_GPK_GPK8000_16K,
 	SC_CARD_TYPE_GPK_GPK16000 = 3160,
 
-	/* miocos driver */
-	SC_CARD_TYPE_MIOCOS_BASE = 4000,
-	SC_CARD_TYPE_MIOCOS_GENERIC,
-
 	/* mcrd driver */
 	SC_CARD_TYPE_MCRD_BASE = 5000,
 	SC_CARD_TYPE_MCRD_GENERIC,
@@ -107,10 +103,6 @@ enum {
 	SC_CARD_TYPE_OPENPGP_V2,
 	SC_CARD_TYPE_OPENPGP_V3,
 	SC_CARD_TYPE_OPENPGP_GNUK,
-
-	/* jcop driver */
-	SC_CARD_TYPE_JCOP_BASE = 10000,
-	SC_CARD_TYPE_JCOP_GENERIC,
 
 	/* oberthur driver */
 	SC_CARD_TYPE_OBERTHUR_BASE = 11000,
@@ -282,13 +274,11 @@ extern sc_card_driver_t *sc_get_cryptoflex_driver(void);
 extern sc_card_driver_t *sc_get_cyberflex_driver(void);
 extern sc_card_driver_t *sc_get_gpk_driver(void);
 extern sc_card_driver_t *sc_get_gemsafeV1_driver(void);
-extern sc_card_driver_t *sc_get_miocos_driver(void);
 extern sc_card_driver_t *sc_get_mcrd_driver(void);
 extern sc_card_driver_t *sc_get_setcos_driver(void);
 extern sc_card_driver_t *sc_get_starcos_driver(void);
 extern sc_card_driver_t *sc_get_tcos_driver(void);
 extern sc_card_driver_t *sc_get_openpgp_driver(void);
-extern sc_card_driver_t *sc_get_jcop_driver(void);
 extern sc_card_driver_t *sc_get_oberthur_driver(void);
 extern sc_card_driver_t *sc_get_belpic_driver(void);
 extern sc_card_driver_t *sc_get_atrust_acos_driver(void);

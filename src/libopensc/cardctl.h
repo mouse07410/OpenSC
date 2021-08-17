@@ -63,12 +63,6 @@ enum {
 	SC_CARDCTL_CRYPTOFLEX_GENERATE_KEY,
 
 	/*
-	 * MioCOS specific calls
-	 */
-	SC_CARDCTL_MIOCOS_BASE = _CTL_PREFIX('M', 'I', 'O'),
-	SC_CARDCTL_MIOCOS_CREATE_AC,
-
-	/*
 	 * TCOS specific calls
 	 */
 	SC_CARDCTL_TCOS_BASE = _CTL_PREFIX('T','C','S'),
@@ -93,12 +87,6 @@ enum {
 	SC_CARDCTL_STARCOS_CREATE_END,
 	SC_CARDCTL_STARCOS_WRITE_KEY,
 	SC_CARDCTL_STARCOS_GENERATE_KEY,
-
-	/*
-	 * JCOP specific calls
-	 */
-	SC_CARDCTL_JCOP_BASE = _CTL_PREFIX('J', 'C', 'P'),
-	SC_CARDCTL_JCOP_GENERATE_KEY,
 
 	/*
 	 * Oberthur specific calls
@@ -394,26 +382,6 @@ struct sc_cardctl_gpk_genkey {
 	unsigned int		pubkey_len;
 };
 
-enum {
-	SC_CARDCTL_MIOCOS_AC_PIN,
-	SC_CARDCTL_MIOCOS_AC_CHAL,
-	SC_CARDCTL_MIOCOS_AC_LOGICAL,
-	SC_CARDCTL_MIOCOS_AC_SMARTPIN
-};
-
-/*
- * MioCOS AC info
- */
-struct sc_cardctl_miocos_ac_info {
-	int type;
-	int ref;
-	int max_tries;
-	int enable_ac;		/* only applicable to PINs */
-	u8 key_value[8];
-	int max_unblock_tries;	/* same here */
-	u8 unblock_value[8];	/* and here */
-};
-
 /*
  * Siemens CardOS PIN info
  */
@@ -500,14 +468,6 @@ typedef struct sc_starcos_gen_key_data_st {
 	size_t	key_length;
 	u8	*modulus;
 } sc_starcos_gen_key_data;
-
-struct sc_cardctl_jcop_genkey  {
-     unsigned long exponent;
-     sc_path_t pub_file_ref;
-     sc_path_t pri_file_ref;
-     unsigned char *	pubkey;
-     unsigned int	pubkey_len;
-};
 
 /*
  * Oberthur ex_data stuff

@@ -141,12 +141,10 @@ static struct profile_operations {
 } profile_operations[] = {
 	{ "rutoken", (void *) sc_pkcs15init_get_rutoken_ops },
 	{ "gpk", (void *) sc_pkcs15init_get_gpk_ops },
-	{ "miocos", (void *) sc_pkcs15init_get_miocos_ops },
 	{ "flex", (void *) sc_pkcs15init_get_cryptoflex_ops },
 	{ "cyberflex", (void *) sc_pkcs15init_get_cyberflex_ops },
 	{ "cardos", (void *) sc_pkcs15init_get_cardos_ops },
 	{ "etoken", (void *) sc_pkcs15init_get_cardos_ops }, /* legacy */
-	{ "jcop", (void *) sc_pkcs15init_get_jcop_ops },
 	{ "starcos", (void *) sc_pkcs15init_get_starcos_ops },
 	{ "oberthur", (void *) sc_pkcs15init_get_oberthur_ops },
 	{ "openpgp", (void *) sc_pkcs15init_get_openpgp_ops },
