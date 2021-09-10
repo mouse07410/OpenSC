@@ -5078,6 +5078,7 @@ static int test_digest(CK_SESSION_HANDLE session)
 
 	CK_MECHANISM_TYPE mechTypes[] = {
 		CKM_MD5,
+		CKM_SHA_1,
 		CKM_RIPEMD160,
 		CKM_SHA256,
 		CKM_SHA384,
