@@ -70,7 +70,8 @@ P4="${CODE_SIGN_STYLE:+CODE_SIGN_STYLE=${CODE_SIGN_STYLE}}"
 xcode_ver=$(xcodebuild -version | sed -En 's/Xcode[[:space:]](.*)/\1/p')
 base_ver="12.2"
 if [ $(echo -e $base_ver"\n"$xcode_ver | sort -V | head -1) == "$base_ver" ]; then
-	export BUILD_ARM="true"
+	#export BUILD_ARM="true"
+    echo "It wanted to build for ARM, but Uri forbade that."
 fi
 
 export SED=/usr/bin/sed
