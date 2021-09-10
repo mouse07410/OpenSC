@@ -168,18 +168,22 @@ static int idprime_process_index(sc_card_t *card, idprime_private_data_t *priv, 
 		goto done;
 	}
 
-	r = iso_ops->read_binary(card, 0, buf, length, 0);
-	if (r < 1) {
-		r = SC_ERROR_WRONG_LENGTH;
-		goto done;
-	}
+	r = 0;
+	do {
+		if (length == r) {
+			r = SC_ERROR_NOT_ENOUGH_MEMORY;
+			goto done;
+		}
+		const int got = iso_ops->read_binary(card, r, buf + r, length - r, 0);
+		if (got < 1) {
+			r = SC_ERROR_WRONG_LENGTH;
+			goto done;
+		}
+		/* First byte shows the number of entries, each of them 21 bytes long */
+		num_entries = buf[0];
+		r += got;
+	} while(r < num_entries * 21 + 1);
 
-	/* First byte shows the number of entries, each of them 21 bytes long */
-	num_entries = buf[0];
-	if (r < num_entries*21 + 1) {
-		r = SC_ERROR_INVALID_DATA;
-		goto done;
-	}
 	new_object.fd = 0;
 	for (i = 0; i < num_entries; i++) {
 		u8 *start = &buf[i*21+1];
@@ -211,6 +215,7 @@ static int idprime_process_index(sc_card_t *card, idprime_private_data_t *priv, 
 					new_object.key_reference = 0xF7 + key_id;
 					break;
 				case SC_CARD_TYPE_IDPRIME_V4:
+				default:
 					new_object.key_reference = 0x56 + key_id;
 					break;
 				}
@@ -333,6 +338,8 @@ static int idprime_init(sc_card_t *card)
 	_sc_card_add_rsa_alg(card, 2048, flags, 0);
 
 	card->caps |= SC_CARD_CAP_ISO7816_PIN_INFO;
+
+	card->caps |= SC_CARD_CAP_RNG;
 
 	LOG_FUNC_RETURN(card->ctx, 0);
 }
@@ -813,6 +820,38 @@ idprime_decipher(struct sc_card *card,
 		LOG_FUNC_RETURN(card->ctx, sc_check_sw(card, apdu.sw1, apdu.sw2));
 }
 
+static int
+idprime_get_challenge(struct sc_card *card, u8 *rnd, size_t len)
+{
+	u8 rbuf[16];
+	size_t out_len;
+	struct sc_apdu apdu;
+	int r;
+
+	LOG_FUNC_CALLED(card->ctx);
+
+	if (len <= 8) {
+		/* official closed driver always calls this regardless the length */
+		sc_format_apdu(card, &apdu, SC_APDU_CASE_2, 0x84, 0x00, 0x01);
+		apdu.le = apdu.resplen = 8;
+	} else {
+		/* this was discovered accidentally - all 16 bytes seem random */
+		sc_format_apdu(card, &apdu, SC_APDU_CASE_2, 0x84, 0x00, 0x00);
+		apdu.le = apdu.resplen = 16;
+	}
+	apdu.resp = rbuf;
+
+	r = sc_transmit_apdu(card, &apdu);
+	LOG_TEST_RET(card->ctx, r, "APDU transmit failed");
+
+	r = sc_check_sw(card, apdu.sw1, apdu.sw2);
+	LOG_TEST_RET(card->ctx, r, "GET CHALLENGE failed");
+
+	out_len = len < apdu.resplen ? len : apdu.resplen;
+	memcpy(rnd, rbuf, out_len);
+
+	LOG_FUNC_RETURN(card->ctx, (int) out_len);
+}
 
 static struct sc_card_driver * sc_get_driver(void)
 {
@@ -831,6 +870,8 @@ static struct sc_card_driver * sc_get_driver(void)
 	idprime_ops.set_security_env = idprime_set_security_env;
 	idprime_ops.compute_signature = idprime_compute_signature;
 	idprime_ops.decipher = idprime_decipher;
+
+	idprime_ops.get_challenge = idprime_get_challenge;
 
 	return &idprime_drv;
 }

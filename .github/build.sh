@@ -34,13 +34,20 @@ if [ "$1" == "mingw" -o "$1" == "mingw32" ]; then
 	unset CC
 	unset CXX
 	./configure --host=$HOST --with-completiondir=/tmp --disable-openssl --disable-readline --disable-zlib --disable-notify --prefix=$PWD/win32/opensc || cat config.log;
-	make -j 2
+	make -j 2 V=1
 	# no point in running tests on mingw
 else
+	if [ "$1" == "ix86" ]; then
+		export CFLAGS="-m32"
+		export LDFLAGS="-m32"
+	fi
 	# normal procedure
 	./configure  --disable-dependency-tracking
-	make -j 2
-	make check
+	make -j 2 V=1
+	# 32b build has some issues to find openssl correctly
+	if [ "$1" != "ix86" ]; then
+		make check
+	fi
 fi
 
 # this is broken in old ubuntu

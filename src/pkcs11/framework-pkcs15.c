@@ -5968,6 +5968,11 @@ static CK_RV register_eddsa_mechanisms(struct sc_pkcs11_card *p11card, int flags
 	mech_info.ulMinKeySize = min_key_size;
 	mech_info.ulMaxKeySize = max_key_size;
 
+#ifdef ENABLE_OPENSSL
+	/* TODO verification using EDDSA
+	mech_info.flags |= CKF_VERIFY;
+	*/
+#endif
 	if (flags & SC_ALGORITHM_EDDSA_RAW) {
 		mt = sc_pkcs11_new_fw_mechanism(CKM_EDDSA, &mech_info, CKK_EC_EDWARDS, NULL, NULL);
 		if (!mt)
@@ -6274,13 +6279,13 @@ register_mechanisms(struct sc_pkcs11_card *p11card)
 			if (rc != CKR_OK)
 				return rc;
 		}
-		if (rsa_flags & SC_ALGORITHM_RSA_HASH_MD5) {
+		if (!FIPS_mode() && rsa_flags & SC_ALGORITHM_RSA_HASH_MD5) {
 			rc = sc_pkcs11_register_sign_and_hash_mechanism(p11card,
 				CKM_MD5_RSA_PKCS, CKM_MD5, mt);
 			if (rc != CKR_OK)
 				return rc;
 		}
-		if (rsa_flags & SC_ALGORITHM_RSA_HASH_RIPEMD160) {
+		if (!FIPS_mode() && rsa_flags & SC_ALGORITHM_RSA_HASH_RIPEMD160) {
 			rc = sc_pkcs11_register_sign_and_hash_mechanism(p11card,
 				CKM_RIPEMD160_RSA_PKCS, CKM_RIPEMD160, mt);
 			if (rc != CKR_OK)

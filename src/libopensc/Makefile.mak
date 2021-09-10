@@ -8,7 +8,7 @@ OBJECTS			= \
 	\
 	pkcs15.obj pkcs15-cert.obj pkcs15-data.obj pkcs15-pin.obj \
 	pkcs15-prkey.obj pkcs15-pubkey.obj pkcs15-skey.obj \
-	pkcs15-sec.obj pkcs15-algo.obj pkcs15-cache.obj pkcs15-syn.obj \
+	pkcs15-sec.obj pkcs15-algo.obj pkcs15-cache.obj pkcs15-syn.obj pkcs15-emulator-filter.obj \
 	\
 	muscle.obj muscle-filesystem.obj \
 	\
@@ -57,7 +57,7 @@ opensc.dll: $(OBJECTS) $(LIBS)
 	echo LIBRARY $* > $*.def
 	echo EXPORTS >> $*.def
 	type lib$*.exports >> $*.def
-	link $(LINKFLAGS) /dll /def:$*.def /implib:$*.lib /out:opensc.dll $(OBJECTS) $(LIBS) $(OPENPACE_LIB) $(OPENSSL_LIB) $(ZLIB_LIB) gdi32.lib Comctl32.lib Shell32.lib user32.lib advapi32.lib ws2_32.lib
+	link $(LINKFLAGS) /dll /def:$*.def /implib:$*.lib /out:opensc.dll $(OBJECTS) $(LIBS) $(OPENPACE_LIB) $(OPENSSL_LIB) $(ZLIB_LIB) gdi32.lib Comctl32.lib Shell32.lib user32.lib advapi32.lib ws2_32.lib shlwapi.lib
 	if EXIST opensc.dll.manifest mt -manifest opensc.dll.manifest -outputresource:opensc.dll;2
 
 opensc_a.lib: $(OBJECTS)

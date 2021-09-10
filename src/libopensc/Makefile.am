@@ -6,7 +6,7 @@ EXTRA_DIST = Makefile.mak opensc.dll.manifest
 
 lib_LTLIBRARIES = libopensc.la
 noinst_HEADERS = cards.h ctbcs.h internal.h muscle.h muscle-filesystem.h \
-	internal-winscard.h p15card-helper.h pkcs15-syn.h \
+	internal-winscard.h p15card-helper.h pkcs15-syn.h pkcs15-emulator-filter.h \
 	opensc.h pkcs15.h gp.h \
 	cardctl.h asn1.h log.h simpletlv.h \
 	errors.h types.h compression.h itacns.h iso7816.h \
@@ -31,7 +31,7 @@ libopensc_la_SOURCES_BASE = \
 	\
 	pkcs15.c pkcs15-cert.c pkcs15-data.c pkcs15-pin.c \
 	pkcs15-prkey.c pkcs15-pubkey.c pkcs15-skey.c \
-	pkcs15-sec.c pkcs15-algo.c pkcs15-cache.c pkcs15-syn.c \
+	pkcs15-sec.c pkcs15-algo.c pkcs15-cache.c pkcs15-syn.c pkcs15-emulator-filter.c \
 	\
 	muscle.c muscle-filesystem.c \
 	\
@@ -87,7 +87,7 @@ libopensc_la_LIBADD = $(OPENPACE_LIBS) $(OPTIONAL_OPENSSL_LIBS) \
 	$(top_builddir)/src/sm/libsmeac.la \
 	$(top_builddir)/src/common/libcompat.la
 if WIN32
-libopensc_la_LIBADD += -lws2_32
+libopensc_la_LIBADD += -lws2_32 -lshlwapi
 endif
 libopensc_static_la_LIBADD = $(libopensc_la_LIBADD)
 libopensc_la_LDFLAGS = $(AM_LDFLAGS) \
@@ -114,7 +114,7 @@ TIDY_FILES = \
 	\
 	pkcs15-cert.c pkcs15-data.c pkcs15-pin.c \
 	pkcs15-prkey.c pkcs15-pubkey.c pkcs15-skey.c \
-	pkcs15-sec.c pkcs15-algo.c pkcs15-cache.c pkcs15-syn.c \
+	pkcs15-sec.c pkcs15-algo.c pkcs15-cache.c pkcs15-syn.c pkcs15-emulator-filter.c \
 	\
 	muscle.c muscle-filesystem.c \
 	\

@@ -541,6 +541,7 @@ static CK_MECHANISM_TYPE p11_name_to_mechanism(const char *);
 static uint16_t p11_mechanism_to_flags(CK_MECHANISM_TYPE mech);
 static const char *	p11_mgf_to_name(CK_RSA_PKCS_MGF_TYPE);
 static CK_MECHANISM_TYPE p11_name_to_mgf(const char *);
+static const char *	p11_profile_to_name(CK_ULONG);
 static void		p11_perror(const char *, CK_RV);
 static const char *	CKR2Str(CK_ULONG res);
 static int		p11_test(CK_SESSION_HANDLE session);
@@ -2525,6 +2526,7 @@ static int gen_keypair(CK_SLOT_ID slot, CK_SESSION_HANDLE session,
 		{CKA_PRIVATE, &_true, sizeof(_true)},
 		{CKA_SENSITIVE, &_true, sizeof(_true)},
 	};
+	unsigned long int gost_key_type = -1;
 	int n_privkey_attr = 4;
 	unsigned char *ecparams = NULL;
 	size_t ecparams_size;
@@ -2660,7 +2662,6 @@ static int gen_keypair(CK_SLOT_ID slot, CK_SESSION_HANDLE session,
 			const struct sc_aid GOST2012_512_PARAMSET_C_OID = { { 0x06, 0x09, 0x2A, 0x85, 0x03, 0x07, 0x01, 0x02, 0x01, 0x02, 0x03 }, 11 };
 			struct sc_aid key_paramset_encoded_oid;
 			struct sc_aid hash_paramset_encoded_oid;
-			unsigned long int gost_key_type = -1;
 			CK_MECHANISM_TYPE mtypes[] = {-1};
 			size_t mtypes_num = sizeof(mtypes)/sizeof(mtypes[0]);
 			const char *p_param_set = type + strlen("GOSTR3410");
@@ -2945,6 +2946,22 @@ gen_key(CK_SLOT_ID slot, CK_SESSION_HANDLE session, CK_OBJECT_HANDLE *hSecretKey
 		}
 		else {
 			FILL_ATTR(keyTemplate[n_attr], CKA_SENSITIVE, &_false, sizeof(_false));
+			n_attr++;
+		}
+
+		if (opt_is_extractable != 0) {
+			FILL_ATTR(keyTemplate[n_attr], CKA_EXTRACTABLE, &_true, sizeof(_true));
+			n_attr++;
+		} else {
+			FILL_ATTR(keyTemplate[n_attr], CKA_EXTRACTABLE, &_false, sizeof(_false));
+			n_attr++;
+		}
+
+		if (opt_is_private != 0) {
+			FILL_ATTR(keyTemplate[n_attr], CKA_PRIVATE, &_true, sizeof(_true));
+			n_attr++;
+		} else {
+			FILL_ATTR(keyTemplate[n_attr], CKA_PRIVATE, &_false, sizeof(_false));
 			n_attr++;
 		}
 
@@ -4627,7 +4644,7 @@ static void show_profile(CK_SESSION_HANDLE sess, CK_OBJECT_HANDLE obj)
 	printf("Profile object %u\n", (unsigned int) obj);
 	printf("  profile_id:          ");
 	if ((id = getPROFILE_ID(sess, obj)) != 0) {
-		printf("'%lu'\n", id);
+		printf("%s (%lu)\n", p11_profile_to_name(id), id);
 	} else {
 		printf("<empty>\n");
 	}
@@ -5061,7 +5078,6 @@ static int test_digest(CK_SESSION_HANDLE session)
 
 	CK_MECHANISM_TYPE mechTypes[] = {
 		CKM_MD5,
-		CKM_SHA_1,
 		CKM_RIPEMD160,
 		CKM_SHA256,
 		CKM_SHA384,
@@ -5159,8 +5175,12 @@ static int test_digest(CK_SESSION_HANDLE session)
 		for (j = 0; j < 10; j++)
 			data[10 * i + j] = (unsigned char) (0x30 + j);
 
-
-	for (i = 0; mechTypes[i] != 0xffffff; i++) {
+#ifdef ENABLE_OPENSSL
+	i = (FIPS_mode() ? 2 : 0);
+#else
+	i = 0;
+#endif
+	for (; mechTypes[i] != 0xffffff; i++) {
 		ck_mech.mechanism = mechTypes[i];
 
 		rv = p11->C_DigestInit(session, &ck_mech);
@@ -7299,6 +7319,16 @@ static struct mech_info	p11_mgf[] = {
       { 0, NULL, NULL, MF_UNKNOWN }
 };
 
+static struct mech_info p11_profile[] = {
+	{ CKP_INVALID_ID,                "CKP_INVALID_ID",                NULL, MF_UNKNOWN },
+	{ CKP_BASELINE_PROVIDER,         "CKP_BASELINE_PROVIDER",         NULL, MF_UNKNOWN },
+	{ CKP_EXTENDED_PROVIDER,         "CKP_EXTENDED_PROVIDER",         NULL, MF_UNKNOWN },
+	{ CKP_AUTHENTICATION_TOKEN,      "CKP_AUTHENTICATION_TOKEN",      NULL, MF_UNKNOWN },
+	{ CKP_PUBLIC_CERTIFICATES_TOKEN, "CKP_PUBLIC_CERTIFICATES_TOKEN", NULL, MF_UNKNOWN },
+	{ CKP_VENDOR_DEFINED,            "CKP_VENDOR_DEFINED",            NULL, MF_UNKNOWN },
+	{ 0, NULL, NULL, MF_UNKNOWN }
+};
+
 static const char *p11_mechanism_to_name(CK_MECHANISM_TYPE mech)
 {
 	static char temp[64];
@@ -7368,6 +7398,19 @@ static const char *p11_mgf_to_name(CK_RSA_PKCS_MGF_TYPE mgf)
 			return mi->name;
 	}
 	snprintf(temp, sizeof(temp), "mgf-0x%lX", (unsigned long) mgf);
+	return temp;
+}
+
+static const char *p11_profile_to_name(CK_ULONG profile)
+{
+	static char temp[64];
+	struct mech_info *mi;
+
+	for (mi = p11_profile; mi->name; mi++) {
+		if (mi->mech == profile)
+			return mi->name;
+	}
+	snprintf(temp, sizeof(temp), "profile-0x%lX", (unsigned long) profile);
 	return temp;
 }
 
@@ -7591,7 +7634,7 @@ static void * test_threads_run(void * pttd)
 				ttd->rv = rv;
 				fprintf(stderr, "Test thread %d C_Initialize returned %s\n", ttd->tnum, CKR2Str(rv));
 			}
-			/* CL C_Initialize with CKF_OS_LOCKING_OK */
+			/* IL C_Initialize with CKF_OS_LOCKING_OK */
 			else if (*(pctest + 1) == 'L') {
 				fprintf(stderr, "Test thread %d C_Initialize CKF_OS_LOCKING_OK \n", ttd->tnum);
 				rv = p11->C_Initialize(&c_initialize_args_OS);

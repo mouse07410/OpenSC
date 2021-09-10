@@ -2,7 +2,16 @@
 
 set -ex -o xtrace
 
-DEPS="docbook-xsl libpcsclite-dev xsltproc gengetopt libcmocka-dev help2man pcscd check softhsm2 pcsc-tools libtool make autoconf autoconf-archive automake libssl-dev zlib1g-dev pkg-config libreadline-dev openssl git"
+# Generic dependencies
+DEPS="docbook-xsl xsltproc gengetopt help2man pcscd check pcsc-tools libtool make autoconf autoconf-archive automake pkg-config openssl git"
+
+# 64bit or 32bit dependencies
+if [ "$1" == "ix86" ]; then
+	sudo dpkg --add-architecture i386
+	DEPS="$DEPS gcc-multilib libpcsclite-dev:i386 libcmocka-dev:i386 libssl-dev:i386 zlib1g-dev:i386 libreadline-dev:i386 softhsm2:i386"
+else
+	DEPS="$DEPS libpcsclite-dev libcmocka-dev libssl-dev zlib1g-dev libreadline-dev softhsm2"
+fi
 
 if [ "$1" == "clang-tidy" ]; then
 	DEPS="$DEPS clang-tidy"
@@ -14,7 +23,7 @@ elif [ "$1" == "piv" -o "$1" == "isoapplet" -o "$1" == "gidsapplet" -o "$1" == "
 	if [ "$1" == "piv" ]; then
 		DEPS="$DEPS cmake"
 	fi
-	DEPS="$DEPS ant openjdk-8-jdk"
+	DEPS="$DEPS ant openjdk-8-jdk maven"
 elif [ "$1" == "mingw" -o "$1" == "mingw32" ]; then
 	DEPS="$DEPS wine wine32 xvfb wget"
 	sudo dpkg --add-architecture i386
@@ -27,6 +36,7 @@ fi
 
 # make sure we do not get prompts
 export DEBIAN_FRONTEND=noninteractive
+export DEBCONF_NONINTERACTIVE_SEEN=true
 sudo apt-get update
 sudo apt-get install -y build-essential $DEPS
 
