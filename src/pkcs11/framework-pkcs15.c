@@ -4280,7 +4280,7 @@ pkcs15_prkey_unwrap(struct sc_pkcs11_session *session, void *obj,
 	struct	pkcs15_fw_data *fw_data = NULL;
 	struct	pkcs15_prkey_object *prkey = (struct pkcs15_prkey_object *) obj;
 	struct	pkcs15_any_object *targetKeyObj = (struct pkcs15_any_object *) targetKey;
-	int	rv;
+	int	rv, flags = 0;
 
 	sc_log(context, "Initiating unwrapping with private key.");
 
@@ -4306,8 +4306,6 @@ pkcs15_prkey_unwrap(struct sc_pkcs11_session *session, void *obj,
 
 	sc_log(context, "Using mechanism %lx.", pMechanism->mechanism);
 
-#if 0
-	/* FIXME https://github.com/OpenSC/OpenSC/issues/1595 */
 	/* Select the proper padding mechanism */
 	switch (pMechanism->mechanism) {
 	case CKM_RSA_PKCS:
@@ -4319,7 +4317,6 @@ pkcs15_prkey_unwrap(struct sc_pkcs11_session *session, void *obj,
 	default:
 		return CKR_MECHANISM_INVALID;
 	}
-#endif
 
 	rv = sc_lock(p11card->card);
 
@@ -4327,7 +4324,7 @@ pkcs15_prkey_unwrap(struct sc_pkcs11_session *session, void *obj,
 		return sc_to_cryptoki_error(rv, "C_UnwrapKey");
 
 	/* Call the card to do the unwrap operation */
-	rv = sc_pkcs15_unwrap(fw_data->p15_card, prkey->prv_p15obj, targetKeyObj->p15_object, 0,
+	rv = sc_pkcs15_unwrap(fw_data->p15_card, prkey->prv_p15obj, targetKeyObj->p15_object, flags,
 		pWrappedKey, ulWrappedKeyLen, NULL, 0);
 
 	sc_unlock(p11card->card);
