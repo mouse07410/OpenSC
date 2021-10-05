@@ -14,6 +14,7 @@ env | grep -i openjdk
 
 # Javacard SDKs
 if [ ! -d "oracle_javacard_sdks" ]; then
+	# https://github.com/licel/jcardsim/pull/174
 	git clone https://github.com/martinpaljak/oracle_javacard_sdks.git
 fi
 export JC_HOME=$PWD/oracle_javacard_sdks/jc222_kit
@@ -26,5 +27,7 @@ fi
 pushd jcardsim
 env | grep -i openjdk
 export JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64/
-mvn initialize && mvn clean install
+if [ ! -f target/jcardsim-3.0.5-SNAPSHOT.jar ]; then
+	mvn initialize && mvn clean install
+fi
 popd
