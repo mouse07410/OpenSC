@@ -138,7 +138,7 @@ AM_CONDITIONAL([HAVE_UNKNOWN_WARNING_OPTION], [test "${have_unknown_warning_opti
 
 AC_ARG_ENABLE(
 	[fuzzing],
-	[AS_HELP_STRING([--enable-fuzzing],[enable compile of fuzzing tests @<:@disabled@:>@, note that CFLAGS and FUZZING_LIBS should be set accordingly, e.g. to something like CFLAGS="-fsanitize=address,fuzzer" FUZZING_LIBS="-fsanitize=fuzzer"])],
+	[AS_HELP_STRING([--enable-fuzzing],[enable compile of fuzzing tests @<:@disabled@:>@, note that CC, CFLAGS and FUZZING_LIBS should be set accordingly, e.g. to something like CC="clang" CFLAGS="-fsanitize=fuzzer-no-link" FUZZING_LIBS="-fsanitize=fuzzer"])],
 	,
 	[enable_fuzzing="no"]
 )
@@ -705,6 +705,9 @@ if test "${enable_cmocka}" = "yes"; then
 	fi
 fi
 
+if test "${enable_fuzzing}" = "yes"; then
+	AC_DEFINE([FUZZING_ENABLED], [1], [Define if fuzzing is enabled])
+fi
 
 
 PKG_CHECK_EXISTS([libeac], [PKG_CHECK_MODULES([OPENPACE], [libeac >= 0.9])],
