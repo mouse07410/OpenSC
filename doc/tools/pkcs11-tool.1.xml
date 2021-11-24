@@ -642,7 +642,6 @@
 					Valid value are <literal>cert</literal>, <literal>privkey</literal>,
 					<literal>pubkey</literal>, <literal>secrkey</literal> 
 					and <literal>data</literal>.</para></listitem>
->>>>>>> upstream/master
 				</varlistentry>
 
 				<varlistentry>

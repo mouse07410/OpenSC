@@ -119,6 +119,11 @@ else
 	export OPENSSL_LOCAL="false"
 fi
 
+echo "OPENSSL_CFLAGS = ${OPENSSL_CFLAGS}"
+echo "OPENSSL_LIBS = ${OPENSSL_LIBS}"
+echo "OPENSSL_LOCAL = ${OPENSSL_LOCAL}"
+echo ""
+
 # MacOS seems to have a problem: if target dir has not been wiped - it does not rebuild the libraries!
 # So force the correct re-configuration, and achieve rebuild by this crude but effective measure
 #rm -rf ${BUILDPATH}/target/$PREFIX/lib/pkgconfig

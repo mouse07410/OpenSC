@@ -299,7 +299,8 @@ if test "x$ax_pthread_clang" = "xyes"; then
              ax_pthread_save_CFLAGS="$CFLAGS"
              for ax_pthread_try in '' -Qunused-arguments -Wno-unused-command-line-argument unknown; do
                 AS_IF([test "x$ax_pthread_try" = "xunknown"], [break])
-                CFLAGS="-Werror -Wunknown-warning-option $ax_pthread_try -pthread $ax_pthread_save_CFLAGS"
+                #CFLAGS="-Werror -Wunknown-warning-option $ax_pthread_try -pthread $ax_pthread_save_CFLAGS"
+                CFLAGS="-Wunknown-warning-option $ax_pthread_try -pthread $ax_pthread_save_CFLAGS"
                 ac_link="$ax_pthread_save_ac_link"
                 AC_LINK_IFELSE([AC_LANG_SOURCE([[int main(void){return 0;}]])],
                     [ac_link="$ax_pthread_2step_ac_link"
