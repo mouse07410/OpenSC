@@ -2257,7 +2257,7 @@ static void sign_data(CK_SLOT_ID slot, CK_SESSION_HANDLE session,
 		sig_len = sizeof(sig_buffer);
 		rv =  p11->C_Sign(session, in_buffer, r, sig_buffer, &sig_len);
 
-		if (rv != CKR_OK && getALWAYS_AUTHENTICATE(session, key)) {
+		if (rv == CKR_USER_NOT_LOGGED_IN) {
 			login(session,CKU_CONTEXT_SPECIFIC);
 
 			sig_len = sizeof(sig_buffer);
@@ -2270,11 +2270,14 @@ static void sign_data(CK_SLOT_ID slot, CK_SESSION_HANDLE session,
 		rv = p11->C_SignInit(session, &mech, key);
 		if (rv != CKR_OK)
 			p11_fatal("C_SignInit", rv);
-		if (getALWAYS_AUTHENTICATE(session, key))
-			login(session,CKU_CONTEXT_SPECIFIC);
+
 
 		do   {
 			rv = p11->C_SignUpdate(session, in_buffer, r);
+			if (rv == CKR_USER_NOT_LOGGED_IN) {
+				login(session,CKU_CONTEXT_SPECIFIC);
+				rv = p11->C_SignUpdate(session, in_buffer, r);
+			}
 			if (rv != CKR_OK)
 				p11_fatal("C_SignUpdate", rv);
 
@@ -5833,13 +5836,18 @@ static int sign_verify_openssl(CK_SESSION_HANDLE session,
 		return errors;
 	if (rv != CKR_OK)
 		p11_fatal("C_SignInit", rv);
-	if (getALWAYS_AUTHENTICATE(session, privKeyObject))
-		login(session,CKU_CONTEXT_SPECIFIC);
+
 	printf("    %s: ", p11_mechanism_to_name(ck_mech->mechanism));
 
 	sigLen1 = sizeof(sig1);
 	rv = p11->C_Sign(session, data, dataLen, sig1,
 		&sigLen1);
+	if (rv == CKR_USER_NOT_LOGGED_IN) {
+		login(session,CKU_CONTEXT_SPECIFIC);
+		sigLen1 = sizeof(sig1);
+		rv = p11->C_Sign(session, data, dataLen, sig1,
+			&sigLen1);
+	}
 	if (rv != CKR_OK)
 		p11_fatal("C_Sign", rv);
 
@@ -6017,8 +6025,6 @@ static int test_signature(CK_SESSION_HANDLE sess)
 		return errors;
 	if (rv != CKR_OK)
 		p11_fatal("C_SignInit", rv);
-	if (getALWAYS_AUTHENTICATE(sess, privKeyObject))
-		login(sess,CKU_CONTEXT_SPECIFIC);
 
 	rv = p11->C_SignUpdate(sess, data, 5);
 	if (rv == CKR_FUNCTION_NOT_SUPPORTED) {
@@ -6029,7 +6035,10 @@ static int test_signature(CK_SESSION_HANDLE sess)
 	} else {
 		if (rv != CKR_OK)
 			p11_fatal("C_SignUpdate", rv);
-
+		if (rv == CKR_USER_NOT_LOGGED_IN) {
+			login(sess,CKU_CONTEXT_SPECIFIC);
+			rv = p11->C_SignUpdate(sess, data, 5);
+		}
 		rv = p11->C_SignUpdate(sess, data + 5, 10);
 		if (rv != CKR_OK)
 			p11_fatal("C_SignUpdate", rv);
@@ -6085,13 +6094,17 @@ static int test_signature(CK_SESSION_HANDLE sess)
 	   printf("  ERR: C_Sign() didn't return CKR_OK for a NULL output buf, but %s (0x%0x)\n",
 	   CKR2Str(rv), (int) rv);
 	}
-	if (getALWAYS_AUTHENTICATE(sess, privKeyObject))
-		login(sess,CKU_CONTEXT_SPECIFIC);
+
 
 	rv = p11->C_Sign(sess, data, dataLen, sig2, &sigLen2);
 	if (rv == CKR_OPERATION_NOT_INITIALIZED) {
 		printf("  ERR: signature operation ended prematurely\n");
 		errors++;
+	} else if (rv == CKR_USER_NOT_LOGGED_IN) {
+		login(sess,CKU_CONTEXT_SPECIFIC);
+		rv = p11->C_Sign(sess, data, dataLen, sig2, &sigLen2);
+		if (rv != CKR_OK)
+			p11_fatal("C_Sign", rv);
 	} else if (rv != CKR_OK)
 		p11_fatal("C_Sign", rv);
 
@@ -6244,12 +6257,15 @@ static int sign_verify(CK_SESSION_HANDLE session,
 			printf("  ERR: C_SignInit() returned %s (0x%0x)\n", CKR2Str(rv), (int) rv);
 			return ++errors;
 		}
-		if (getALWAYS_AUTHENTICATE(session, priv_key))
-			login(session,CKU_CONTEXT_SPECIFIC);
 		printf("    %s: ", p11_mechanism_to_name(*mech_type));
 
 		signat_len = sizeof(signat);
 		rv = p11->C_Sign(session, datas[j], data_lens[j], signat, &signat_len);
+		if (rv == CKR_USER_NOT_LOGGED_IN) {
+			login(session,CKU_CONTEXT_SPECIFIC);
+			signat_len = sizeof(signat);
+			rv = p11->C_Sign(session, datas[j], data_lens[j], signat, &signat_len);
+		}
 		if (rv != CKR_OK) {
 			printf("  ERR: C_Sign() returned %s (0x%0x)\n", CKR2Str(rv), (int) rv);
 			return ++errors;
@@ -7875,7 +7891,7 @@ static struct mech_info	p11_mgf[] = {
       { CKG_MGF1_SHA3_256,	"MGF1-SHA3_256", NULL, MF_MGF },
       { CKG_MGF1_SHA3_384,	"MGF1-SHA3_384", NULL, MF_MGF },
       { CKG_MGF1_SHA3_512,	"MGF1-SHA3_512", NULL, MF_MGF },
-      
+
       { 0, NULL, NULL, MF_UNKNOWN }
 };
 
