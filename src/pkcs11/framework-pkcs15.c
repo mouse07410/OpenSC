@@ -4088,6 +4088,7 @@ pkcs15_prkey_check_pss_param(CK_MECHANISM_PTR pMechanism, CK_ULONG hlen)
 
 	pss_param = (CK_RSA_PKCS_PSS_PARAMS *)pMechanism->pParameter;
 
+#if 0
 	// Hash parameter must match length of data supplied for CKM_RSA_PKCS_PSS
 	for (i = 0; i < 5; i++) {
 		if (pss_param->hashAlg == hashes[i]
@@ -4095,7 +4096,7 @@ pkcs15_prkey_check_pss_param(CK_MECHANISM_PTR pMechanism, CK_ULONG hlen)
 			return CKR_MECHANISM_PARAM_INVALID;
 	}
 	/* other aspects of pss params were already verified during SignInit */
-
+#endif /* 0 */
 	return CKR_OK;
 }
 
@@ -4683,10 +4684,10 @@ pkcs15_prkey_init_params(struct sc_pkcs11_session *session,
 		/* We're strict, and only do PSS signatures with a salt length that
 		 * matches the digest length (any shorter is rubbish, any longer
 		 * is useless). */
-		if (pss_params->sLen != expected_salt_len / 8)
-			return CKR_MECHANISM_PARAM_INVALID;
-
-		/* TODO support different salt lengths */
+		/* The above is bullsh*t, as deterministic signatures have their place. ULB */
+		/* So, getting rid of the ~~stupid~~ unnecessary check below. ULB */
+		//if (pss_params->sLen != expected_salt_len / 8)
+		//	return CKR_MECHANISM_PARAM_INVALID;
 		break;
 	case CKM_RSA_PKCS_OAEP:
 		if (!pMechanism->pParameter ||
