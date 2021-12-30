@@ -6120,6 +6120,7 @@ static int test_signature(CK_SESSION_HANDLE sess)
 		if (rv == CKR_USER_NOT_LOGGED_IN) {
 			login(sess,CKU_CONTEXT_SPECIFIC);
 			rv = p11->C_Sign(sess, data, dataLen, sig2, &sigLen2);
+                }
 		if (rv != CKR_OK)
 			p11_fatal("C_Sign", rv);
 	}
