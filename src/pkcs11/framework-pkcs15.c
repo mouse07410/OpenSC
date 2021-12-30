@@ -3613,7 +3613,7 @@ pkcs15_set_attrib(struct sc_pkcs11_session *session, struct sc_pkcs15_object *p1
 			ck_rv = CKR_ATTRIBUTE_READ_ONLY;
 			goto set_attr_done;
 		}
-		rv = sc_pkcs15init_change_attrib(fw_data->p15_card, profile, p15_object, 
+		rv = sc_pkcs15init_change_attrib(fw_data->p15_card, profile, p15_object,
 				P15_ATTR_TYPE_VALUE, attr->pValue, (unsigned int) attr->ulValueLen);
 		break;
 	default:
@@ -4093,8 +4093,12 @@ pkcs15_prkey_check_pss_param(CK_MECHANISM_PTR pMechanism, CK_ULONG hlen)
 	// Hash parameter must match length of data supplied for CKM_RSA_PKCS_PSS
 	for (i = 0; i < 5; i++) {
 		if (pss_param->hashAlg == hashes[i]
-			&& hlen != hash_lens[i]/8)
-			return CKR_MECHANISM_PARAM_INVALID;
+			&& hlen != hash_lens[i]/8) {
+			//return CKR_MECHANISM_PARAM_INVALID; /* this is plain stupid */
+			// FIXME instead, find a way to print to stderr that
+			// PSS strength may be degraded
+			continue;
+		}
 	}
 	/* other aspects of pss params were already verified during SignInit */
 
@@ -4906,7 +4910,7 @@ pkcs15_pubkey_get_attribute(struct sc_pkcs11_session *session, void *object, CK_
 		return get_modulus_bits(pubkey->pub_data, attr);
 	case CKA_PUBLIC_EXPONENT:
 		return get_public_exponent(pubkey->pub_data, attr);
-	/* 
+	/*
 	 * PKCS#11 does not define a CKA_VALUE for a CKO_PUBLIC_KEY.
 	 * OpenSC does, but it is not consistent it what it returns
 	 * Internally to do verify, with OpenSSL, we need a SPKI that
