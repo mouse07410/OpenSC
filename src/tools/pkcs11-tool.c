@@ -5711,6 +5711,11 @@ static int test_digest(CK_SESSION_HANDLE session)
 	if (rv == CKR_OPERATION_NOT_INITIALIZED) {
 		printf("  ERR: digest operation ended prematurely\n");
 		errors++;
+	} else if (rv == CKR_USER_NOT_LOGGED_IN) {
+		login(session, CKU_CONTEXT_SPECIFIC);
+		rv = p11->C_Digest(session, data, sizeof(data), hash2, &hashLen2);
+		if (rv != CKR_OK)
+			p11_fatal("C_Sign", rv);
 	} else if (rv != CKR_OK)
 		p11_fatal("C_Sign", rv);
 
