@@ -2259,18 +2259,15 @@ static void sign_data(CK_SLOT_ID slot, CK_SESSION_HANDLE session,
 
 		if (rv == CKR_USER_NOT_LOGGED_IN) {
 			login(session,CKU_CONTEXT_SPECIFIC);
-
 			sig_len = sizeof(sig_buffer);
 			rv =  p11->C_Sign(session, in_buffer, r, sig_buffer, &sig_len);
 		}
-
 	}
 
 	if (rv != CKR_OK)   {
 		rv = p11->C_SignInit(session, &mech, key);
 		if (rv != CKR_OK)
 			p11_fatal("C_SignInit", rv);
-
 
 		do   {
 			rv = p11->C_SignUpdate(session, in_buffer, r);
@@ -5711,8 +5708,14 @@ static int test_digest(CK_SESSION_HANDLE session)
 	if (rv == CKR_OPERATION_NOT_INITIALIZED) {
 		printf("  ERR: digest operation ended prematurely\n");
 		errors++;
-	} else if (rv != CKR_OK)
-		p11_fatal("C_Sign", rv);
+	} else {
+		if (rv == CKR_USER_NOT_LOGGED_IN) {
+			login(session, CKU_CONTEXT_SPECIFIC);
+			rv = p11->C_Digest(session, data, sizeof(data), hash2, &hashLen2);
+		}
+		if (rv != CKR_OK)
+			p11_fatal("C_Sign", rv);
+	}
 
 	return errors;
 }
@@ -5840,13 +5843,11 @@ static int sign_verify_openssl(CK_SESSION_HANDLE session,
 	printf("    %s: ", p11_mechanism_to_name(ck_mech->mechanism));
 
 	sigLen1 = sizeof(sig1);
-	rv = p11->C_Sign(session, data, dataLen, sig1,
-		&sigLen1);
+	rv = p11->C_Sign(session, data, dataLen, sig1, &sigLen1);
 	if (rv == CKR_USER_NOT_LOGGED_IN) {
 		login(session,CKU_CONTEXT_SPECIFIC);
 		sigLen1 = sizeof(sig1);
-		rv = p11->C_Sign(session, data, dataLen, sig1,
-			&sigLen1);
+		rv = p11->C_Sign(session, data, dataLen, sig1, &sigLen1);
 	}
 	if (rv != CKR_OK)
 		p11_fatal("C_Sign", rv);
@@ -6029,15 +6030,16 @@ static int test_signature(CK_SESSION_HANDLE sess)
 	rv = p11->C_SignUpdate(sess, data, 5);
 	if (rv == CKR_FUNCTION_NOT_SUPPORTED) {
 		p11_warn("C_SignUpdate", rv);
-	} else if (rv != CKR_OK) {
-		p11_perror("C_SignUpdate", rv);
-		errors++;
 	} else {
 		if (rv != CKR_OK)
 			p11_fatal("C_SignUpdate", rv);
 		if (rv == CKR_USER_NOT_LOGGED_IN) {
 			login(sess,CKU_CONTEXT_SPECIFIC);
 			rv = p11->C_SignUpdate(sess, data, 5);
+			if (rv != CKR_OK) {
+				p11_perror("C_SignUpdate", rv);
+				errors++;
+			}
 		}
 		rv = p11->C_SignUpdate(sess, data + 5, 10);
 		if (rv != CKR_OK)
@@ -6055,11 +6057,14 @@ static int test_signature(CK_SESSION_HANDLE sess)
 		rv = p11->C_SignInit(sess, &ck_mech, privKeyObject);
 		if (rv != CKR_OK)
 			p11_fatal("C_SignInit", rv);
-		if (getALWAYS_AUTHENTICATE(sess, privKeyObject))
-			login(sess,CKU_CONTEXT_SPECIFIC);
 
 		sigLen2 = sizeof(sig2);
 		rv = p11->C_Sign(sess, data, dataLen, sig2, &sigLen2);
+		if (rv == CKR_USER_NOT_LOGGED_IN) {
+			login(sess,CKU_CONTEXT_SPECIFIC);
+			sigLen2 = sizeof(sig2);
+			rv = p11->C_Sign(sess, data, dataLen, sig2, &sigLen2);
+		}
 		if (rv != CKR_OK)
 			p11_fatal("C_Sign", rv);
 
@@ -6095,18 +6100,17 @@ static int test_signature(CK_SESSION_HANDLE sess)
 	   CKR2Str(rv), (int) rv);
 	}
 
-
 	rv = p11->C_Sign(sess, data, dataLen, sig2, &sigLen2);
 	if (rv == CKR_OPERATION_NOT_INITIALIZED) {
 		printf("  ERR: signature operation ended prematurely\n");
 		errors++;
-	} else if (rv == CKR_USER_NOT_LOGGED_IN) {
-		login(sess,CKU_CONTEXT_SPECIFIC);
-		rv = p11->C_Sign(sess, data, dataLen, sig2, &sigLen2);
+	} else {
+		if (rv == CKR_USER_NOT_LOGGED_IN) {
+			login(sess,CKU_CONTEXT_SPECIFIC);
+			rv = p11->C_Sign(sess, data, dataLen, sig2, &sigLen2);
 		if (rv != CKR_OK)
 			p11_fatal("C_Sign", rv);
-	} else if (rv != CKR_OK)
-		p11_fatal("C_Sign", rv);
+	}
 
 	/* 3rd test */
 
@@ -7153,10 +7157,12 @@ static CK_SESSION_HANDLE test_kpgen_certwrite(CK_SLOT_ID slot, CK_SESSION_HANDLE
 	rv = p11->C_SignInit(session, &mech, priv_key);
 	if (rv != CKR_OK)
 		p11_fatal("C_SignInit", rv);
-	if (getALWAYS_AUTHENTICATE(session, priv_key))
-		login(session,CKU_CONTEXT_SPECIFIC);
 
 	rv = p11->C_Sign(session, data, data_len, NULL, &sig_len);
+	if (rv == CKR_USER_NOT_LOGGED_IN) {
+		login(session,CKU_CONTEXT_SPECIFIC);
+		rv = p11->C_Sign(session, data, data_len, NULL, &sig_len);
+	}
 	if (rv != CKR_OK)
 		p11_fatal("C_Sign", rv);
 	sig_len = 20;
@@ -7185,10 +7191,12 @@ static CK_SESSION_HANDLE test_kpgen_certwrite(CK_SLOT_ID slot, CK_SESSION_HANDLE
 	rv = p11->C_SignInit(session, &mech, priv_key);
 	if (rv != CKR_OK)
 		p11_fatal("C_SignInit", rv);
-	if (getALWAYS_AUTHENTICATE(session, priv_key))
-		login(session,CKU_CONTEXT_SPECIFIC);
 
 	rv = p11->C_Sign(session, data, data_len, sig, &sig_len);
+	if (rv == CKR_USER_NOT_LOGGED_IN) {
+		login(session,CKU_CONTEXT_SPECIFIC);
+		rv = p11->C_Sign(session, data, data_len, sig, &sig_len);
+	}
 	if (rv != CKR_OK)
 		p11_fatal("C_Sign", rv);
 
@@ -7344,9 +7352,11 @@ static void test_ec(CK_SLOT_ID slot, CK_SESSION_HANDLE session)
 	rv = p11->C_SignInit(session, &mech, priv_key);
 	if (rv != CKR_OK)
 		p11_fatal("C_SignInit", rv);
-	if (getALWAYS_AUTHENTICATE(session, priv_key))
-		login(session,CKU_CONTEXT_SPECIFIC);
 	rv = p11->C_Sign(session, data, data_len, NULL, &sig_len);
+	if (rv == CKR_USER_NOT_LOGGED_IN) {
+		login(session,CKU_CONTEXT_SPECIFIC);
+		rv = p11->C_Sign(session, data, data_len, NULL, &sig_len);
+	}
 	if (rv != CKR_OK)
 		p11_fatal("C_Sign", rv);
 	sig_len -= 20;
@@ -7364,9 +7374,11 @@ static void test_ec(CK_SLOT_ID slot, CK_SESSION_HANDLE session)
 	rv = p11->C_SignInit(session, &mech, priv_key);
 	if (rv != CKR_OK)
 		p11_fatal("C_SignInit", rv);
-	if (getALWAYS_AUTHENTICATE(session, priv_key))
-		login(session,CKU_CONTEXT_SPECIFIC);
 	rv = p11->C_Sign(session, data, data_len, sig, &sig_len);
+	if (rv == CKR_USER_NOT_LOGGED_IN) {
+		login(session,CKU_CONTEXT_SPECIFIC);
+		rv = p11->C_Sign(session, data, data_len, sig, &sig_len);
+	}
 	if (rv != CKR_OK)
 		p11_fatal("C_Sign", rv);
 
