@@ -2580,19 +2580,25 @@ static void decrypt_data(CK_SLOT_ID slot, CK_SESSION_HANDLE session,
 		rv = p11->C_DecryptInit(session, &mech, key);
 		if (rv != CKR_OK)
 			p11_fatal("C_DecryptInit", rv);
-		if (getALWAYS_AUTHENTICATE(session, key))
-			login(session, CKU_CONTEXT_SPECIFIC);
 		rv = p11->C_Decrypt(session, in_buffer, in_len, out_buffer, &out_len);
+		if (rv == CKR_USER_NOT_LOGGED_IN) {
+			login(session, CKU_CONTEXT_SPECIFIC);
+			rv = p11->C_Decrypt(session, in_buffer, in_len, out_buffer, &out_len);
+		}
 	}
 	if (rv != CKR_OK) {
 		rv = p11->C_DecryptInit(session, &mech, key);
 		if (rv != CKR_OK)
 			p11_fatal("C_DecryptInit", rv);
-		if (getALWAYS_AUTHENTICATE(session, key))
-			login(session, CKU_CONTEXT_SPECIFIC);
+
 		do {
 			out_len = sizeof(out_buffer);
 			rv = p11->C_DecryptUpdate(session, in_buffer, in_len, out_buffer, &out_len);
+			if (rv == CKR_USER_NOT_LOGGED_IN) {
+				login(session, CKU_CONTEXT_SPECIFIC);
+				rv = p11->C_DecryptUpdate(session, in_buffer, in_len,
+									out_buffer, &out_len);
+			}
 			if (rv != CKR_OK)
 				p11_fatal("C_DecryptUpdate", rv);
 			r = write(fd_out, out_buffer, out_len);
@@ -2680,20 +2686,26 @@ static void encrypt_data(CK_SLOT_ID slot, CK_SESSION_HANDLE session,
 		rv = p11->C_EncryptInit(session, &mech, key);
 		if (rv != CKR_OK)
 			p11_fatal("C_EncryptInit", rv);
-		if (getALWAYS_AUTHENTICATE(session, key))
-			login(session, CKU_CONTEXT_SPECIFIC);
 		out_len = sizeof(out_buffer);
 		rv = p11->C_Encrypt(session, in_buffer, in_len, out_buffer, &out_len);
+		if (rv == CKR_USER_NOT_LOGGED_IN) {
+			login(session, CKU_CONTEXT_SPECIFIC);
+			out_len = sizeof(out_buffer);
+			rv = p11->C_Encrypt(session, in_buffer, in_len, out_buffer, &out_len);
+		}
 	}
 	if (rv != CKR_OK) {
 		rv = p11->C_EncryptInit(session, &mech, key);
 		if (rv != CKR_OK)
 			p11_fatal("C_EncryptInit", rv);
-		if (getALWAYS_AUTHENTICATE(session, key))
-			login(session, CKU_CONTEXT_SPECIFIC);
 		do {
 			out_len = sizeof(out_buffer);
 			rv = p11->C_EncryptUpdate(session, in_buffer, in_len, out_buffer, &out_len);
+			if (rv == CKR_USER_NOT_LOGGED_IN) {
+				login(session, CKU_CONTEXT_SPECIFIC);
+				out_len = sizeof(out_buffer);
+				rv = p11->C_EncryptUpdate(session, in_buffer, in_len, out_buffer, &out_len);
+			}
 			if (rv != CKR_OK)
 				p11_fatal("C_EncryptUpdate", rv);
 			r = write(fd_out, out_buffer, out_len);
