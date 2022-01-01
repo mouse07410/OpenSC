@@ -740,7 +740,7 @@ CK_RV sc_pkcs11_verify_data(const unsigned char *pubkey, unsigned int pubkey_len
 			rv = CKR_SIGNATURE_INVALID;
 			if (data_len == (unsigned int) EVP_MD_size(pss_md)
 					&& RSA_verify_PKCS1_PSS_mgf1(rsa, data, pss_md, mgf_md,
-						rsa_out, EVP_MD_size(pss_md)/*sLen*/) == 1)
+						rsa_out, param->sLen) == 1)
 				rv = CKR_OK;
 			RSA_free(rsa);
 			free(rsa_out);
