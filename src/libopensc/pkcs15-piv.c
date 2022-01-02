@@ -1208,6 +1208,7 @@ sc_log(card->ctx,  "DEE Adding pin %d label=%s",i, label);
 				sc_log(card->ctx,  "Unsupported key_alg %d", ckis[i].key_alg);
 				r = 0; /* we just skip this one */
 		}
+		prkey_obj.user_consent = 0; /****** TEST ******/
 		sc_log(card->ctx, "USAGE: cert_keyUsage_present:%d usage:0x%8.8x", ckis[i].cert_keyUsage_present ,prkey_info.usage);
 		LOG_TEST_GOTO_ERR(card->ctx, r, "Failed to add Private key");
 	}

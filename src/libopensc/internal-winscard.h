@@ -46,10 +46,13 @@ typedef unsigned __int8 uint8_t;
 #endif
 
 #ifdef HAVE_WINSCARD_H
+#ifdef __APPLE__
+#include <pcsclite.h>
+#endif /* __APPLE__ */
 #include <winscard.h>
 #ifdef __APPLE__
 #include <wintypes.h>
-#endif
+#endif /* __APPLE__ */
 // allow unicode built where SCARD_READERSTATE is defined as SCARD_READERSTATEW and SCardGetStatusChange renamed to SCardGetStatusChangeW
 #ifdef _WIN32
 #ifdef UNICODE

@@ -398,7 +398,7 @@ util_fatal(const char *fmt, ...)
 	va_list	ap;
 
 	va_start(ap, fmt);
-	fprintf(stderr, "error: ");
+	fprintf(stderr, "fatal error: ");
 	vfprintf(stderr, fmt, ap);
 	fprintf(stderr, "\nAborting.\n");
 	va_end(ap);

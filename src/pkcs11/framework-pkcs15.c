@@ -1772,6 +1772,7 @@ pkcs15_login(struct sc_pkcs11_slot *slot, CK_USER_TYPE userType,
 		sc_log(context, "context specific login returns %d", rc);
 		return sc_to_cryptoki_error(rc, "C_Login");
 	default:
+		sc_log(context, "unknown user/login type %lu", userType);
 		return CKR_USER_TYPE_INVALID;
 	}
 	pin_info = (struct sc_pkcs15_auth_info *) auth_object->data;
@@ -4688,6 +4689,9 @@ pkcs15_prkey_init_params(struct sc_pkcs11_session *session,
 		/* So, getting rid of the ~~stupid~~ unnecessary check below. ULB */
 		//if (pss_params->sLen != expected_salt_len / 8)
 		//	return CKR_MECHANISM_PARAM_INVALID;
+#ifdef P11DEBUG
+		fprintf(stderr, "%s:%d pkcs15: PSS salt len = %lu B\n", __FILE__, __LINE__, pss_params->sLen);
+#endif /* P11DEBUG */
 		break;
 	case CKM_RSA_PKCS_OAEP:
 		if (!pMechanism->pParameter ||

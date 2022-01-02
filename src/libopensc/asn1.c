@@ -852,7 +852,29 @@ sc_asn1_decode_object_id(const u8 *inbuf, size_t inlen, struct sc_object_id *id)
 		*octet++ = *p - (a * 40);
 		inlen--;
 	} else {
+#if 0
+		a = (*p & 0x7F);
+		inlen--;
+		if (!inlen) {
+			sc_init_oid(id);
+			return SC_ERROR_INVALID_ASN1_OBJECT;
+		}
+		do {
+			/* Limit the OID values to int size and do not overflow */
+			if (a > (INT_MAX>>7)) {
+				sc_init_oid(id);
+				return SC_ERROR_NOT_SUPPORTED;
+			}
+			p++;
+			a <<= 7;
+			a |= *p & 0x7F;
+			inlen--;
+		} while (inlen && *p & 0x80);
+		/* In this case, the first octet was 2 */
+		*octet++ = a - (2 * 40);
+#else
 		large_second_octet = 1;
+#endif
 	}
 
 	while (inlen) {

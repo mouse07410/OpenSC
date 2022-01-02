@@ -446,6 +446,7 @@ CK_RV sc_pkcs11_verify_data(const unsigned char *pubkey, unsigned int pubkey_len
 	CK_RV rv = CKR_GENERAL_ERROR;
 	EVP_PKEY *pkey = NULL;
 	const unsigned char *pubkey_tmp = NULL;
+	int sLen = -1;
 
 	if (mech->mechanism == CKM_GOSTR3410)
 	{
@@ -463,7 +464,7 @@ CK_RV sc_pkcs11_verify_data(const unsigned char *pubkey, unsigned int pubkey_len
 	 * PKCS#11 does not define CKA_VALUE for public keys, and different cards
 	 * return either the raw or spki versions as defined in PKCS#15
 	 * And we need to support more then just RSA.
-	 * We can use d2i_PUBKEY which works for SPKI and any key type. 
+	 * We can use d2i_PUBKEY which works for SPKI and any key type.
 	 */
 	pubkey_tmp = pubkey; /* pass in so pubkey pointer is not modified */
 
@@ -505,7 +506,7 @@ CK_RV sc_pkcs11_verify_data(const unsigned char *pubkey, unsigned int pubkey_len
 					res = -1;
 				}
 				free(signat_tmp);
-			} else 
+			} else
 				res = EVP_VerifyFinal(md_ctx, signat, signat_len, pkey);
 		} else {
 			res = -1;
@@ -738,9 +739,17 @@ CK_RV sc_pkcs11_verify_data(const unsigned char *pubkey, unsigned int pubkey_len
 				data_len = tmp_len;
 			}
 			rv = CKR_SIGNATURE_INVALID;
+
+ 			/* special mode - autodetect sLen from signature */
+ 			/* https://github.com/openssl/openssl/blob/master/crypto/rsa/rsa_pss.c */
+ 			if (((CK_ULONG) 1 ) << (sizeof(CK_ULONG) * CHAR_BIT -1) == param->sLen)
+ 				sLen = -2;
+ 			else
+ 				sLen = param->sLen;
+
 			if (data_len == (unsigned int) EVP_MD_size(pss_md)
 					&& RSA_verify_PKCS1_PSS_mgf1(rsa, data, pss_md, mgf_md,
-						rsa_out, param->sLen) == 1)
+						rsa_out, sLen) == 1)
 				rv = CKR_OK;
 			RSA_free(rsa);
 			free(rsa_out);
