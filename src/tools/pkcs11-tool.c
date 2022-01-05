@@ -2182,14 +2182,13 @@ parse_pss_params(CK_SESSION_HANDLE session, CK_OBJECT_HANDLE key,
 		hashlen = hash_length(pss_params->hashAlg);
 
 		if (opt_salt_len_given == 1) { /* salt size explicitly given */
-			unsigned long modlen = 0;
 			if (opt_salt_len < 0 && opt_salt_len != -1 && opt_salt_len != -2 && opt_salt_len != -3)
 				util_fatal("Salt length must be greater or equal "
 				    "to zero, or equal to -1 (meaning: use digest size) "
 				    "or to -2 (meaning: use maximum permissible size), "
 					"or to -3 (meaning: same as -2 for signing)") ;
 
-			modlen = (get_private_key_length(session, key) + 7) / 8;
+			unsigned long modlen = (get_private_key_length(session, key) + 7) / 8;
 			switch (opt_salt_len) {
 			case -1: /* salt size equals to digest size */
 				pss_params->sLen = hashlen;
@@ -2255,7 +2254,7 @@ static void sign_data(CK_SLOT_ID slot, CK_SESSION_HANDLE session,
 	rv = CKR_CANCEL;
 	if (r < (int) sizeof(in_buffer)) {
 		rv = p11->C_SignInit(session, &mech, key);
-		
+
 		if (rv != CKR_OK) {
 			fprintf(stderr, "%s:%d C_SignInit failed with %s\n", __FILE__, __LINE__, CKR2Str(rv));
 			p11_fatal("C_SignInit", rv);
@@ -2761,6 +2760,11 @@ static void encrypt_data(CK_SLOT_ID slot, CK_SESSION_HANDLE session,
 		out_len = sizeof(out_buffer);
 		rv = p11->C_Encrypt(session, in_buffer, in_len, out_buffer, &out_len);
 		if (rv == CKR_USER_NOT_LOGGED_IN) {
+			rv = p11->C_EncryptInit(session, &mech, key);
+			if (rv != CKR_OK) {
+				fprintf(stderr, "%s:%d C_EncryptInit failed with %s\n", __FILE__, __LINE__, CKR2Str(rv));
+				p11_fatal("C_EncryptInit", rv);
+			}
 			login(session, CKU_CONTEXT_SPECIFIC);
 			out_len = sizeof(out_buffer);
 			rv = p11->C_Encrypt(session, in_buffer, in_len, out_buffer, &out_len);
@@ -2774,12 +2778,19 @@ static void encrypt_data(CK_SLOT_ID slot, CK_SESSION_HANDLE session,
 			out_len = sizeof(out_buffer);
 			rv = p11->C_EncryptUpdate(session, in_buffer, in_len, out_buffer, &out_len);
 			if (rv == CKR_USER_NOT_LOGGED_IN) {
+				rv = p11->C_EncryptInit(session, &mech, key); /* Hope, only 1st time */
+				if (rv != CKR_OK) {
+					fprintf(stderr, "%s:%d C_EncryptInit failed with %s\n", __FILE__, __LINE__, CKR2Str(rv));
+					p11_fatal("C_EncryptInit", rv);
+				}
 				login(session, CKU_CONTEXT_SPECIFIC);
 				out_len = sizeof(out_buffer);
 				rv = p11->C_EncryptUpdate(session, in_buffer, in_len, out_buffer, &out_len);
 			}
-			if (rv != CKR_OK)
+			if (rv != CKR_OK) {
+				fprintf(stderr, "%s:%d C_EncryptUpdate failed with %s\n", __FILE__, __LINE__, CKR2Str(rv));
 				p11_fatal("C_EncryptUpdate", rv);
+			}
 			r = write(fd_out, out_buffer, out_len);
 			if (r != (int) out_len)
 				util_fatal("Cannot write to %s: %m", opt_output);
@@ -5794,11 +5805,14 @@ static int test_digest(CK_SESSION_HANDLE session)
 		errors++;
 	} else {
 		if (rv == CKR_USER_NOT_LOGGED_IN) {
-			login(session, CKU_CONTEXT_SPECIFIC);
+			rv = p11->C_DigestInit(session, &ck_mech);
+			if (rv != CKR_OK)
+				p11_fatal("C_DigestInit", rv);
+			login(session, CKU_CONTEXT_SPECIFIC); // FIXME?
 			rv = p11->C_Digest(session, data, sizeof(data), hash2, &hashLen2);
 		}
 		if (rv != CKR_OK) {
-			fprintf(stderr, "%s:%d C_Sign failed with %s\n", __FILE__, __LINE__, CKR2Str(rv));
+			fprintf(stderr, "%s:%d C_Digest failed with %s\n", __FILE__, __LINE__, CKR2Str(rv));
 			p11_fatal("C_Sign", rv);
 		}
 	}
@@ -5950,7 +5964,7 @@ static int sign_verify_openssl(CK_SESSION_HANDLE session,
 		sigLen1 = sizeof(sig1);
 		rv = p11->C_Sign(session, data, dataLen, sig1, &sigLen1);
 	}
-		
+
 	if (rv != CKR_OK) {
 		fprintf(stderr, "%s:%d C_Sign failed with %s\n", __FILE__, __LINE__, CKR2Str(rv));
 		p11_fatal("C_Sign", rv);
@@ -6185,6 +6199,10 @@ static int test_signature(CK_SESSION_HANDLE sess)
 		rv = p11->C_Sign(sess, data, dataLen, sig2, &sigLen2);
 		if (rv == CKR_USER_NOT_LOGGED_IN) {
 			rv = p11->C_SignInit(sess, &ck_mech, privKeyObject);
+			if (rv != CKR_OK) {
+				fprintf(stderr, "%s:%d C_SignInit failed with %s\n", __FILE__, __LINE__, CKR2Str(rv));
+				p11_fatal("C_SignInit", rv);
+			}
 			login(sess,CKU_CONTEXT_SPECIFIC);
 			sigLen2 = sizeof(sig2);
 			rv = p11->C_Sign(sess, data, dataLen, sig2, &sigLen2);
@@ -6235,9 +6253,13 @@ static int test_signature(CK_SESSION_HANDLE sess)
 	} else {
 		if (rv == CKR_USER_NOT_LOGGED_IN) {
 			rv = p11->C_SignInit(sess, &ck_mech, privKeyObject);
+			if (rv != CKR_OK) {
+				fprintf(stderr, "%s:%d C_SignInit failed with %s\n", __FILE__, __LINE__, CKR2Str(rv));
+				p11_fatal("C_Sign", rv);
+			}
 			rv = login(sess,CKU_CONTEXT_SPECIFIC);
 			rv = p11->C_Sign(sess, data, dataLen, sig2, &sigLen2);
-        	}
+        }
 		if (rv != CKR_OK) {
 			fprintf(stderr, "%s:%d C_Sign failed with %s\n", __FILE__, __LINE__, CKR2Str(rv));
 			p11_fatal("C_Sign", rv);
@@ -6390,11 +6412,12 @@ static int sign_verify(CK_SESSION_HANDLE session,
 		if (rv == CKR_MECHANISM_INVALID)
 			continue;
 		if (rv != CKR_OK) {
-			printf("  ERR: C_SignInit() returned %s (0x%0x)\n", CKR2Str(rv), (int) rv);
+			printf(" %s:%d ERR: C_SignInit() returned %s (0x%0x)\n",
+					__FILE__, __LINE__, CKR2Str(rv), (int) rv);
 			return ++errors;
 		}
 		printf("    %s: ", p11_mechanism_to_name(*mech_type));
-		
+
 		//if (getALWAYS_AUTHENTICATE(session, priv_key))
 		//	login(session,CKU_CONTEXT_SPECIFIC);
 
@@ -6407,7 +6430,8 @@ static int sign_verify(CK_SESSION_HANDLE session,
 			rv = p11->C_Sign(session, datas[j], data_lens[j], signat, &signat_len);
 		}
 		if (rv != CKR_OK) {
-			printf("  ERR: C_Sign() returned %s (0x%0x)\n", CKR2Str(rv), (int) rv);
+			printf(" %s:%d ERR: C_Sign() returned %s (0x%0x)\n",
+				__FILE__, __LINE__, CKR2Str(rv), (int) rv);
 			return ++errors;
 		}
 
@@ -7298,11 +7322,12 @@ static CK_SESSION_HANDLE test_kpgen_certwrite(CK_SLOT_ID slot, CK_SESSION_HANDLE
 
 	rv = p11->C_Sign(session, data, data_len, NULL, &sig_len);
 	if (rv == CKR_USER_NOT_LOGGED_IN) {
-		login(session,CKU_CONTEXT_SPECIFIC);
+		rv = p11->C_SignInit(session, &mech, priv_key);
 		if (rv != CKR_OK) {
-			rv = p11->C_Sign(session, data, data_len, NULL, &sig_len);
-			login(session,CKU_CONTEXT_SPECIFIC);
+			fprintf(stderr, "%s:%d C_SignInit failed with %s\n", __FILE__, __LINE__, CKR2Str(rv));
+			p11_fatal("C_SignInit", rv);
 		}
+		login(session,CKU_CONTEXT_SPECIFIC);
 		rv = p11->C_Sign(session, data, data_len, NULL, &sig_len);
 	}
 	if (rv != CKR_OK) {
@@ -7342,11 +7367,13 @@ static CK_SESSION_HANDLE test_kpgen_certwrite(CK_SLOT_ID slot, CK_SESSION_HANDLE
 
 	rv = p11->C_Sign(session, data, data_len, sig, &sig_len);
 	if (rv == CKR_USER_NOT_LOGGED_IN) {
+		rv = p11->C_SignInit(session, &mech, priv_key);
 		login(session,CKU_CONTEXT_SPECIFIC);
 		if (rv != CKR_OK) {
-			rv = p11->C_SignInit(session, &mech, priv_key);
-			login(session,CKU_CONTEXT_SPECIFIC);
+			fprintf(stderr, "%s:%d C_SignInit failed with %s\n", __FILE__, __LINE__, CKR2Str(rv));
+			p11_fatal("C_SignInit", rv);
 		}
+		login(session,CKU_CONTEXT_SPECIFIC);
 		rv = p11->C_Sign(session, data, data_len, sig, &sig_len);
 	}
 	if (rv != CKR_OK) {
@@ -7510,11 +7537,12 @@ static void test_ec(CK_SLOT_ID slot, CK_SESSION_HANDLE session)
 	}
 	rv = p11->C_Sign(session, data, data_len, NULL, &sig_len);
 	if (rv == CKR_USER_NOT_LOGGED_IN) {
-		rv = login(session,CKU_CONTEXT_SPECIFIC);
+		rv = p11->C_SignInit(session, &mech, priv_key);
 		if (rv != CKR_OK) {
-			rv = p11->C_SignInit(session, &mech, priv_key);
-			login(session,CKU_CONTEXT_SPECIFIC);
+			fprintf(stderr, "%s:%d C_SignInit failed with %s\n", __FILE__, __LINE__, CKR2Str(rv));
+			p11_fatal("C_SignInit", rv);
 		}
+		login(session,CKU_CONTEXT_SPECIFIC);
 		rv = p11->C_Sign(session, data, data_len, NULL, &sig_len);
 	}
 	if (rv != CKR_OK) {
@@ -7540,11 +7568,11 @@ static void test_ec(CK_SLOT_ID slot, CK_SESSION_HANDLE session)
 	}
 	rv = p11->C_Sign(session, data, data_len, sig, &sig_len);
 	if (rv == CKR_USER_NOT_LOGGED_IN) {
-		login(session,CKU_CONTEXT_SPECIFIC);
+		rv = p11->C_SignInit(session, &mech, priv_key);
 		if (rv != CKR_OK) {
-			rv = p11->C_SignInit(session, &mech, priv_key);
-			login(session,CKU_CONTEXT_SPECIFIC);
+			fprintf(stderr, "%s:%d C_SignInit failed with %s\n", __FILE__, __LINE__, CKR2Str(rv));				p11_fatal("C_SignInit", rv);
 		}
+		login(session,CKU_CONTEXT_SPECIFIC);
 		rv = p11->C_Sign(session, data, data_len, sig, &sig_len);
 	}
 	if (rv != CKR_OK) {

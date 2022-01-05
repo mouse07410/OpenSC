@@ -574,7 +574,7 @@ int sc_pkcs15_wrap(struct sc_pkcs15_card *p15card,
 int sc_pkcs15_compute_signature(struct sc_pkcs15_card *p15card,
 				const struct sc_pkcs15_object *obj,
 				unsigned long flags, const u8 *in, size_t inlen,
-				u8 *out, size_t outlen)
+				u8 *out, size_t outlen, void *pMech)
 {
 	sc_context_t *ctx = p15card->card->ctx;
 	int r;
@@ -652,7 +652,7 @@ int sc_pkcs15_compute_signature(struct sc_pkcs15_card *p15card,
 				LOG_TEST_GOTO_ERR(ctx, SC_ERROR_NOT_ALLOWED, "Buffer too small, needs recompile!");
 
 			/* XXX Assuming RSA key here */
-			r = sc_pkcs1_encode(ctx, flags, in, inlen, buf, &tmplen, prkey->modulus_length);
+			r = sc_pkcs1_encode(ctx, flags, in, inlen, buf, &tmplen, prkey->modulus_length, pMech);
 
 			/* no padding needed - already done */
 			flags &= ~SC_ALGORITHM_RSA_PADS;
@@ -718,7 +718,7 @@ int sc_pkcs15_compute_signature(struct sc_pkcs15_card *p15card,
 
 		/* XXX Assuming RSA key here */
 		r = sc_pkcs1_encode(ctx, pad_flags, tmp, inlen, tmp, &tmplen,
-		    prkey->modulus_length);
+		    prkey->modulus_length, pMech);
 		LOG_TEST_GOTO_ERR(ctx, r, "Unable to add padding");
 		inlen = tmplen;
 	}
