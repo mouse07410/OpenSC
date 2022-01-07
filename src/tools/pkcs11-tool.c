@@ -6853,7 +6853,7 @@ static int encrypt_decrypt(CK_SESSION_HANDLE session,
 		return 0;
 	}
 	if (mech_type == CKM_RSA_PKCS_OAEP) {
-#if defined(EVP_PKEY_CTX_set_rsa_oaep_md) && defined(EVP_PKEY_CTX_set_rsa_mgf1_md)
+#if (defined(EVP_PKEY_CTX_set_rsa_oaep_md) && defined(EVP_PKEY_CTX_set_rsa_mgf1_md)) || (OPENSSL_VERSION_NUMBER >= 0x30000000L)
 		const EVP_MD *md = NULL;
 		switch (hash_alg) {
 		case CKM_SHA_1:
