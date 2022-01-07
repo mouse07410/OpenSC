@@ -2593,7 +2593,7 @@ static void decrypt_data(CK_SLOT_ID slot, CK_SESSION_HANDLE session,
 		mech.pParameter = &oaep_params;
 		mech.ulParameterLen = sizeof(oaep_params);
 
-		fprintf(stderr, "OAEP parameters: hashAlg=%s, mgf=%s, source_type=%lu, source_ptr=%p, source_len=%lu\n",
+		fprintf(stderr, "OAEP parameters: hashAlg=%s, mgf=%s, label sourcer: type=%lu, ptr=%p, len=%lu\n",
 			p11_mechanism_to_name(oaep_params.hashAlg),
 			p11_mgf_to_name(oaep_params.mgf),
 			oaep_params.source,
@@ -6965,7 +6965,7 @@ static int encrypt_decrypt(CK_SESSION_HANDLE session,
 		mech.pParameter = &oaep_params;
 		mech.ulParameterLen = sizeof(oaep_params);
 
-		fprintf(stderr, "OAEP parameters: hashAlg=%s, mgf=%s, source_type=%lu, source_ptr=%p, source_len=%lu\n",
+		fprintf(stderr, "OAEP parameters: hashAlg=%s, mgf=%s, label source: type=%lu, ptr=%p, len=%lu\n",
 			p11_mechanism_to_name(oaep_params.hashAlg),
 			p11_mgf_to_name(oaep_params.mgf),
 			oaep_params.source,
