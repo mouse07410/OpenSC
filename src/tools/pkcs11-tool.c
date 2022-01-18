@@ -49,6 +49,11 @@
 #include <openssl/asn1t.h>
 #include <openssl/rsa.h>
 #include <openssl/pem.h>
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+# include <openssl/core_names.h>
+# include <openssl/param_build.h>
+#include <openssl/provider.h>
+#endif
 #if !defined(OPENSSL_NO_EC) && !defined(OPENSSL_NO_ECDSA)
 #include <openssl/ec.h>
 #include <openssl/ecdsa.h>
@@ -66,6 +71,10 @@
 #include "common/libpkcs11.h"
 #include "util.h"
 #include "libopensc/sc-ossl-compat.h"
+
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+	static OSSL_PROVIDER *legacy_provider = NULL;
+#endif
 
 #ifdef _WIN32
 #ifndef STDOUT_FILENO
@@ -3687,11 +3696,11 @@ do_read_key(unsigned char *data, size_t data_len, int private, EVP_PKEY **key)
 static int
 parse_rsa_pkey(EVP_PKEY *pkey, int private, struct rsakey_info *rsa)
 {
+#if OPENSSL_VERSION_NUMBER < 0x30000000L
 	RSA *r;
 	const BIGNUM *r_n, *r_e, *r_d;
 	const BIGNUM *r_p, *r_q;
 	const BIGNUM *r_dmp1, *r_dmq1, *r_iqmp;
-
 	r = EVP_PKEY_get1_RSA(pkey);
 	if (!r) {
 		if (private)
@@ -3701,25 +3710,59 @@ parse_rsa_pkey(EVP_PKEY *pkey, int private, struct rsakey_info *rsa)
 	}
 
 	RSA_get0_key(r, &r_n, &r_e, NULL);
+#else
+	BIGNUM *r_n = NULL, *r_e = NULL, *r_d = NULL;
+	BIGNUM *r_p = NULL, *r_q = NULL;
+	BIGNUM *r_dmp1 = NULL, *r_dmq1 = NULL, *r_iqmp = NULL;
+	if (EVP_PKEY_get_bn_param(pkey, OSSL_PKEY_PARAM_RSA_N, &r_n) != 1 ||
+		EVP_PKEY_get_bn_param(pkey, OSSL_PKEY_PARAM_RSA_E, &r_e) != 1) {
+		if (private)
+			util_fatal("OpenSSL error during RSA private key parsing");
+		else
+			util_fatal("OpenSSL error during RSA public key parsing");
+	 }
+#endif
 	RSA_GET_BN(rsa, modulus, r_n);
 	RSA_GET_BN(rsa, public_exponent, r_e);
 
 	if (private) {
+#if OPENSSL_VERSION_NUMBER < 0x30000000L
 		RSA_get0_key(r, NULL, NULL, &r_d);
+		RSA_get0_factors(r, &r_p, &r_q);
+		RSA_get0_crt_params(r, &r_dmp1, &r_dmq1, &r_iqmp);
+#else
+		if (EVP_PKEY_get_bn_param(pkey, OSSL_PKEY_PARAM_RSA_FACTOR1, &r_d) != 1 ||
+			EVP_PKEY_get_bn_param(pkey, OSSL_PKEY_PARAM_RSA_FACTOR1, &r_p) != 1 ||
+			EVP_PKEY_get_bn_param(pkey, OSSL_PKEY_PARAM_RSA_FACTOR2, &r_q) != 1 ||
+			EVP_PKEY_get_bn_param(pkey, OSSL_PKEY_PARAM_RSA_EXPONENT1, &r_dmp1) != 1 ||
+			EVP_PKEY_get_bn_param(pkey, OSSL_PKEY_PARAM_RSA_EXPONENT2, &r_dmq1) != 1 ||
+			EVP_PKEY_get_bn_param(pkey, OSSL_PKEY_PARAM_RSA_EXPONENT3, &r_iqmp) != 1) {
+			util_fatal("OpenSSL error during RSA private key parsing");
+		}
+#endif
 		RSA_GET_BN(rsa, private_exponent, r_d);
 
-		RSA_get0_factors(r, &r_p, &r_q);
 		RSA_GET_BN(rsa, prime_1, r_p);
 		RSA_GET_BN(rsa, prime_2, r_q);
 
-		RSA_get0_crt_params(r, &r_dmp1, &r_dmq1, &r_iqmp);
 		RSA_GET_BN(rsa, exponent_1, r_dmp1);
 		RSA_GET_BN(rsa, exponent_2, r_dmq1);
 		RSA_GET_BN(rsa, coefficient, r_iqmp);
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+		BN_clear_free(r_d);
+		BN_clear_free(r_p);
+		BN_clear_free(r_q);
+		BN_clear_free(r_dmp1);
+		BN_clear_free(r_dmq1);
+		BN_clear_free(r_iqmp);
+#endif
 	}
-
+#if OPENSSL_VERSION_NUMBER < 0x30000000L
 	RSA_free(r);
-
+#else
+	BN_free(r_n);
+	BN_free(r_e);
+#endif
 	return 0;
 }
 
@@ -3727,17 +3770,30 @@ parse_rsa_pkey(EVP_PKEY *pkey, int private, struct rsakey_info *rsa)
 static int
 parse_gost_pkey(EVP_PKEY *pkey, int private, struct gostkey_info *gost)
 {
-	EC_KEY *src = EVP_PKEY_get0(pkey);
 	unsigned char *pder;
-	const BIGNUM *bignum;
 	BIGNUM *X, *Y;
-	const EC_POINT *point;
 	int nid, rv;
-
+#if OPENSSL_VERSION_NUMBER < 0x30000000L
+	const BIGNUM *bignum;
+	const EC_GROUP *group;
+	const EC_POINT *point;
+	EC_KEY *src = EVP_PKEY_get0(pkey);
 	if (!src)
 		return -1;
+	group = EC_KEY_get0_group(src);
+	nid = EC_GROUP_get_curve_name(group);
+#else
+	unsigned char *pubkey = NULL;
+	size_t pubkey_len = 0;
+	BIGNUM *bignum = NULL;
+	EC_GROUP *group = NULL;
+	EC_POINT *point = NULL;
+	char name[256]; size_t len = 0;
+	if (EVP_PKEY_get_group_name(pkey, name, sizeof(name), &len) != 1)
+		return -1;
 
-	nid = EC_GROUP_get_curve_name(EC_KEY_get0_group(EVP_PKEY_get0(pkey)));
+	nid = OBJ_txt2nid(name);
+#endif
 	rv = i2d_ASN1_OBJECT(OBJ_nid2obj(nid), NULL);
 	if (rv < 0)
 		return -1;
@@ -3751,22 +3807,45 @@ parse_gost_pkey(EVP_PKEY *pkey, int private, struct gostkey_info *gost)
 	gost->param_oid.len = rv;
 
 	if (private) {
-		bignum = EC_KEY_get0_private_key(EVP_PKEY_get0(pkey));
-
+#if OPENSSL_VERSION_NUMBER < 0x30000000L
+		bignum = EC_KEY_get0_private_key(src);
+#else
+		if (EVP_PKEY_get_bn_param(pkey, OSSL_PKEY_PARAM_PRIV_KEY, &bignum) != 1)
+			return -1;
+#endif
 		gost->private.len = BN_num_bytes(bignum);
 		gost->private.value = malloc(gost->private.len);
-		if (!gost->private.value)
+		if (!gost->private.value) {
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+			BN_free(bignum);
+#endif
 			return -1;
+		}
 		BN_bn2bin(bignum, gost->private.value);
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+		BN_free(bignum);
+#endif
 	}
 	else {
 		X = BN_new();
 		Y = BN_new();
+#if OPENSSL_VERSION_NUMBER < 0x30000000L
 		point = EC_KEY_get0_public_key(src);
+#else
+		group = EC_GROUP_new_by_curve_name(nid);
+		EVP_PKEY_get_octet_string_param(pkey, OSSL_PKEY_PARAM_PUB_KEY, NULL, 0, &pubkey_len);
+		if (!(pubkey = malloc(pubkey_len)) ||
+			EVP_PKEY_get_octet_string_param(pkey, OSSL_PKEY_PARAM_PUB_KEY, pubkey, pubkey_len, NULL) != 1 ||
+			!(point = EC_POINT_new(group)) ||
+			EC_POINT_oct2point(group, point, pubkey, pubkey_len, NULL) != 1) {
+			EC_GROUP_free(group);
+			EC_POINT_free(point);
+			return -1;
+		}
+#endif
 		rv = -1;
-		if (X && Y && point && EC_KEY_get0_group(src))
-			rv = EC_POINT_get_affine_coordinates_GFp(EC_KEY_get0_group(src),
-					point, X, Y, NULL);
+		if (X && Y && point && group)
+			rv = EC_POINT_get_affine_coordinates(group, point, X, Y, NULL);
 		if (rv == 1) {
 			gost->public.len = BN_num_bytes(X) + BN_num_bytes(Y);
 			gost->public.value = malloc(gost->public.len);
@@ -3780,44 +3859,67 @@ parse_gost_pkey(EVP_PKEY *pkey, int private, struct gostkey_info *gost)
 		}
 		BN_free(X);
 		BN_free(Y);
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+		EC_GROUP_free(group);
+		EC_POINT_free(point);
+#endif
 		if (rv != 1)
 			return -1;
 	}
-
 	return 0;
 }
 
 static int
 parse_ec_pkey(EVP_PKEY *pkey, int private, struct gostkey_info *gost)
 {
+#if OPENSSL_VERSION_NUMBER < 0x30000000L
 	const EC_KEY *src = EVP_PKEY_get0_EC_KEY(pkey);
 	const BIGNUM *bignum;
-
 	if (!src)
 		return -1;
-
 	gost->param_oid.len = i2d_ECParameters((EC_KEY *)src, &gost->param_oid.value);
-	if (gost->param_oid.len <= 0)
+#else
+	BIGNUM *bignum = NULL;
+	gost->param_oid.len = i2d_KeyParams(pkey, &gost->param_oid.value);
+#endif
+	if (gost->param_oid.len <= 0) {
 		return -1;
+	}
 
 	if (private) {
+#if OPENSSL_VERSION_NUMBER < 0x30000000L
 		bignum = EC_KEY_get0_private_key(src);
-
+#else
+		if (EVP_PKEY_get_bn_param(pkey, OSSL_PKEY_PARAM_PRIV_KEY, &bignum) != 1) {
+			return -1;
+		}
+#endif
 		gost->private.len = BN_num_bytes(bignum);
 		gost->private.value = malloc(gost->private.len);
-		if (!gost->private.value)
+		if (!gost->private.value) {
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+			BN_free(bignum);
+#endif
 			return -1;
+		}
 		BN_bn2bin(bignum, gost->private.value);
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+		BN_free(bignum);
+#endif
 	}
 	else {
 		unsigned char buf[512], *point;
-		int point_len, header_len;
+		size_t point_len, header_len;
 		const int MAX_HEADER_LEN = 3;
+#if OPENSSL_VERSION_NUMBER < 0x30000000L
 		const EC_GROUP *ecgroup = EC_KEY_get0_group(src);
 		const EC_POINT *ecpoint = EC_KEY_get0_public_key(src);
 		if (!ecgroup || !ecpoint)
 			return -1;
 		point_len = EC_POINT_point2oct(ecgroup, ecpoint, POINT_CONVERSION_UNCOMPRESSED, buf, sizeof(buf), NULL);
+#else
+		EVP_PKEY_get_octet_string_param(pkey, OSSL_PKEY_PARAM_ENCODED_PUBLIC_KEY, buf, sizeof(buf), &point_len);
+#endif
 		gost->public.value = malloc(MAX_HEADER_LEN+point_len);
 		if (!gost->public.value)
 			return -1;
@@ -4624,9 +4726,6 @@ derive_ec_key(CK_SESSION_HANDLE session, CK_OBJECT_HANDLE key, CK_MECHANISM_TYPE
 	CK_ECDH1_DERIVE_PARAMS ecdh_parms;
 	CK_RV rv;
 	BIO *bio_in = NULL;
-	EC_KEY  *eckey = NULL;
-	const EC_GROUP *ecgroup = NULL;
-	const EC_POINT *ecpoint = NULL;
 	unsigned char *buf = NULL;
 	size_t buf_size = 0;
 	CK_ULONG key_len = 0;
@@ -4634,6 +4733,16 @@ derive_ec_key(CK_SESSION_HANDLE session, CK_OBJECT_HANDLE key, CK_MECHANISM_TYPE
 	unsigned char * der = NULL;
 	unsigned char * derp = NULL;
 	size_t  der_size = 0;
+	EVP_PKEY *pkey = NULL;
+#if OPENSSL_VERSION_NUMBER < 0x30000000L
+	EC_KEY *eckey = NULL;
+	const EC_GROUP *ecgroup = NULL;
+	const EC_POINT *ecpoint = NULL;
+#else
+	EC_GROUP *ecgroup = NULL;
+	char name[256]; size_t len = 0;
+	int nid = 0;
+#endif
 
 	printf("Using derive algorithm 0x%8.8lx %s\n", opt_mechanism, p11_mechanism_to_name(mech_mech));
 	memset(&mech, 0, sizeof(mech));
@@ -4644,15 +4753,24 @@ derive_ec_key(CK_SESSION_HANDLE session, CK_OBJECT_HANDLE key, CK_MECHANISM_TYPE
 	if (BIO_read_filename(bio_in, opt_input) <= 0)
 		util_fatal("Cannot open %s: %m", opt_input);
 
-	eckey = d2i_EC_PUBKEY_bio(bio_in, NULL);
-	if (!eckey)
+	pkey = d2i_PUBKEY_bio(bio_in, NULL);
+
+	if (!pkey)
 		util_fatal("Cannot read EC key from %s", opt_input);
 
+#if OPENSSL_VERSION_NUMBER < 0x30000000L
+	eckey = EVP_PKEY_get0_EC_KEY(pkey);
 	ecpoint = EC_KEY_get0_public_key(eckey);
 	ecgroup = EC_KEY_get0_group(eckey);
 
 	if (!ecpoint || !ecgroup)
 		util_fatal("Failed to parse other EC key from %s", opt_input);
+#else
+	if (EVP_PKEY_get_group_name(pkey, name, sizeof(name), &len) != 1
+	 || (nid = OBJ_txt2nid(name)) == NID_undef
+	 || (ecgroup = EC_GROUP_new_by_curve_name(nid)) == NULL)
+		util_fatal("Failed to parse other EC key from %s", opt_input);
+#endif
 
 	/* both eckeys must be same curve */
 	key_len = (EC_GROUP_get_degree(ecgroup) + 7) / 8;
@@ -4666,11 +4784,23 @@ derive_ec_key(CK_SESSION_HANDLE session, CK_OBJECT_HANDLE key, CK_MECHANISM_TYPE
 		n_attrs++;
 	}
 
+#if OPENSSL_VERSION_NUMBER < 0x30000000L
 	buf_size = EC_POINT_point2oct(ecgroup, ecpoint, POINT_CONVERSION_UNCOMPRESSED, NULL,	    0, NULL);
 	buf = (unsigned char *)malloc(buf_size);
 	if (buf == NULL)
 	    util_fatal("malloc() failure\n");
 	buf_size = EC_POINT_point2oct(ecgroup, ecpoint, POINT_CONVERSION_UNCOMPRESSED, buf, buf_size, NULL);
+#else
+	EC_GROUP_free(ecgroup);
+	EVP_PKEY_get_octet_string_param(pkey, OSSL_PKEY_PARAM_ENCODED_PUBLIC_KEY, NULL, 0, &buf_size);
+	if ((buf = (unsigned char *)malloc(buf_size)) == NULL)
+	    util_fatal("malloc() failure\n");
+
+	if (EVP_PKEY_get_octet_string_param(pkey, OSSL_PKEY_PARAM_ENCODED_PUBLIC_KEY, buf, buf_size, NULL) != 1) {
+		free(buf);
+		util_fatal("Failed to parse other EC key from %s", opt_input);
+	}
+#endif
 
 	if (opt_derive_pass_der) {
 		octet = ASN1_OCTET_STRING_new();
@@ -4685,7 +4815,7 @@ derive_ec_key(CK_SESSION_HANDLE session, CK_OBJECT_HANDLE key, CK_MECHANISM_TYPE
 	}
 
 	BIO_free(bio_in);
-	EC_KEY_free(eckey);
+	EVP_PKEY_free(pkey);
 
 	memset(&ecdh_parms, 0, sizeof(ecdh_parms));
 	ecdh_parms.kdf = CKD_NULL;
@@ -5377,21 +5507,26 @@ static int read_object(CK_SESSION_HANDLE session)
 	if (clazz == CKO_PUBLIC_KEY) {
 #ifdef ENABLE_OPENSSL
 		long derlen;
+		EVP_PKEY *pkey = NULL;
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+		EVP_PKEY_CTX *ctx = NULL;
+		OSSL_PARAM *params = NULL;
+		OSSL_PARAM_BLD *bld = NULL;
+#endif
+
 		BIO *pout = BIO_new(BIO_s_mem());
 		if (!pout)
 			util_fatal("out of memory");
 
 		type = getKEY_TYPE(session, obj);
 		if (type == CKK_RSA) {
-			RSA *rsa;
 			BIGNUM *rsa_n = NULL;
 			BIGNUM *rsa_e = NULL;
-
-
-			rsa = RSA_new();
-			if (rsa == NULL)
+#if OPENSSL_VERSION_NUMBER < 0x30000000L
+			RSA *rsa = RSA_new();
+			if (!rsa)
 				util_fatal("out of memory");
-
+#endif
 			if ((value = getMODULUS(session, obj, &len))) {
 				if (!(rsa_n = BN_bin2bn(value, len, NULL)))
 					util_fatal("cannot parse MODULUS");
@@ -5405,29 +5540,71 @@ static int read_object(CK_SESSION_HANDLE session)
 				free(value);
 			} else
 				util_fatal("cannot obtain PUBLIC_EXPONENT");
-
+#if OPENSSL_VERSION_NUMBER < 0x30000000L
 			if (RSA_set0_key(rsa, rsa_n, rsa_e, NULL) != 1)
 				util_fatal("cannot set RSA values");
 
 			if (!i2d_RSA_PUBKEY_bio(pout, rsa))
 				util_fatal("cannot convert RSA public key to DER");
 			RSA_free(rsa);
+#else
+			ctx = EVP_PKEY_CTX_new_from_name(NULL, "RSA", NULL);
+			if (!ctx)
+				util_fatal("out of memory");
+			if (!(bld = OSSL_PARAM_BLD_new()) ||
+				OSSL_PARAM_BLD_push_BN(bld, "n", rsa_n) != 1 ||
+				OSSL_PARAM_BLD_push_BN(bld, "e", rsa_e) != 1 ||
+				!(params = OSSL_PARAM_BLD_to_param(bld))) {
+				OSSL_PARAM_BLD_free(bld);
+				EVP_PKEY_CTX_free(ctx);
+				OSSL_PARAM_free(params);
+			 	util_fatal("cannot set RSA values");
+			}
+			OSSL_PARAM_BLD_free(bld);
+			if (EVP_PKEY_fromdata_init(ctx) != 1 ||
+				EVP_PKEY_fromdata(ctx, &pkey, EVP_PKEY_PUBLIC_KEY, params) != 1) {
+				EVP_PKEY_CTX_free(ctx);
+				OSSL_PARAM_free(params);
+			 	util_fatal("cannot set RSA values");
+			}
+			OSSL_PARAM_free(params);
+			if (i2d_PUBKEY_bio(pout, pkey) != 1) {
+				EVP_PKEY_CTX_free(ctx);
+				util_fatal("cannot convert RSA public key to DER");
+			}
+			EVP_PKEY_free(pkey);
+			EVP_PKEY_CTX_free(ctx);
+#endif
 #if !defined(OPENSSL_NO_EC)
 		} else if (type == CKK_EC) {
-			EC_KEY *ec;
 			CK_BYTE *params;
 			const unsigned char *a;
+			size_t a_len = 0;
 			ASN1_OCTET_STRING *os;
-			EC_KEY *success = NULL;
+			int success = 0;
+			EC_POINT *point = NULL;
 
-			ec = EC_KEY_new();
-			if (ec == NULL)
-				util_fatal("out of memory");
+#if OPENSSL_VERSION_NUMBER < 0x30000000L
+			const EC_GROUP *group = NULL;
+			EC_KEY *ec = EC_KEY_new();
+			pkey = EVP_PKEY_new();
+#else
+			EC_GROUP *group = NULL;
+			char group_name[80];
+			OSSL_PARAM *old = NULL, *new = NULL, *p = NULL;
+			OSSL_PARAM_BLD *bld = NULL;
+#endif
 
 			if ((params = getEC_PARAMS(session, obj, &len))) {
 				const unsigned char *a = params;
+#if OPENSSL_VERSION_NUMBER < 0x30000000L
 				if (!d2i_ECParameters(&ec, &a, (long)len))
 					util_fatal("cannot parse EC_PARAMS");
+				EVP_PKEY_assign_EC_KEY(pkey, ec);
+#else
+				if (!d2i_KeyParams(EVP_PKEY_EC, &pkey, &a, len))
+					util_fatal("cannot parse EC_PARAMS");
+#endif
 				free(params);
 			} else
 				util_fatal("cannot obtain EC_PARAMS");
@@ -5436,21 +5613,73 @@ static int read_object(CK_SESSION_HANDLE session)
 			/* PKCS#11-compliant modules should return ASN1_OCTET_STRING */
 			a = value;
 			os = d2i_ASN1_OCTET_STRING(NULL, &a, (long)len);
+#if OPENSSL_VERSION_NUMBER < 0x30000000L
+			group = EC_KEY_get0_group(EVP_PKEY_get0_EC_KEY(pkey));
+#else
+			if (EVP_PKEY_get_group_name(pkey, group_name, sizeof(group_name), NULL) != 1)
+				util_fatal("cannot obtain EC_PARAMS");
+			group = EC_GROUP_new_by_curve_name(OBJ_txt2nid(group_name));
+#endif
+			point = EC_POINT_new(group);
 			if (os) {
 				a = os->data;
-				success = o2i_ECPublicKey(&ec, &a, os->length);
-				ASN1_STRING_free(os);
+				a_len = os->length;
+				success = EC_POINT_oct2point(group, point, a, a_len, NULL);
 			}
 			if (!success) { /* Workaround for broken PKCS#11 modules */
+				ASN1_STRING_free(os);
 				a = value;
-				success = o2i_ECPublicKey(&ec, &a, len);
+				a_len = len;
+				if (!EC_POINT_oct2point(group, point, a, len, NULL)) {
+					free(value);
+					util_fatal("cannot obtain and parse EC_POINT");
+				}
 			}
+
+#if OPENSSL_VERSION_NUMBER < 0x30000000L
+			if (success)
+				ASN1_STRING_free(os);
 			free(value);
-			if (!success)
-				util_fatal("cannot obtain and parse EC_POINT");
-			if (!i2d_EC_PUBKEY_bio(pout, ec))
+			EC_KEY_set_public_key(EVP_PKEY_get0_EC_KEY(pkey), point);
+#else
+			if (!(bld = OSSL_PARAM_BLD_new()) ||
+				EVP_PKEY_todata(pkey, EVP_PKEY_PUBLIC_KEY, &old) != 1 ||
+				OSSL_PARAM_BLD_push_octet_string(bld, "pub", a, a_len) != 1 ||
+				!(new = OSSL_PARAM_BLD_to_param(bld)) ||
+				!(p = OSSL_PARAM_merge(old, new))) {
+					OSSL_PARAM_BLD_free(bld);
+					OSSL_PARAM_free(old);
+					OSSL_PARAM_free(new);
+					OSSL_PARAM_free(p);
+					if (success)
+						ASN1_STRING_free(os);
+					free(value);
+					util_fatal("cannot set OSSL_PARAM");
+			}
+			OSSL_PARAM_BLD_free(bld);
+			OSSL_PARAM_free(old);
+			OSSL_PARAM_free(new);
+			if (success)
+				ASN1_STRING_free(os);
+			free(value);
+
+			if (!(ctx = EVP_PKEY_CTX_new_from_name(NULL, "EC", NULL)) ||
+				EVP_PKEY_fromdata_init(ctx) != 1) {
+					OSSL_PARAM_free(p);
+					EVP_PKEY_CTX_free(ctx);
+					util_fatal("cannot set CTX");
+			}
+			EVP_PKEY_free(pkey);
+			pkey = NULL;
+			if (EVP_PKEY_fromdata(ctx, &pkey, EVP_PKEY_PUBLIC_KEY, p) != 1) {
+					OSSL_PARAM_free(p);
+					EVP_PKEY_CTX_free(ctx);
+					util_fatal("cannot create EVP_PKEY");
+			}
+
+#endif
+			if (!i2d_PUBKEY_bio(pout, pkey))
 				util_fatal("cannot convert EC public key to DER");
-			EC_KEY_free(ec);
 #endif
 #ifdef EVP_PKEY_ED25519
 		} else if (type == CKK_EC_EDWARDS) {
@@ -5644,7 +5873,6 @@ static int test_digest(CK_SESSION_HANDLE session)
 	CK_ULONG        hashLen1, hashLen2;
 	CK_MECHANISM_TYPE firstMechType;
 	CK_SESSION_INFO sessionInfo;
-
 	CK_MECHANISM_TYPE mechTypes[] = {
 		CKM_MD5,
 		CKM_SHA_1,
@@ -5750,6 +5978,14 @@ static int test_digest(CK_SESSION_HANDLE session)
 #else
 	i = 0;
 #endif
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+		if (!legacy_provider) {
+			if (!(legacy_provider = OSSL_PROVIDER_try_load(NULL, "legacy", 1))) {
+				printf("Failed to load legacy provider\n");
+				return errors;
+			}
+		}
+#endif
 	for (; mechTypes[i] != 0xffffff; i++) {
 		ck_mech.mechanism = mechTypes[i];
 
@@ -5828,9 +6064,15 @@ static EVP_PKEY *get_public_key(CK_SESSION_HANDLE session, CK_OBJECT_HANDLE priv
 	unsigned char  *pubkey;
 	const unsigned char *pubkey_c;
 	CK_ULONG        pubkeyLen;
-	EVP_PKEY       *pkey;
-	RSA            *rsa;
+	EVP_PKEY       *pkey = NULL;
 	BIGNUM *rsa_n, *rsa_e;
+#if OPENSSL_VERSION_NUMBER < 0x30000000L
+	RSA				*rsa;
+#else
+	EVP_PKEY_CTX 	*ctx = NULL;
+	OSSL_PARAM_BLD	*bld = NULL;
+	OSSL_PARAM		*params = NULL;
+#endif
 
 	id = NULL;
 	id = getID(session, privKeyObject, &idLen);
@@ -5847,17 +6089,22 @@ static EVP_PKEY *get_public_key(CK_SESSION_HANDLE session, CK_OBJECT_HANDLE priv
 	free(id);
 
 	switch(getKEY_TYPE(session, pubkeyObject)) {
-		case CKK_RSA:
-			pkey = EVP_PKEY_new();
+		case CKK_RSA:;
+#if OPENSSL_VERSION_NUMBER < 0x30000000L
 			rsa = RSA_new();
-			mod = getMODULUS(session, pubkeyObject, &modLen);
-			exp = getPUBLIC_EXPONENT(session, pubkeyObject, &expLen);
-			if ( !pkey || !rsa || !mod || !exp) {
-				fprintf(stderr, "public key not extractable\n");
+			pkey = EVP_PKEY_new();
+			if (!rsa || !pkey) {
+			fprintf(stderr, "public key not extractable\n");
 				if (pkey)
 					EVP_PKEY_free(pkey);
 				if (rsa)
 					RSA_free(rsa);
+			}
+#endif
+			mod = getMODULUS(session, pubkeyObject, &modLen);
+			exp = getPUBLIC_EXPONENT(session, pubkeyObject, &expLen);
+			if (!mod || !exp) {
+				fprintf(stderr, "public key not extractable\n");
 				if (mod)
 					free(mod);
 				if (exp)
@@ -5866,12 +6113,33 @@ static EVP_PKEY *get_public_key(CK_SESSION_HANDLE session, CK_OBJECT_HANDLE priv
 			}
 			rsa_n = BN_bin2bn(mod, modLen, NULL);
 			rsa_e =	BN_bin2bn(exp, expLen, NULL);
-			if (RSA_set0_key(rsa, rsa_n, rsa_e, NULL) != 1)
-			    return NULL;
-
-			EVP_PKEY_assign_RSA(pkey, rsa);
 			free(mod);
 			free(exp);
+#if OPENSSL_VERSION_NUMBER < 0x30000000L
+			if (RSA_set0_key(rsa, rsa_n, rsa_e, NULL) != 1)
+			    return NULL;
+			EVP_PKEY_assign_RSA(pkey, rsa);
+#else
+			if (!(bld = OSSL_PARAM_BLD_new()) ||
+				OSSL_PARAM_BLD_push_BN(bld, "n", rsa_n) != 1 ||
+				OSSL_PARAM_BLD_push_BN(bld, "e", rsa_e) != 1 ||
+				!(params = OSSL_PARAM_BLD_to_param(bld))) {
+				fprintf(stderr, "public key not extractable\n");
+				OSSL_PARAM_BLD_free(bld);
+				OSSL_PARAM_free(params);
+				return NULL;
+			}
+			OSSL_PARAM_BLD_free(bld);
+			
+			if (!(ctx = EVP_PKEY_CTX_new_from_name(NULL, "RSA", NULL)) ||
+				EVP_PKEY_fromdata_init(ctx) != 1 ||
+				EVP_PKEY_fromdata(ctx, &pkey, EVP_PKEY_PUBLIC_KEY, params) != 1) {
+				fprintf(stderr, "public key not extractable\n");
+				OSSL_PARAM_free(params);
+				return NULL;
+			}
+			OSSL_PARAM_free(params);
+#endif
 			return pkey;
 		case CKK_DSA:
 		case CKK_GOSTR3410:
@@ -5930,6 +6198,14 @@ static int sign_verify_openssl(CK_SESSION_HANDLE session,
 		EVP_sha384(),
 		EVP_sha512()
 	};
+#endif
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L && !defined(OPENSSL_NO_RIPEMD)
+	if (!legacy_provider) {
+		if (!(legacy_provider = OSSL_PROVIDER_try_load(NULL, "legacy", 1))) {
+			printf("Failed to load legacy provider");
+			return errors;
+		}
+	}
 #endif
 
 	rv = p11->C_SignInit(session, ck_mech, privKeyObject);
@@ -6853,7 +7129,7 @@ static int encrypt_decrypt(CK_SESSION_HANDLE session,
 		return 0;
 	}
 	if (mech_type == CKM_RSA_PKCS_OAEP) {
-#if (defined(EVP_PKEY_CTX_set_rsa_oaep_md) && defined(EVP_PKEY_CTX_set_rsa_mgf1_md)) || (OPENSSL_VERSION_NUMBER >= 0x30000000L)
+#if (defined(EVP_PKEY_CTX_set_rsa_oaep_md) && defined(EVP_PKEY_CTX_set_rsa_mgf1_md)) || (OPENSSL_VERSION_NUMBER >= 0x10002000L)
 		const EVP_MD *md = NULL;
 		switch (hash_alg) {
 		case CKM_SHA_1:

@@ -48,13 +48,25 @@ extern "C" {
  * But for compatibility with LibreSSL and older OpenSSL. OpenSC uses the older functions
  */
 #if OPENSSL_VERSION_NUMBER >= 0x10100000L  && !defined(LIBRESSL_VERSION_NUMBER)
-# if defined(OPENSSL_API_COMPAT) && OPENSSL_API_COMPAT >= 0x10100000L
+# if !(defined(OPENSSL_API_COMPAT) || OPENSSL_API_COMPAT >= 0x10100000L)
+# ifndef ERR_load_crypto_strings
 #define ERR_load_crypto_strings(x) while (0) continue
+# endif
+# ifndef SSL_load_error_strings
 #define SSL_load_error_strings(x)  while (0) continue
+# endif
+# ifndef ERR_free_strings
 #define ERR_free_strings(x)        while (0) continue
+# endif
+# ifndef ENGINE_load_dynamic
 #define ENGINE_load_dynamic(x)     while (0) continue
+# endif
+# ifndef EVP_CIPHER_CTX_cleanup
 #define EVP_CIPHER_CTX_cleanup(x) EVP_CIPHER_CTX_reset(x)
+# endif
+# ifndef EVP_CIPHER_CTX_init
 #define EVP_CIPHER_CTX_init(x) EVP_CIPHER_CTX_reset(x)
+# endif
 # endif
 #endif
 
@@ -96,11 +108,31 @@ extern "C" {
 #endif
 
 #if OPENSSL_VERSION_NUMBER >= 0x30000000L
-#include <openssl/provider.h>
 #define EC_POINT_get_affine_coordinates_GFp     EC_POINT_get_affine_coordinates
 #define EC_POINT_set_affine_coordinates_GFp     EC_POINT_set_affine_coordinates
-#define EVP_PKEY_CTX_set_rsa_keygen_pubexp      EVP_PKEY_CTX_set1_rsa_keygen_pubexp
-#define FIPS_mode()                             OSSL_PROVIDER_available(NULL, "fips")
+
+# ifndef FIPS_mode
+#define FIPS_mode()                             EVP_default_properties_is_fips_enabled(NULL)
+# endif
+
+/* As defined in openssl/include/openssl/evp.h */
+# ifndef EVP_PK_RSA
+#  define EVP_PK_RSA      0x0001
+#  define EVP_PK_DSA      0x0002
+#  define EVP_PK_DH       0x0004
+#  define EVP_PK_EC       0x0008
+#  define EVP_PKT_SIGN    0x0010
+#  define EVP_PKT_ENC     0x0020
+#  define EVP_PKT_EXCH    0x0040
+#  define EVP_PKS_RSA     0x0100
+#  define EVP_PKS_DSA     0x0200
+#  define EVP_PKS_EC      0x0400
+# endif
+#endif
+
+#if OPENSSL_VERSION_NUMBER < 0x30000000L
+#define EVP_PKEY_eq                             EVP_PKEY_cmp
+#define EVP_PKEY_CTX_set1_rsa_keygen_pubexp     EVP_PKEY_CTX_set_rsa_keygen_pubexp
 #endif
 
 /*
