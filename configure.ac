@@ -19,7 +19,7 @@ define([VS_FF_PRODUCT_NAME], [OpenSC smartcard framework])
 define([VS_FF_PRODUCT_UPDATES], [https://github.com/mouse07410/OpenSC/releases])
 define([VS_FF_PRODUCT_URL], [https://github.com/mouse07410/OpenSC])
 
-m4_sinclude(version.m4.ci)
+m4_sinclude(m4/version.m4.ci)
 
 m4_define([openssl_minimum_version], [1.1.1])
 
