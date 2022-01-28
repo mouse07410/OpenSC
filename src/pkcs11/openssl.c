@@ -622,19 +622,24 @@ CK_RV sc_pkcs11_verify_data(const unsigned char *pubkey, unsigned int pubkey_len
 					md = EVP_sha512();
 					break;
 				default:
+					EVP_PKEY_free(pkey);
 					return CKR_GENERAL_ERROR;
 			}
 			mdbuf_len = EVP_MD_size(md);
 			mdbuf = calloc(1, mdbuf_len);
-			if (mdbuf == NULL)
+			if (mdbuf == NULL) {
+				EVP_PKEY_free(pkey);
 				return CKR_DEVICE_MEMORY;
+			}
 			if ((mdctx = EVP_MD_CTX_new()) == NULL) {
 				free(mdbuf);
+				EVP_PKEY_free(pkey);
 				return CKR_GENERAL_ERROR;
 			}
 			if (!EVP_DigestInit(mdctx, md)
 				|| !EVP_DigestUpdate(mdctx, data, data_len)
 				|| !EVP_DigestFinal(mdctx, mdbuf, &mdbuf_len)) {
+				EVP_PKEY_free(pkey);
 				EVP_MD_CTX_free(mdctx);
 				free(mdbuf);
 				return CKR_GENERAL_ERROR;
@@ -667,8 +672,10 @@ CK_RV sc_pkcs11_verify_data(const unsigned char *pubkey, unsigned int pubkey_len
 		unsigned char *rsa_out = NULL, pad;
 		size_t rsa_outlen = 0;
 		EVP_PKEY_CTX *ctx = EVP_PKEY_CTX_new(pkey, NULL);
-		if (!ctx)
+		if (!ctx) {
+			EVP_PKEY_free(pkey);
 			return CKR_DEVICE_MEMORY;
+		}
 
 		sc_log(context, "Trying to verify using low-level API");
 		switch (mech->mechanism) {
@@ -731,6 +738,7 @@ CK_RV sc_pkcs11_verify_data(const unsigned char *pubkey, unsigned int pubkey_len
 
 			if (mech->pParameter == NULL) {
 				free(rsa_out);
+				EVP_PKEY_free(pkey);
 				sc_log(context, "PSS mechanism requires parameter");
 				return CKR_MECHANISM_PARAM_INVALID;
 			}
@@ -754,6 +762,7 @@ CK_RV sc_pkcs11_verify_data(const unsigned char *pubkey, unsigned int pubkey_len
 				break;
 			default:
 				free(rsa_out);
+				EVP_PKEY_free(pkey);
 				return CKR_MECHANISM_PARAM_INVALID;
 			}
 
@@ -775,6 +784,7 @@ CK_RV sc_pkcs11_verify_data(const unsigned char *pubkey, unsigned int pubkey_len
 				break;
 			default:
 				free(rsa_out);
+				EVP_PKEY_free(pkey);
 				return CKR_MECHANISM_PARAM_INVALID;
 			}
 
@@ -789,6 +799,7 @@ CK_RV sc_pkcs11_verify_data(const unsigned char *pubkey, unsigned int pubkey_len
 
 				if (!md_ctx || !EVP_DigestFinal(md_ctx, tmp, &tmp_len)) {
 					free(rsa_out);
+					EVP_PKEY_free(pkey);
 					return CKR_GENERAL_ERROR;
 				}
 				data = tmp;
@@ -830,6 +841,8 @@ CK_RV sc_pkcs11_verify_data(const unsigned char *pubkey, unsigned int pubkey_len
 			free(rsa_out);
 			sc_log(context, "Returning %lu", rv);
 			return rv;
+		} else {
+			EVP_PKEY_free(pkey);
 		}
 
 		if ((unsigned int) rsa_outlen == data_len && memcmp(rsa_out, data, data_len) == 0)
