@@ -831,7 +831,6 @@ CK_RV sc_pkcs11_verify_data(const unsigned char *pubkey, unsigned int pubkey_len
 
 			if (data_len == (unsigned int) EVP_MD_size(pss_md) &&
 					EVP_PKEY_verify(ctx, signat, signat_len, data, data_len) == 1)
-#endif /* 0 */
 				rv = CKR_OK;
 			EVP_PKEY_free(pkey);
 			EVP_PKEY_CTX_free(ctx);
