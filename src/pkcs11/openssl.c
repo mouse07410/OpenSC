@@ -23,6 +23,7 @@
 
 #ifdef ENABLE_OPENSSL		/* empty file without openssl */
 #include <string.h>
+#include <limits.h>
 #include <openssl/bn.h>
 #include <openssl/evp.h>
 #include <openssl/rand.h>
@@ -807,23 +808,19 @@ CK_RV sc_pkcs11_verify_data(const unsigned char *pubkey, unsigned int pubkey_len
 			}
 			rv = CKR_SIGNATURE_INVALID;
 
-#if 0
- 			/* special mode - autodetect sLen from signature */
- 			/* https://github.com/openssl/openssl/blob/master/crypto/rsa/rsa_pss.c */
- 			if (((CK_ULONG) 1 ) << (sizeof(CK_ULONG) * CHAR_BIT -1) == param->sLen)
- 				sLen = -2;
- 			else
- 				sLen = param->sLen;
+			/* special mode - autodetect sLen from signature */
+			/* https://github.com/openssl/openssl/blob/master/crypto/rsa/rsa_pss.c */
+			/* there is no way to pass negative value here, we using maximal value for this */
+			if (((CK_ULONG) 1 ) << (sizeof(CK_ULONG) * CHAR_BIT -1) == param->sLen)
+				sLen = -2;
+			else
+				sLen = param->sLen;
 
-			if (data_len == (unsigned int) EVP_MD_size(pss_md)
-					&& RSA_verify_PKCS1_PSS_mgf1(rsa, data, pss_md, mgf_md,
-						rsa_out, sLen) == 1)
-#else
 			if ((ctx = EVP_PKEY_CTX_new(pkey, NULL)) == NULL ||
 				EVP_PKEY_verify_init(ctx) != 1 ||
 				EVP_PKEY_CTX_set_rsa_padding(ctx, RSA_PKCS1_PSS_PADDING) != 1 ||
 				EVP_PKEY_CTX_set_signature_md(ctx, pss_md) != 1 ||
-				EVP_PKEY_CTX_set_rsa_pss_saltlen(ctx, param->sLen) != 1 ||
+				EVP_PKEY_CTX_set_rsa_pss_saltlen(ctx, sLen) != 1 ||
 				EVP_PKEY_CTX_set_rsa_mgf1_md(ctx, mgf_md) != 1) {
 				sc_log(context, "Failed to initialize EVP_PKEY_CTX");
 				free(rsa_out);

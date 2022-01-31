@@ -25,6 +25,7 @@
 #include <stdlib.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <limits.h>
 
 #ifndef _WIN32
 #include <sys/types.h>
@@ -2190,12 +2191,6 @@ parse_pss_params(CK_SESSION_HANDLE session, CK_OBJECT_HANDLE key,
 		hashlen = hash_length(pss_params->hashAlg);
 
 		if (opt_salt_len_given == 1) { /* salt size explicitly given */
-			if (opt_salt_len < 0 && opt_salt_len != -1 && opt_salt_len != -2 && opt_salt_len != -3)
-				util_fatal("Salt length must be greater or equal "
-				    "to zero, or equal to -1 (meaning: use digest size) "
-				    "or to -2 (meaning: use maximum permissible size), "
-					"or to -3 (meaning: same as -2 for signing)") ;
-
 			unsigned long modlen = (get_private_key_length(session, key) + 7) / 8;
 			switch (opt_salt_len) {
 			case -1: /* salt size equals to digest size */
@@ -2206,6 +2201,11 @@ parse_pss_params(CK_SESSION_HANDLE session, CK_OBJECT_HANDLE key,
 				pss_params->sLen = modlen - hashlen -2;
 				break;
 			default: /* use given size but its value must be >= 0 */
+				if (opt_salt_len < 0)
+					util_fatal("Salt length must be greater or equal "
+						"to zero, or equal to -1 (meaning: use digest size) "
+						"or to -2 or -3 (meaning: use maximum permissible size");
+
 				pss_params->sLen = opt_salt_len;
 				break;
 			} /* end switch (opt_salt_len_given) */

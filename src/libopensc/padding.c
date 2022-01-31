@@ -413,8 +413,7 @@ static const EVP_MD* mgf1_flag2md(unsigned int mgf1)
 #define PSS_MAX_SALT_SIZE 512
 /* add PKCS#1 v2.0 PSS padding */
 static int sc_pkcs1_add_pss_padding(unsigned int hash, unsigned int mgf1_hash,
-    const u8 *in, size_t in_len, u8 *out, size_t *out_len, size_t mod_bits,
-	const size_t sLen)
+    const u8 *in, size_t in_len, u8 *out, size_t *out_len, size_t mod_bits, size_t sLen)
 {
 	/* hLen = sLen in our case */
 	int rv = SC_ERROR_INTERNAL, i, j, hlen, dblen, plen, round, mgf_rounds;
@@ -440,7 +439,6 @@ static int sc_pkcs1_add_pss_padding(unsigned int hash, unsigned int mgf1_hash,
 		/* RSA key too small for chosen hash (1296 bits or higher needed for
 		 * signing SHA-512 hashes) */
 		return SC_ERROR_NOT_SUPPORTED;
-
 	if (sLen > PSS_MAX_SALT_SIZE)
 		return SC_ERROR_INVALID_ARGUMENTS;
 	if (RAND_bytes(salt, sLen) != 1)
@@ -534,8 +532,7 @@ static int hash_len2algo(size_t hash_len)
 
 /* general PKCS#1 encoding function */
 int sc_pkcs1_encode(sc_context_t *ctx, unsigned long flags,
-	const u8 *in, size_t in_len, u8 *out, size_t *out_len, 
-	size_t mod_bits, void *pMech)
+	const u8 *in, size_t in_len, u8 *out, size_t *out_len, size_t mod_bits, void *pMechanism)
 {
 	int    rv, i;
 	size_t tmp_len = *out_len;
@@ -592,15 +589,18 @@ int sc_pkcs1_encode(sc_context_t *ctx, unsigned long flags,
 			 */
 			hash_algo = hash_len2algo(tmp_len);
 		}
-		if (pMech == NULL) {
-			if(!(md = hash_flag2md(hash_algo)))
-				return SC_ERROR_NOT_SUPPORTED;
-			sLen = EVP_MD_size(md);
-		} else {
-			CK_MECHANISM *mech = (CK_MECHANISM *)pMech;
+		/* sLen is by default same as hash length */
+		if (!(md = hash_flag2md(hash_algo)))
+			return SC_ERROR_NOT_SUPPORTED;
+		sLen = EVP_MD_size(md);
+		/* if application provide sLen, use it */
+		if (pMechanism != NULL) {
+			CK_MECHANISM *mech = (CK_MECHANISM *)pMechanism;
 			CK_RSA_PKCS_PSS_PARAMS *pss_params;
-			pss_params = mech->pParameter;
-			sLen = pss_params->sLen;
+			if (mech->pParameter && sizeof(CK_RSA_PKCS_PSS_PARAMS) == mech->ulParameterLen) {
+				pss_params = mech->pParameter;
+				sLen = pss_params->sLen;
+			}
 #if defined(P11DEBUG)
 			printf("DEBUG sc_pkcs1_encode, sLen=%zu\n", sLen);
 #endif /* P11DEBUG */

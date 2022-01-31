@@ -4247,7 +4247,6 @@ pkcs15_prkey_sign(struct sc_pkcs11_session *session, void *obj,
 		/* The MGF parameter was already verified in SignInit() */
 		flags |= mgf2flags(((CK_RSA_PKCS_PSS_PARAMS*)pMechanism->pParameter)->mgf);
 
-		/* Assuming salt is the size of hash */
 		break;
 	case CKM_GOSTR3410:
 		flags = SC_ALGORITHM_GOSTR3410_HASH_NONE;
@@ -4698,7 +4697,6 @@ pkcs15_prkey_init_params(struct sc_pkcs11_session *session,
 		default:
 			return CKR_MECHANISM_PARAM_INVALID;
 		}
-		/* TODO support different salt lengths */
 		/* TODO is there something more to check */
 		break;
 	}
