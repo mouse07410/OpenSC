@@ -172,6 +172,7 @@ if ! test -e ${BUILDPATH}/target/$PREFIX/lib/pkgconfig; then
 		--enable-static \
 		--enable-strict \
 		--disable-assert \
+		--enable-openssl \
 		--disable-silent-rules \
 		--enable-doc \
 		--with-pkcs11-provider=$PREFIX/lib/opensc-pkcs11.so \
