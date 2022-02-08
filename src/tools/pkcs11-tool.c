@@ -7269,7 +7269,7 @@ static int encrypt_decrypt(CK_SESSION_HANDLE session,
 		oaep_params.pSourceData = NULL; /* PKCS#11 standard: this must be NULLPTR */
 		oaep_params.ulSourceDataLen = 0; /* PKCS#11 standard: this must be 0 */
 
-		fprintf(stderr, "    OAEP parameters: hashAlg=%s, mgf=%s, ",
+		fprintf(stderr, "    RSA OAEP parameters: hashAlg=%s, mgf=%s, ",
 			p11_mechanism_to_name(oaep_params.hashAlg),
 			p11_mgf_to_name(oaep_params.mgf));
 
