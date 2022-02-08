@@ -321,7 +321,7 @@ static const char *option_help[] = {
 	"Key generation",
 	"Specify the type and length (bytes if symmetric) of the key to create, for example rsa:1024, EC:prime256v1, EC:ed25519, EC:curve25519, GOSTR3410-2012-256:B, AES:16 or GENERIC:64",
 	"Specify 'sign' key usage flag (sets SIGN in privkey, sets VERIFY in pubkey)",
-	"Specify 'decrypt' key usage flag (RSA only, set DECRYPT privkey, ENCRYPT in pubkey)",
+	"Specify 'decrypt' key usage flag (sets DECRYPT in privkey and ENCRYPT in pubkey for RSA, sets both DECRYPT and ENCRYPT for secret keys)",
 	"Specify 'derive' key usage flag (EC only)",
 	"Specify 'wrap' key usage flag (only on cards that allow key-wrapping)",
 	"Write an object (key, cert, data) to the card",
@@ -3338,14 +3338,20 @@ gen_key(CK_SLOT_ID slot, CK_SESSION_HANDLE session, CK_OBJECT_HANDLE *hSecretKey
 			n_attr++;
 		}
 
-		FILL_ATTR(keyTemplate[n_attr], CKA_ENCRYPT, &_true, sizeof(_true));
-		n_attr++;
-		FILL_ATTR(keyTemplate[n_attr], CKA_DECRYPT, &_true, sizeof(_true));
-		n_attr++;
-		FILL_ATTR(keyTemplate[n_attr], CKA_WRAP, &_true, sizeof(_true));
-		n_attr++;
-		FILL_ATTR(keyTemplate[n_attr], CKA_UNWRAP, &_true, sizeof(_true));
-		n_attr++;
+		if (opt_key_usage_default || opt_key_usage_decrypt) {
+			FILL_ATTR(keyTemplate[n_attr], CKA_ENCRYPT, &_true, sizeof(_true));
+			n_attr++;
+			FILL_ATTR(keyTemplate[n_attr], CKA_DECRYPT, &_true, sizeof(_true));
+			n_attr++;
+		}
+
+		if (opt_key_usage_wrap) {
+			FILL_ATTR(keyTemplate[n_attr], CKA_WRAP, &_true, sizeof(_true));
+			n_attr++;
+			FILL_ATTR(keyTemplate[n_attr], CKA_UNWRAP, &_true, sizeof(_true));
+			n_attr++;
+		}
+
 		FILL_ATTR(keyTemplate[n_attr], CKA_VALUE_LEN, &key_length, sizeof(key_length));
 		n_attr++;
 
@@ -4340,6 +4346,20 @@ static int write_object(CK_SESSION_HANDLE session)
 		}
 		else {
 			FILL_ATTR(seckey_templ[n_seckey_attr], CKA_EXTRACTABLE, &_false, sizeof(_false));
+			n_seckey_attr++;
+		}
+
+		if (opt_key_usage_default || opt_key_usage_decrypt) {
+			FILL_ATTR(seckey_templ[n_seckey_attr], CKA_ENCRYPT, &_true, sizeof(_true));
+			n_seckey_attr++;
+			FILL_ATTR(seckey_templ[n_seckey_attr], CKA_DECRYPT, &_true, sizeof(_true));
+			n_seckey_attr++;
+		}
+
+		if (opt_key_usage_wrap) {
+			FILL_ATTR(seckey_templ[n_seckey_attr], CKA_WRAP, &_true, sizeof(_true));
+			n_seckey_attr++;
+			FILL_ATTR(seckey_templ[n_seckey_attr], CKA_UNWRAP, &_true, sizeof(_true));
 			n_seckey_attr++;
 		}
 
@@ -6994,7 +7014,8 @@ static int test_unwrap(CK_SESSION_HANDLE sess)
 #ifdef ENABLE_OPENSSL
 static int encrypt_decrypt(CK_SESSION_HANDLE session,
 		CK_MECHANISM_TYPE mech_type,
-		CK_OBJECT_HANDLE privKeyObject)
+		CK_OBJECT_HANDLE privKeyObject,
+		char *param, unsigned long param_len)
 {
 	EVP_PKEY       *pkey = 0;
 	/* Note: the actual size of the data to be encrypted is 10 bytes! */
@@ -7207,6 +7228,18 @@ static int encrypt_decrypt(CK_SESSION_HANDLE session,
 			printf("set mgf1 md failed, returning\n");
 			return 0;
 		}
+		if (param_len != 0 && param != NULL) {
+			/* label is in ownership of openssl, do not free this ptr! */
+			char *label = malloc(param_len);
+			memcpy(label, param, param_len);
+
+			if (EVP_PKEY_CTX_set0_rsa_oaep_label(ctx, label, param_len) <= 0) {
+				EVP_PKEY_CTX_free(ctx);
+				EVP_PKEY_free(pkey);
+				printf("set OAEP label failed, returning\n");
+				return 0;
+			}
+		}
 #else
 		if (hash_alg != CKM_SHA_1) {
 			printf("This version of OpenSSL only supports SHA1 for OAEP, returning\n");
@@ -7232,21 +7265,35 @@ static int encrypt_decrypt(CK_SESSION_HANDLE session,
 		oaep_params.hashAlg = hash_alg;
 		oaep_params.mgf = mgf;
 
-		/* These settings are compatible with OpenSSL 1.0.2L and 1.1.0+ */
 		oaep_params.source = 0UL;  /* empty encoding parameter (label) */
 		oaep_params.pSourceData = NULL; /* PKCS#11 standard: this must be NULLPTR */
 		oaep_params.ulSourceDataLen = 0; /* PKCS#11 standard: this must be 0 */
 
-		/* If an RSA-OAEP mechanism, it needs parameters */
+		fprintf(stderr, "    OAEP parameters: hashAlg=%s, mgf=%s, ",
+			p11_mechanism_to_name(oaep_params.hashAlg),
+			p11_mgf_to_name(oaep_params.mgf));
+
+		if (param != NULL && param_len > 0) {
+			oaep_params.source = CKZ_DATA_SPECIFIED;
+			oaep_params.pSourceData = param;
+			oaep_params.ulSourceDataLen = param_len;
+			fprintf(stderr, "Label length %ld\n", param_len);
+		} else {
+			fprintf(stderr, "Label not present\n");
+		}
+
 		mech.pParameter = &oaep_params;
 		mech.ulParameterLen = sizeof(oaep_params);
 
+#if 0 /* debugging output, not needed now */
 		fprintf(stderr, "OAEP parameters: hashAlg=%s, mgf=%s, label source: type=%lu, ptr=%p, len=%lu\n",
 			p11_mechanism_to_name(oaep_params.hashAlg),
 			p11_mgf_to_name(oaep_params.mgf),
 			oaep_params.source,
 			oaep_params.pSourceData,
 			oaep_params.ulSourceDataLen);
+#endif /* 0 */
+
 		break;
 	case CKM_RSA_X_509:
 	case CKM_RSA_PKCS:
@@ -7365,16 +7412,17 @@ static int test_decrypt(CK_SESSION_HANDLE sess)
 #else
 		for (n = 0; n < num_mechs; n++) {
 			switch (mechs[n]) {
-			case CKM_RSA_PKCS:
 			case CKM_RSA_PKCS_OAEP:
+				/* one more OAEP test with param .. */
+				errors += encrypt_decrypt(sess, mechs[n], privKeyObject, "ABC", 3);
+				/* fall through */
+			case CKM_RSA_PKCS:
 			case CKM_RSA_X_509:
+				errors += encrypt_decrypt(sess, mechs[n], privKeyObject, NULL, 0);
 				break;
 			default:
 				printf(" -- mechanism can't be used to decrypt, skipping\n");
-				continue;
 			}
-
-			errors += encrypt_decrypt(sess, mechs[n], privKeyObject);
 		}
 #endif
 	}
