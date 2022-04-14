@@ -450,6 +450,8 @@ sc_profile_free(struct sc_profile *profile)
 
 	if (profile->name)
 		free(profile->name);
+	if (profile->driver)
+		free(profile->driver);
 
 	free_file_list(&profile->ef_list);
 
@@ -1199,6 +1201,7 @@ free_file_list(struct file_info **list)
 
 		if (fi->dont_free == 0)
 			sc_file_free(fi->file);
+		free(fi->profile_extension);
 		free(fi->ident);
 		free(fi);
 	}
@@ -1215,6 +1218,7 @@ new_file(struct state *cur, const char *name, unsigned int type)
 	struct file_info	*info;
 	sc_file_t	*file;
 	unsigned int	df_type = 0, dont_free = 0;
+	int	free_file = 0;
 
 	if ((info = sc_profile_find_file(profile, NULL, name)) != NULL)
 		return info;
@@ -1223,6 +1227,7 @@ new_file(struct state *cur, const char *name, unsigned int type)
 	 * by the PKCS15 logic */
 	if (strncasecmp(name, "PKCS15-", 7)) {
 		file = init_file(type);
+		free_file = 1;
 	} else if (!strcasecmp(name+7, "TokenInfo")) {
 		if (!profile->p15_spec) {
 			parse_error(cur, "no pkcs15 spec in profile");
@@ -1246,6 +1251,7 @@ new_file(struct state *cur, const char *name, unsigned int type)
 		dont_free = 1;
 	} else if (!strcasecmp(name+7, "AppDF")) {
 		file = init_file(SC_FILE_TYPE_DF);
+		free_file = 1;
 	} else {
 		if (map_str2int(cur, name+7, &df_type, pkcs15DfNames)
 				|| df_type >= SC_PKCS15_DF_TYPE_COUNT)
@@ -1253,6 +1259,7 @@ new_file(struct state *cur, const char *name, unsigned int type)
 
 		file = init_file(SC_FILE_TYPE_WORKING_EF);
 		profile->df[df_type] = file;
+		free_file = 1;
 	}
 	assert(file);
 	if (file->type != type) {
@@ -1260,8 +1267,7 @@ new_file(struct state *cur, const char *name, unsigned int type)
 			file->type == SC_FILE_TYPE_DF
 				? "DF" : file->type == SC_FILE_TYPE_BSO
 					? "BS0" : "EF");
-		if (strncasecmp(name, "PKCS15-", 7) ||
-			!strcasecmp(name+7, "AppDF"))
+		if (free_file)
 			sc_file_free(file);
 		return NULL;
 	}
@@ -1577,7 +1583,8 @@ do_acl(struct state *cur, int argc, char **argv)
 
 			if (map_str2int(cur, oper, &op, fileOpNames))
 				goto bad;
-			acl = sc_file_get_acl_entry(file, op);
+			if (!(acl = sc_file_get_acl_entry(file, op)))
+				goto bad;
 			if (acl->method == SC_AC_NEVER
 			 || acl->method == SC_AC_NONE
 			 || acl->method == SC_AC_UNKNOWN)
@@ -2116,12 +2123,14 @@ sc_profile_find_file(struct sc_profile *pro,
 {
 	struct file_info	*fi;
 	unsigned int		len;
+	const u8			*value;
 
-	len = path? path->len : 0;
+	value = path ? path->value : (const u8*) "";
+	len = path ? path->len : 0;
 	for (fi = pro->ef_list; fi; fi = fi->next) {
 		sc_path_t *fpath = &fi->file->path;
 
-		if (!strcasecmp(fi->ident, name) && fpath->len >= len && !memcmp(fpath->value, path->value, len))
+		if (!strcasecmp(fi->ident, name) && fpath->len >= len && !memcmp(fpath->value, value, len))
 			return fi;
 	}
 	return NULL;
@@ -2351,8 +2360,9 @@ __expr_get(struct num_exp_ctx *ctx, int eof_okay)
 	}
 
 	ctx->j = 0;
+	s = ctx->str;
 	do {
-		if ((s = ctx->str) == NULL || *s == '\0') {
+		if (s == NULL || *s == '\0') {
 			if (ctx->argc == 0) {
 				if (eof_okay)
 					return NULL;
@@ -2491,7 +2501,10 @@ expr_eval(struct num_exp_ctx *ctx, unsigned int *vp, unsigned int pri)
 		expr_eval(ctx, &right, new_pri + 1);
 		switch (op) {
 		case '*': left *= right; break;
-		case '/': left /= right; break;
+		case '/':
+			if (right == 0)
+				expr_fail(ctx);
+			left /= right; break;
 		case '+': left += right; break;
 		case '-': left -= right; break;
 		case '&': left &= right; break;
