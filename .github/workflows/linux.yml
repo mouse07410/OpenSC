@@ -36,6 +36,13 @@ jobs:
           path:
             tests/*.log
 
+  build-no-shared:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - run: .github/setup-linux.sh
+      - run: .github/build.sh no-shared
+
   build-ix86:
     runs-on: ubuntu-latest
     steps:
@@ -184,16 +191,24 @@ jobs:
   build-openssl-3:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - run: .github/setup-linux.sh ossl3
       - run: .github/build.sh dist ossl3
+      - uses: actions/upload-artifact@v3
+        with:
+          name: logs
+          path: |
+            tests/*.log
+            config.log
       - uses: actions/cache@v2
         id: cache-build
+        if: ${{ success() }}
         with:
           path: ./*
           key: ${{ runner.os }}-${{ github.sha }}-ossl3
       - name: Upload artifacts
         uses: actions/upload-artifact@v2
+        if: ${{ success() }}
         with:
           name: opensc-build
           path:
@@ -203,8 +218,8 @@ jobs:
     runs-on: ubuntu-latest
     needs: [build-openssl-3]
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions/cache@v2
+      - uses: actions/checkout@v3
+      - uses: actions/cache@v3
         id: cache-build
         with:
           path: ./*
@@ -216,8 +231,8 @@ jobs:
     runs-on: ubuntu-latest
     needs: [build-openssl-3]
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions/cache@v2
+      - uses: actions/checkout@v3
+      - uses: actions/cache@v3
         id: cache-build
         with:
           path: ./*
@@ -225,17 +240,16 @@ jobs:
       - run: .github/setup-linux.sh oseid ossl3
       - run: .github/test-oseid.sh
 
-  ###########################
-  ## LibreSSL 3.0 pipeline ##
-  ###########################
+  #######################
+  ## LibreSSL pipeline ##
+  #######################
   build-libressl:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - run: .github/setup-linux.sh libressl
       - run: .github/build.sh dist libressl
-      - uses: actions/upload-artifact@v2
-        if: failure()
+      - uses: actions/upload-artifact@v3
         with:
           name: logs
           path: |
@@ -243,6 +257,7 @@ jobs:
             config.log
       - uses: actions/cache@v2
         id: cache-build
+        if: ${{ success() }}
         with:
           path: ./*
           key: ${{ runner.os }}-${{ github.sha }}-libressl
@@ -251,8 +266,8 @@ jobs:
     runs-on: ubuntu-latest
     needs: [build-libressl]
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions/cache@v2
+      - uses: actions/checkout@v3
+      - uses: actions/cache@v3
         id: cache-build
         with:
           path: ./*
@@ -264,8 +279,8 @@ jobs:
     runs-on: ubuntu-latest
     needs: [build-libressl]
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions/cache@v2
+      - uses: actions/checkout@v3
+      - uses: actions/cache@v3
         id: cache-build
         with:
           path: ./*
