@@ -483,6 +483,10 @@ sc_profile_free(struct sc_profile *profile)
 		free(pi);
 	}
 
+	for (int i = 0; profile->options[i]; i++) {
+		free(profile->options[i]);
+	}
+
 	if (profile->p15_spec)
 		sc_pkcs15_card_free(profile->p15_spec);
 	free(profile);
@@ -1538,6 +1542,10 @@ do_exclusive_aid(struct state *cur, int argc, char **argv)
 static int
 do_profile_extension(struct state *cur, int argc, char **argv)
 {
+	if (!cur->file) {
+		parse_error(cur, "Invalid state\n");
+		return 1;
+	}
 	return setstr(&cur->file->profile_extension, argv[0]);
 }
 

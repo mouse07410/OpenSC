@@ -1,4 +1,5 @@
-AM_CPPFLAGS = -I$(top_srcdir)/src -D'SC_PKCS15_PROFILE_DIRECTORY="$(pkgdatadir)"'
+AM_CPPFLAGS = -I$(top_srcdir)/src -D'SC_PKCS15_PROFILE_DIRECTORY="$(pkgdatadir)"' \
+				-D'DEFAULT_PKCS11_PROVIDER="$(DEFAULT_PKCS11_PROVIDER)"'
 AM_CFLAGS = -g -O0 $(OPTIONAL_OPENSSL_CFLAGS) $(OPTIONAL_READLINE_CFLAGS) $(PTHREAD_CFLAGS)
 LIBS = $(FUZZING_LIBS)\
 	$(top_builddir)/src/libopensc/libopensc.la \
@@ -16,6 +17,10 @@ endif
 
 if ENABLE_OPENSSL
 noinst_PROGRAMS += fuzz_piv_tool
+endif
+
+if !ENABLE_SHARED
+noinst_PROGRAMS += fuzz_pkcs11
 endif
 
 noinst_HEADERS = fuzzer_reader.h fuzzer_tool.h
@@ -44,3 +49,9 @@ fuzz_pkcs15_tool_LDADD = $(OPTIONAL_OPENSSL_LIBS)
 fuzz_pkcs15_crypt_SOURCES = fuzz_pkcs15_crypt.c fuzzer_reader.c fuzzer_tool.c $(ADDITIONAL_SRC) \
 							../../tools/util.c
 fuzz_pkcs15_crypt_LDADD = $(OPTIONAL_OPENSSL_LIBS)
+fuzz_pkcs11_SOURCES = fuzz_pkcs11.c fuzzer_reader.c fuzzer_tool.c $(ADDITIONAL_SRC)
+fuzz_pkcs11_CFLAGS = $(OPTIONAL_OPENSSL_CFLAGS) $(PTHREAD_CFLAGS)
+fuzz_pkcs11_LDADD = \
+	$(top_builddir)/src/common/libpkcs11.la \
+	$(OPTIONAL_OPENSSL_LIBS) \
+	$(top_builddir)/src/pkcs11/libopensc-pkcs11.la

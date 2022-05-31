@@ -38,7 +38,7 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
 	uint8_t           len = 0;
 	u8               *rnd = NULL, *wrap_buf = NULL, *unwrap_buf = NULL;
 	size_t            wrap_buf_len = 0, unwrap_buf_len = 0;
-	int               reset = 0, r = 0;
+	int               r = 0;
 
 #ifdef FUZZING_ENABLED
 	fclose(stdout);
@@ -61,11 +61,9 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
 		goto err;
 
 	/* Wrap & Unwrap*/
-	fuzz_get_chunk(reader, &ptr, &ptr_size);
-	if (!(wrap_buf = malloc(ptr_size)))
+	if (!(wrap_buf = malloc(SC_MAX_APDU_BUFFER_SIZE)))
 		goto err;
-	memcpy(wrap_buf, ptr, ptr_size);
-	wrap_buf_len = ptr_size;
+	wrap_buf_len = SC_MAX_APDU_BUFFER_SIZE;
 	sc_wrap(card, NULL, 0, wrap_buf, wrap_buf_len);
 
 	fuzz_get_chunk(reader, &ptr, &ptr_size);
@@ -94,10 +92,6 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
 
 	/* Append record */
 	sc_append_record(card, ptr, ptr_size, flag);
-
-	/* Reset card */
-	reset = (*data) < 128 ? 1 : 0;
-	sc_reset(card, reset);
 
 err:
 	free(rnd);
