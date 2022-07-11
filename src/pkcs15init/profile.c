@@ -1431,6 +1431,8 @@ do_content(struct state *cur, int argc, char **argv)
 	}
 	file = cur->file->file;
 
+	free(file->encoded_content);
+
 	file->encoded_content = malloc(len);
 	if (!file->encoded_content)
 		return 1;
