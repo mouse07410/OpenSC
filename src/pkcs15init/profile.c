@@ -1454,6 +1454,7 @@ do_prop_attr(struct state *cur, int argc, char **argv)
 	}
 	file = cur->file->file;
 
+	free(file->prop_attr);
 	file->prop_attr = malloc(len);
 	if (!file->prop_attr)
 		return 1;
@@ -2000,6 +2001,9 @@ build_argv(struct state *cur, const char *cmdname,
 			return SC_ERROR_SYNTAX_ERROR;
 		}
 
+		if (list == mac->value) {
+			return SC_ERROR_SYNTAX_ERROR;
+		}
 #ifdef DEBUG_PROFILE
 		{
 			scconf_list *list;

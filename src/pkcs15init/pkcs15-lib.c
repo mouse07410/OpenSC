@@ -619,6 +619,11 @@ sc_pkcs15init_delete_by_path(struct sc_profile *profile, struct sc_pkcs15_card *
 				sc_file_free(file);
 			LOG_TEST_RET(ctx, rv, "parent 'DELETE' authentication failed");
 		}
+		else {
+			/* No 'DELETE' ACL of the file and not deleted for parent */
+			rv = SC_ERROR_INVALID_ARGUMENTS;
+			sc_file_free(file);
+		}
 	}
 	LOG_TEST_RET(ctx, rv, "'DELETE' authentication failed");
 
@@ -629,8 +634,10 @@ sc_pkcs15init_delete_by_path(struct sc_profile *profile, struct sc_pkcs15_card *
 
 	memset(&path, 0, sizeof(path));
 	path.type = SC_PATH_TYPE_FILE_ID;
-	if (file_path->len < 2)
+	if (file_path->len < 2) {
+		sc_file_free(file);
 		LOG_FUNC_RETURN(ctx, SC_ERROR_INVALID_ARGUMENTS);
+	}
 	path.value[0] = file_path->value[file_path->len - 2];
 	path.value[1] = file_path->value[file_path->len - 1];
 	path.len = 2;
@@ -3177,6 +3184,8 @@ sc_pkcs15init_update_lastupdate(struct sc_pkcs15_card *p15card, struct sc_profil
 		LOG_TEST_RET(ctx, r, "select object path failed");
 
 		r = sc_select_file(p15card->card, &last_update->path, &file);
+		if (r < 0)
+			free(buf);
 		LOG_TEST_RET(ctx, r, "select object path failed");
 
 		r = sc_pkcs15init_update_file(profile, p15card, file, buf, buflen);
@@ -4021,7 +4030,7 @@ do_select_parent(struct sc_profile *profile, struct sc_pkcs15_card *p15card,
 	r = sc_select_file(p15card->card, &path, parent);
 	/* If DF doesn't exist, create it (unless it's the MF,
 	 * but then something's badly broken anyway :-) */
-	if (r == SC_ERROR_FILE_NOT_FOUND && path.len != 2) {
+	if (r == SC_ERROR_FILE_NOT_FOUND && path.len > 2) {
 		r = sc_profile_get_file_by_path(profile, &path, parent);
 		if (r < 0) {
 			sc_log(ctx, "no profile template for DF %s", sc_print_path(&path));
