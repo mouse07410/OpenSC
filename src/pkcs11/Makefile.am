@@ -73,6 +73,11 @@ install-exec-hook:
 	for l in opensc-pkcs11.dll pkcs11-spy.dll; do \
 		mv "$(DESTDIR)$(libdir)/$$l" "$(DESTDIR)$(bindir)/$$l"; \
 	done
+
+uninstall-hook:
+	for l in opensc-pkcs11.dll pkcs11-spy.dll; do \
+		rm -f "$(DESTDIR)$(bindir)/$$l"; \
+	done
 else
 # see http://wiki.cacert.org/wiki/Pkcs11TaskForce
 install-exec-hook:
@@ -82,6 +87,11 @@ install-exec-hook:
 		$(LN_S) ../$$l "$(DESTDIR)$(pkcs11dir)/$$l"; \
 	done
 
+uninstall-hook:
+	for l in opensc-pkcs11$(DYN_LIB_EXT) onepin-opensc-pkcs11$(DYN_LIB_EXT) pkcs11-spy$(DYN_LIB_EXT); do \
+		rm -f "$(DESTDIR)$(pkcs11dir)/$$l"; \
+	done
+	rm -df "$(DESTDIR)$(pkcs11dir)" || true
 endif
 
 TIDY_FLAGS = $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) $(OPENSC_PKCS11_CFLAGS)

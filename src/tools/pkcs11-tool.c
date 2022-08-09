@@ -171,6 +171,7 @@ enum {
 	OPT_UNLOCK_PIN,
 	OPT_PUK,
 	OPT_NEW_PIN,
+	OPT_SESSION_RW,
 	OPT_LOGIN_TYPE,
 	OPT_TEST_EC,
 	OPT_DERIVE,
@@ -223,6 +224,7 @@ static const struct option options[] = {
 	{ "mgf",		1, NULL,		OPT_MGF },
 	{ "salt-len",		1, NULL,		OPT_SALT },
 
+	{ "session-rw",		0, NULL,		OPT_SESSION_RW },
 	{ "login",		0, NULL,		'l' },
 	{ "login-type",		1, NULL,		OPT_LOGIN_TYPE },
 	{ "pin",		1, NULL,		'p' },
@@ -309,6 +311,7 @@ static const char *option_help[] = {
 	"Specify MGF (Message Generation Function) used for RSA-PSS signature and RSA-OAEP decryption (possible values are MGF1-SHA1 to MGF1-SHA512)",
 	"Specify how many bytes should be used for salt in RSA-PSS signatures (default is digest size)",
 
+	"Forces to open the PKCS#11 session with CKF_RW_SESSION",
 	"Log into the token first",
 	"Specify login type ('so', 'user', 'context-specific'; default:'user')",
 	"Supply User PIN on the command line (if used in scripts: careful!)",
@@ -857,8 +860,11 @@ int main(int argc, char * argv[])
 		case OPT_SIGNATURE_FILE:
 			opt_signature_file = optarg;
 			break;
-		case 'l':
+		case OPT_SESSION_RW:
 			need_session |= NEED_SESSION_RW;
+			break;
+		case 'l':
+			need_session |= NEED_SESSION_RO;
 			opt_login = 1;
 			break;
 		case 'm':
@@ -879,7 +885,7 @@ int main(int argc, char * argv[])
 			opt_output = optarg;
 			break;
 		case 'p':
-			need_session |= NEED_SESSION_RW;
+			need_session |= NEED_SESSION_RO;
 			opt_login = 1;
 			util_get_pin(optarg, &opt_pin);
 			break;
@@ -894,7 +900,7 @@ int main(int argc, char * argv[])
 			action_count++;
 			break;
 		case 's':
-			need_session |= NEED_SESSION_RW;
+			need_session |= NEED_SESSION_RO;
 			do_sign = 1;
 			action_count++;
 			break;
@@ -904,12 +910,12 @@ int main(int argc, char * argv[])
 			action_count++;
 			break;
 		case OPT_DECRYPT:
-			need_session |= NEED_SESSION_RW;
+			need_session |= NEED_SESSION_RO;
 			do_decrypt = 1;
 			action_count++;
 			break;
 		case OPT_ENCRYPT:
-			need_session |= NEED_SESSION_RW;
+			need_session |= NEED_SESSION_RO;
 			do_encrypt = 1;
 			action_count++;
 			break;
@@ -919,7 +925,7 @@ int main(int argc, char * argv[])
 			action_count++;
 			break;
 		case OPT_WRAP:
-			need_session |= NEED_SESSION_RW;
+			need_session |= NEED_SESSION_RO;
 			do_wrap = 1;
 			action_count++;
 			break;

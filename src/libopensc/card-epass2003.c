@@ -47,10 +47,22 @@
 #include "asn1.h"
 #include "cardctl.h"
 
+/*
+ * See https://github.com/OpenSC/OpenSC/issues/2572
+ * 2012 ATR: note version 01:00:11
+ *        3b:9f:95:81:31:fe:9f:00:66:46:53:05:01:00:11:71:df:00:00:03:90:00:80
+ * 2022 ATRs: note version 23:00:25
+ *   OpenSC-initialized ATR:
+ *        3b 9f:95:81:31:fe:9f:00:66:46:53:05:23:00:25:71:df:00:00:03:90:00:96
+ *   Feitian-initalized ATR:
+ *        3b:9f:95:81:31:fe:9f:00:66:46:53:05:23:00:25:71:df:00:00:00:00:00:05
+ */
+
 static const struct sc_atr_table epass2003_atrs[] = {
 	/* This is a FIPS certified card using SCP01 security messaging. */
-	{"3B:9F:95:81:31:FE:9F:00:66:46:53:05:10:00:11:71:df:00:00:00:6a:82:5e",
-	 "FF:FF:FF:FF:FF:00:FF:FF:FF:FF:FF:FF:00:00:00:ff:00:ff:ff:00:00:00:00",
+	/* will match all the above */
+	{"3B:9F:95:81:31:FE:9F:00:66:46:53:05:00:00:00:71:df:00:00:00:00:00:00",
+	 "FF:FF:FF:FF:FF:FF:FF:FF:FF:FF:FF:FF:00:00:00:FF:FF:FF:FF:00:00:00:00",
 	 "FTCOS/ePass2003", SC_CARD_TYPE_ENTERSAFE_FTCOS_EPASS2003, 0, NULL },
 	{NULL, NULL, NULL, 0, 0, NULL}
 };
@@ -877,6 +889,7 @@ construct_data_tlv(struct sc_card *card, struct sc_apdu *apdu, unsigned char *ap
 	size_t tlv_more;	/* increased tlv length */
 	unsigned char iv[16] = { 0 };
 	epass2003_exdata *exdata = NULL;
+	int r = 0;
 
 	if (!card->drv_data) 
 		return SC_ERROR_INVALID_ARGUMENTS;
@@ -909,10 +922,13 @@ construct_data_tlv(struct sc_card *card, struct sc_apdu *apdu, unsigned char *ap
 	memcpy(data_tlv, &apdu_buf[block_size], tlv_more);
 
 	/* encrypt Data */
-	if (KEY_TYPE_AES == key_type)
-		aes128_encrypt_cbc(exdata->sk_enc, 16, iv, pad, pad_len, apdu_buf + block_size + tlv_more);
-	else
-		des3_encrypt_cbc(exdata->sk_enc, 16, iv, pad, pad_len, apdu_buf + block_size + tlv_more);
+	if (KEY_TYPE_AES == key_type) {
+		r = aes128_encrypt_cbc(exdata->sk_enc, 16, iv, pad, pad_len, apdu_buf + block_size + tlv_more);
+		LOG_TEST_RET(card->ctx, r, "aes128_encrypt_cbc failed");
+	} else {
+		r = des3_encrypt_cbc(exdata->sk_enc, 16, iv, pad, pad_len, apdu_buf + block_size + tlv_more);
+		LOG_TEST_RET(card->ctx, r, "des3_encrypt_cbc failed");
+	}
 
 	memcpy(data_tlv + tlv_more, apdu_buf + block_size + tlv_more, pad_len);
 	*data_tlv_len = tlv_more + pad_len;
