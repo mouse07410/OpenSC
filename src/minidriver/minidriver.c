@@ -98,7 +98,7 @@ HINSTANCE g_inst;
 #define NULLSTR(a) (a == NULL ? "<NULL>" : a)
 #define NULLWSTR(a) (a == NULL ? L"<NULL>" : a)
 
-#define MD_MAX_KEY_CONTAINERS 12
+#define MD_MAX_KEY_CONTAINERS 32
 #define MD_CARDID_SIZE 16
 
 #define MD_ROLE_USER_SIGN (ROLE_ADMIN + 1)
@@ -1445,9 +1445,11 @@ md_fs_read_msroots_file(PCARD_DATA pCardData, struct md_file *file)
 	for(ii = 0; ii < cert_num; ii++)   {
 		struct sc_pkcs15_cert_info *cert_info = (struct sc_pkcs15_cert_info *) prkey_objs[ii]->data;
 		struct sc_pkcs15_cert *cert = NULL;
+		int private_obj;
 		PCCERT_CONTEXT wincert = NULL;
 		if (cert_info->authority) {
-			rv = sc_pkcs15_read_certificate(vs->p15card, cert_info, &cert);
+			private_obj = prkey_objs[ii]->flags & SC_PKCS15_CO_FLAG_PRIVATE;
+			rv = sc_pkcs15_read_certificate(vs->p15card, cert_info, private_obj, &cert);
 			if(rv)   {
 				logprintf(pCardData, 2, "Cannot read certificate idx:%i: sc-error %d\n", ii, rv);
 				continue;
@@ -1547,8 +1549,9 @@ md_fs_read_content(PCARD_DATA pCardData, char *parent, struct md_file *file)
 			struct sc_pkcs15_cert *cert = NULL;
 			struct sc_pkcs15_object *cert_obj = vs->p15_containers[idx].cert_obj;
 			struct sc_pkcs15_cert_info *cert_info = (struct sc_pkcs15_cert_info *)cert_obj->data;
+			int private_obj = cert_obj->flags & SC_PKCS15_CO_FLAG_PRIVATE;
 
-			rv = sc_pkcs15_read_certificate(vs->p15card, cert_info, &cert);
+			rv = sc_pkcs15_read_certificate(vs->p15card, cert_info, private_obj, &cert);
 			if(rv)   {
 				logprintf(pCardData, 2, "Cannot read certificate idx:%i: sc-error %d\n", idx, rv);
 				logprintf(pCardData, 2, "set cardcf from 'DATA' pkcs#15 object\n");
@@ -2788,7 +2791,8 @@ md_query_key_sizes(PCARD_DATA pCardData, DWORD dwKeySpec, CARD_KEY_SIZES *pKeySi
 		for (i = 0; i < count; i++) {
 			algo_info = vs->p15card->card->algorithms + i;
 			if (algo_info->algorithm == SC_ALGORITHM_EC) {
-				flag = SC_ALGORITHM_ECDH_CDH_RAW | SC_ALGORITHM_EXT_EC_NAMEDCURVE;
+				flag = SC_ALGORITHM_ECDH_CDH_RAW;
+				/* TODO  check if namedCurve matches Windows supported curves */
 				/* ECDHE */
 				if ((dwKeySpec == AT_ECDHE_P256) && (algo_info->key_length == 256) && (algo_info->flags & flag)) {
 					keysize = 256;
@@ -2803,11 +2807,12 @@ md_query_key_sizes(PCARD_DATA pCardData, DWORD dwKeySpec, CARD_KEY_SIZES *pKeySi
 					break;
 				}
 				/* ECDSA */
-				flag = SC_ALGORITHM_ECDSA_HASH_NONE|
+				flag = SC_ALGORITHM_ECDSA_RAW|
+						SC_ALGORITHM_ECDSA_HASH_NONE|
 						SC_ALGORITHM_ECDSA_HASH_SHA1|
 						SC_ALGORITHM_ECDSA_HASH_SHA224|
-						SC_ALGORITHM_ECDSA_HASH_SHA256|
-						SC_ALGORITHM_EXT_EC_NAMEDCURVE;
+						SC_ALGORITHM_ECDSA_HASH_SHA256;
+				/* TODO  check if namedCurve matches Windows supported curves */
 				if ((dwKeySpec == AT_ECDSA_P256) && (algo_info->key_length == 256) && (algo_info->flags & flag)) {
 					keysize = 256;
 					break;
@@ -3561,9 +3566,10 @@ DWORD WINAPI CardGetContainerInfo(__in PCARD_DATA pCardData, __in BYTE bContaine
 
 	if (!pubkey_der.value && cont->cert_obj)   {
 		struct sc_pkcs15_cert *cert = NULL;
+		int private_obj = cont->cert_obj->flags & SC_PKCS15_CO_FLAG_PRIVATE;
 
 		logprintf(pCardData, 1, "now read certificate '%.*s'\n", (int) sizeof cont->cert_obj->label, cont->cert_obj->label);
-		rv = sc_pkcs15_read_certificate(vs->p15card, (struct sc_pkcs15_cert_info *)(cont->cert_obj->data), &cert);
+		rv = sc_pkcs15_read_certificate(vs->p15card, (struct sc_pkcs15_cert_info *)(cont->cert_obj->data), private_obj, &cert);
 		if(!rv)   {
 			rv = sc_pkcs15_encode_pubkey(vs->ctx, cert->key, &pubkey_der.value, &pubkey_der.len);
 			if (rv)   {
@@ -3688,8 +3694,10 @@ DWORD WINAPI CardGetContainerInfo(__in PCARD_DATA pCardData, __in BYTE bContaine
 				memcpy(((PBYTE)publicKey) + sizeof(BCRYPT_ECCKEY_BLOB),  pubkey_der.value + 3,  pubkey_der.len -3);
 
 				logprintf(pCardData, 3,
-					  "return info on ECC SIGN_CONTAINER_INDEX %u\n",
-					  (unsigned int)bContainerIndex);
+					  "return info on ECC SIGN_CONTAINER_INDEX %u cbKey:%u dwMagic:%u\n",
+					  (unsigned int)bContainerIndex,
+					  (unsigned int)publicKey->cbKey,
+					  (unsigned int)publicKey->dwMagic);
 			}
 			if (cont->size_key_exchange)   {
 				sz = (DWORD) (sizeof(BCRYPT_ECCKEY_BLOB) +  pubkey_der.len -3);
@@ -3727,13 +3735,22 @@ DWORD WINAPI CardGetContainerInfo(__in PCARD_DATA pCardData, __in BYTE bContaine
 				memcpy(((PBYTE)publicKey) + sizeof(BCRYPT_ECCKEY_BLOB),  pubkey_der.value + 3,  pubkey_der.len -3);
 
 				logprintf(pCardData, 3,
-					  "return info on ECC KEYX_CONTAINER_INDEX %u\n",
-					  (unsigned int)bContainerIndex);
+					  "return info on ECC KEYX_CONTAINER_INDEX %u cbKey:%u dwMagic:%u\n",
+					  (unsigned int)bContainerIndex,
+					  (unsigned int)publicKey->cbKey,
+					  (unsigned int)publicKey->dwMagic);
 			}
 		}
 	}
 	logprintf(pCardData, 7, "returns container(idx:%u) info\n",
 		  (unsigned int)bContainerIndex);
+
+	logprintf(pCardData, 1,
+		  "CardGetContainerInfo bContainerIndex=%u, dwFlags=0x%08X, dwVersion=%lu, cbSigPublicKey=%lu, cbKeyExPublicKey=%lu\n",
+		  (unsigned int)bContainerIndex, (unsigned int)dwFlags,
+		  (unsigned long)pContainerInfo->dwVersion,
+		  (unsigned long)pContainerInfo->cbSigPublicKey,
+		  (unsigned long)pContainerInfo->cbKeyExPublicKey);
 
 err:
 	free(pubkey_der.value);
@@ -6284,7 +6301,8 @@ DWORD WINAPI CardGetProperty(__in PCARD_DATA pCardData,
 		if (cbData < sizeof(*pKeySizes))
 			MD_FUNC_RETURN(pCardData, 1, ERROR_INSUFFICIENT_BUFFER);
 
-		dwret = md_query_key_sizes(pCardData, 0, pKeySizes);
+		/* dwFlags has key_type */
+		dwret = md_query_key_sizes(pCardData, dwFlags, pKeySizes);
 		if (dwret != SCARD_S_SUCCESS)
 			MD_FUNC_RETURN(pCardData, 1, dwret);
 	}
