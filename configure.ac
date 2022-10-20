@@ -1154,6 +1154,7 @@ AC_CONFIG_FILES([
 	MacOSX/Makefile
 	MacOSX/build-package
 	MacOSX/Distribution.xml
+	MacOSX/Distribution_universal.xml
 	MacOSX/resources/Welcome.html
 	src/tools/org.opensc-project.mac.pkcs11-register.plist
 	src/tools/org.opensc-project.mac.opensc-notify.plist
