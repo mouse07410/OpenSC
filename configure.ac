@@ -468,9 +468,20 @@ AC_CHECK_LIB(
 
 if test "${WIN32}" = "no"; then
 	dnl dl support
-	AC_SEARCH_LIBS([dlopen], [dl dld], [], [
-		AC_MSG_ERROR([unable to find the dlopen() function])
-	])
+	AC_ARG_VAR([LDL_LIBS], [linker flags for ldl])
+	if test -z "${LDL_LIBS}"; then
+		AC_CHECK_LIB(
+			[dl],
+			[dlopen],
+			[LDL_LIBS="-ldl"],
+			AC_CHECK_LIB(
+				[dld],
+				[dlopen],
+				[LDL_LIBS="-ldld"],
+				AC_MSG_ERROR([unable to find the dlopen() function])
+			)
+		)
+	fi
 
 	dnl Special check for pthread support.
 	AX_PTHREAD(
@@ -521,7 +532,7 @@ if test "${enable_dnie_ui}" = "yes"; then
 fi
 
 case "${host}" in
-	*-*-darwin*)
+	*-*-darwin*|*-mingw*|*-winnt*|*-cygwin*)
 			have_notify="yes"
 		;;
 	*)
@@ -545,6 +556,10 @@ case "${host}" in
 							   have_notify="no"
 							   have_gio2="no"  ])
 			LIBS="$saved_LIBS"
+			if test "${have_gio2}" = "yes"; then
+				# we do not need lglib-2.0
+				GIO2_LIBS="-lgio-2.0 -lgobject-2.0"
+			fi
 		;;
 esac
 
@@ -1087,6 +1102,7 @@ AM_CONDITIONAL([ENABLE_ZLIB], [test "${enable_zlib}" = "yes"])
 AM_CONDITIONAL([ENABLE_READLINE], [test "${enable_readline}" = "yes"])
 AM_CONDITIONAL([ENABLE_OPENSSL], [test "${enable_openssl}" = "yes"])
 AM_CONDITIONAL([ENABLE_OPENPACE], [test "${enable_openpace}" = "yes"])
+AM_CONDITIONAL([ENABLE_NOTIFY], [test "${enable_notify}" = "yes"])
 AM_CONDITIONAL([ENABLE_CRYPTOTOKENKIT], [test "${enable_cryptotokenkit}" = "yes"])
 AM_CONDITIONAL([ENABLE_OPENCT], [test "${enable_openct}" = "yes"])
 AM_CONDITIONAL([ENABLE_DOC], [test "${enable_doc}" = "yes"])
@@ -1215,6 +1231,7 @@ Compiler flags:          ${CFLAGS}
 Linker flags:            ${LDFLAGS}
 Libraries:               ${LIBS}
 
+LDL_LIBS:                ${LDL_LIBS}
 READLINE_CFLAGS:         ${READLINE_CFLAGS}
 READLINE_LIBS:           ${READLINE_LIBS}
 ZLIB_CFLAGS:             ${ZLIB_CFLAGS}
