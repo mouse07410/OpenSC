@@ -167,6 +167,7 @@ enum {
 	OPT_PRIVATE,
 	OPT_SENSITIVE,
 	OPT_EXTRACTABLE,
+	OPT_UNDESTROYABLE,
 	OPT_TEST_HOTPLUG,
 	OPT_UNLOCK_PIN,
 	OPT_PUK,
@@ -272,6 +273,7 @@ static const struct option options[] = {
 	{ "private",		0, NULL,		OPT_PRIVATE },
 	{ "sensitive",		0, NULL,		OPT_SENSITIVE },
 	{ "extractable",	0, NULL,		OPT_EXTRACTABLE },
+	{ "undestroyable",	0, NULL,		OPT_UNDESTROYABLE },
 	{ "always-auth",	0, NULL,		OPT_ALWAYS_AUTH },
 	{ "test-ec",		0, NULL,		OPT_TEST_EC },
 #ifndef _WIN32
@@ -359,6 +361,7 @@ static const char *option_help[] = {
 	"Set the CKA_PRIVATE attribute (object is only viewable after a login)",
 	"Set the CKA_SENSITIVE attribute (object cannot be revealed in plaintext)",
 	"Set the CKA_EXTRACTABLE attribute (object can be extracted)",
+	"Set the CKA_DESTROYABLE attribute to false (object cannot be destroyed)",
 	"Set the CKA_ALWAYS_AUTHENTICATE attribute to a key object (require PIN verification for each use)",
 	"Test EC (best used with the --login or --pin option)",
 #ifndef _WIN32
@@ -413,6 +416,7 @@ static size_t		opt_allowed_mechanisms_len = 0;
 static int		opt_is_private = 0;
 static int		opt_is_sensitive = 0;
 static int		opt_is_extractable = 0;
+static int		opt_is_destroyable = 1;
 static int		opt_test_hotplug = 0;
 static int		opt_login_type = -1;
 static int		opt_key_usage_sign = 0;
@@ -677,12 +681,14 @@ ATTR_METHOD(MODULUS_BITS, CK_ULONG);			/* getMODULUS_BITS */
 ATTR_METHOD(VALUE_LEN, CK_ULONG);			/* getVALUE_LEN */
 ATTR_METHOD(PROFILE_ID, CK_ULONG);			/* getPROFILE_ID */
 VARATTR_METHOD(LABEL, char);				/* getLABEL */
+VARATTR_METHOD(UNIQUE_ID, char);			/* getUNIQUE_ID */
 VARATTR_METHOD(APPLICATION, char);			/* getAPPLICATION */
 VARATTR_METHOD(ID, unsigned char);			/* getID */
 VARATTR_METHOD(OBJECT_ID, unsigned char);		/* getOBJECT_ID */
 VARATTR_METHOD(MODULUS, CK_BYTE);			/* getMODULUS */
 #ifdef ENABLE_OPENSSL
 VARATTR_METHOD(SUBJECT, unsigned char);			/* getSUBJECT */
+VARATTR_METHOD(SERIAL_NUMBER, unsigned char);	/* getSERIAL_NUMBER */
 VARATTR_METHOD(PUBLIC_EXPONENT, CK_BYTE);		/* getPUBLIC_EXPONENT */
 #endif
 VARATTR_METHOD(VALUE, unsigned char);			/* getVALUE */
@@ -1041,6 +1047,9 @@ int main(int argc, char * argv[])
 			break;
 		case OPT_EXTRACTABLE:
 			opt_is_extractable = 1;
+			break;
+		case OPT_UNDESTROYABLE:
+			opt_is_destroyable = 0;
 			break;
 		case OPT_TEST_HOTPLUG:
 			opt_test_hotplug = 1;
@@ -3357,6 +3366,13 @@ gen_key(CK_SLOT_ID slot, CK_SESSION_HANDLE session, CK_OBJECT_HANDLE *hSecretKey
 			n_attr++;
 		}
 
+		if (opt_key_usage_sign != 0) {
+			FILL_ATTR(keyTemplate[n_attr], CKA_SIGN, &_true, sizeof(_true));
+			n_attr++;
+			FILL_ATTR(keyTemplate[n_attr], CKA_VERIFY, &_true, sizeof(_true));
+			n_attr++;
+		}
+
 		FILL_ATTR(keyTemplate[n_attr], CKA_VALUE_LEN, &key_length, sizeof(key_length));
 		n_attr++;
 
@@ -4093,6 +4109,10 @@ static int write_object(CK_SESSION_HANDLE session)
 			FILL_ATTR(cert_templ[n_cert_attr], CKA_ID, opt_object_id, opt_object_id_len);
 			n_cert_attr++;
 		}
+		if (opt_is_destroyable == 0) {
+			FILL_ATTR(cert_templ[n_cert_attr], CKA_DESTROYABLE, &_false, sizeof(_false));
+			n_cert_attr++;
+		}
 #ifdef ENABLE_OPENSSL
 		/* according to PKCS #11 CKA_SUBJECT MUST be specified */
 		FILL_ATTR(cert_templ[n_cert_attr], CKA_SUBJECT, cert.subject, cert.subject_len);
@@ -4365,6 +4385,13 @@ static int write_object(CK_SESSION_HANDLE session)
 			FILL_ATTR(seckey_templ[n_seckey_attr], CKA_WRAP, &_true, sizeof(_true));
 			n_seckey_attr++;
 			FILL_ATTR(seckey_templ[n_seckey_attr], CKA_UNWRAP, &_true, sizeof(_true));
+			n_seckey_attr++;
+		}
+
+		if (opt_key_usage_sign != 0) {
+			FILL_ATTR(seckey_templ[n_seckey_attr], CKA_SIGN, &_true, sizeof(_true));
+			n_seckey_attr++;
+			FILL_ATTR(seckey_templ[n_seckey_attr], CKA_VERIFY, &_true, sizeof(_true));
 			n_seckey_attr++;
 		}
 
@@ -4939,6 +4966,7 @@ show_key(CK_SESSION_HANDLE sess, CK_OBJECT_HANDLE obj)
 	unsigned char	*id, *oid, *value;
 	const char      *sepa;
 	char		*label;
+	char		*unique_id;
 	int		pub = 1;
 	int		sec = 0;
 
@@ -5254,6 +5282,10 @@ show_key(CK_SESSION_HANDLE sess, CK_OBJECT_HANDLE obj)
 			printf("\n");
 		}
 	}
+	if ((unique_id = getUNIQUE_ID(sess, obj, NULL)) != NULL) {
+		printf("  Unique ID:  %s\n", unique_id);
+		free(unique_id);
+	}
 
 	suppress_warn = 0;
 }
@@ -5264,8 +5296,10 @@ static void show_cert(CK_SESSION_HANDLE sess, CK_OBJECT_HANDLE obj)
 	CK_ULONG	size;
 	unsigned char	*id;
 	char		*label;
+	char		*unique_id;
 #if defined(ENABLE_OPENSSL)
 	unsigned char	*subject;
+	unsigned char	*serial_number;
 #endif /* ENABLE_OPENSSL */
 
 	printf("Certificate Object; type = ");
@@ -5305,6 +5339,21 @@ static void show_cert(CK_SESSION_HANDLE sess, CK_OBJECT_HANDLE obj)
 		}
 		free(subject);
 	}
+	if ((serial_number = getSERIAL_NUMBER(sess, obj, &size)) != NULL) {
+		ASN1_INTEGER* serial = NULL;
+		const unsigned char *tmp = serial_number;
+		serial = d2i_ASN1_INTEGER(NULL, &tmp, size);
+		if (serial) {
+			BIO *bio = BIO_new(BIO_s_file());
+			BIO_set_fp(bio, stdout, BIO_NOCLOSE);
+			BIO_printf(bio, "  serial:     ");
+			i2a_ASN1_INTEGER(bio, serial);
+			BIO_printf(bio, "\n");
+			BIO_free(bio);
+			ASN1_INTEGER_free(serial);
+		}
+		free(serial_number);
+	}
 #endif /* ENABLE_OPENSSL */
 
 	if ((id = getID(sess, obj, &size)) != NULL && size) {
@@ -5315,6 +5364,10 @@ static void show_cert(CK_SESSION_HANDLE sess, CK_OBJECT_HANDLE obj)
 			printf("%02x", id[n]);
 		printf("\n");
 		free(id);
+	}
+	if ((unique_id = getUNIQUE_ID(sess, obj, NULL)) != NULL) {
+		printf("  Unique ID:  %s\n", unique_id);
+		free(unique_id);
 	}
 }
 
@@ -6171,7 +6224,7 @@ static EVP_PKEY *get_public_key(CK_SESSION_HANDLE session, CK_OBJECT_HANDLE priv
 				return NULL;
 			}
 			OSSL_PARAM_BLD_free(bld);
-			
+
 			if (!(ctx = EVP_PKEY_CTX_new_from_name(NULL, "RSA", NULL)) ||
 				EVP_PKEY_fromdata_init(ctx) != 1 ||
 				EVP_PKEY_fromdata(ctx, &pkey, EVP_PKEY_PUBLIC_KEY, params) != 1) {
@@ -8208,14 +8261,14 @@ static struct mech_info	p11_mechanisms[] = {
       { CKM_CDMF_MAC_GENERAL,	"CDMF-MAC-GENERAL", NULL, MF_UNKNOWN },
       { CKM_CDMF_CBC_PAD,	"CDMF-CBC-PAD", NULL, MF_UNKNOWN },
       { CKM_MD2,		"MD2", NULL, MF_UNKNOWN },
-      { CKM_MD2_HMAC,		"MD2-HMAC", NULL, MF_UNKNOWN },
-      { CKM_MD2_HMAC_GENERAL,	"MD2-HMAC-GENERAL", NULL, MF_UNKNOWN },
+      { CKM_MD2_HMAC,		"MD2-HMAC", NULL, MF_GENERIC_HMAC_FLAGS },
+      { CKM_MD2_HMAC_GENERAL,	"MD2-HMAC-GENERAL", NULL, MF_GENERIC_HMAC_FLAGS },
       { CKM_MD5,		"MD5", NULL, MF_UNKNOWN },
-      { CKM_MD5_HMAC,		"MD5-HMAC", NULL, MF_UNKNOWN },
-      { CKM_MD5_HMAC_GENERAL,	"MD5-HMAC-GENERAL", NULL, MF_UNKNOWN },
+      { CKM_MD5_HMAC,		"MD5-HMAC", NULL, MF_GENERIC_HMAC_FLAGS },
+      { CKM_MD5_HMAC_GENERAL,	"MD5-HMAC-GENERAL", NULL, MF_GENERIC_HMAC_FLAGS },
       { CKM_SHA_1,		"SHA-1", NULL, MF_UNKNOWN },
       { CKM_SHA_1_HMAC,		"SHA-1-HMAC", NULL, MF_GENERIC_HMAC_FLAGS },
-      { CKM_SHA_1_HMAC_GENERAL,	"SHA-1-HMAC-GENERAL", NULL, MF_UNKNOWN },
+      { CKM_SHA_1_HMAC_GENERAL,	"SHA-1-HMAC-GENERAL", NULL, MF_GENERIC_HMAC_FLAGS },
       { CKM_SHA224,		"SHA224", NULL, MF_UNKNOWN },
       { CKM_SHA224_HMAC,	"SHA224-HMAC", NULL, MF_GENERIC_HMAC_FLAGS },
       { CKM_SHA256,		"SHA256", NULL, MF_UNKNOWN },
@@ -8225,15 +8278,19 @@ static struct mech_info	p11_mechanisms[] = {
       { CKM_SHA512,		"SHA512", NULL, MF_UNKNOWN },
       { CKM_SHA512_HMAC,	"SHA512-HMAC", NULL, MF_GENERIC_HMAC_FLAGS },
       { CKM_SHA3_224,		"SHA3-224", NULL, MF_UNKNOWN },
+      { CKM_SHA3_224_HMAC,	"SHA3-224-HMAC", NULL, MF_GENERIC_HMAC_FLAGS },
       { CKM_SHA3_256,		"SHA3-256", NULL, MF_UNKNOWN },
+      { CKM_SHA3_256_HMAC,	"SHA3-256-HMAC", NULL, MF_GENERIC_HMAC_FLAGS },
       { CKM_SHA3_384,		"SHA3-384", NULL, MF_UNKNOWN },
+      { CKM_SHA3_384_HMAC,	"SHA3-384-HMAC", NULL, MF_GENERIC_HMAC_FLAGS },
       { CKM_SHA3_512,		"SHA3-512", NULL, MF_UNKNOWN },
-      { CKM_RIPEMD128,		"RIPEMD128", NULL, MF_UNKNOWN },
-      { CKM_RIPEMD128_HMAC,	"RIPEMD128-HMAC", NULL, MF_UNKNOWN },
-      { CKM_RIPEMD128_HMAC_GENERAL,"RIPEMD128-HMAC-GENERAL", NULL, MF_UNKNOWN },
+      { CKM_SHA3_512_HMAC,	"SHA3-512-HMAC", NULL, MF_GENERIC_HMAC_FLAGS },
+      { CKM_RIPEMD128,		"RIPEMD128", NULL, MF_GENERIC_HMAC_FLAGS },
+      { CKM_RIPEMD128_HMAC,	"RIPEMD128-HMAC", NULL, MF_GENERIC_HMAC_FLAGS },
+      { CKM_RIPEMD128_HMAC_GENERAL,"RIPEMD128-HMAC-GENERAL", NULL, MF_GENERIC_HMAC_FLAGS },
       { CKM_RIPEMD160,		"RIPEMD160", NULL, MF_UNKNOWN },
-      { CKM_RIPEMD160_HMAC,	"RIPEMD160-HMAC", NULL, MF_UNKNOWN },
-      { CKM_RIPEMD160_HMAC_GENERAL,"RIPEMD160-HMAC-GENERAL", NULL, MF_UNKNOWN },
+      { CKM_RIPEMD160_HMAC,	"RIPEMD160-HMAC", NULL, MF_GENERIC_HMAC_FLAGS },
+      { CKM_RIPEMD160_HMAC_GENERAL,"RIPEMD160-HMAC-GENERAL", NULL, MF_GENERIC_HMAC_FLAGS },
       { CKM_CAST_KEY_GEN,	"CAST-KEY-GEN", NULL, MF_UNKNOWN },
       { CKM_CAST_ECB,		"CAST-ECB", NULL, MF_UNKNOWN },
       { CKM_CAST_CBC,		"CAST-CBC", NULL, MF_UNKNOWN },
@@ -8296,7 +8353,7 @@ static struct mech_info	p11_mechanisms[] = {
       { CKM_PBE_SHA1_RC2_128_CBC,"PBE-SHA1-RC2-128-CBC", NULL, MF_UNKNOWN },
       { CKM_PBE_SHA1_RC2_40_CBC,"PBE-SHA1-RC2-40-CBC", NULL, MF_UNKNOWN },
       { CKM_PKCS5_PBKD2,	"PKCS5-PBKD2", NULL, MF_UNKNOWN },
-      { CKM_PBA_SHA1_WITH_SHA1_HMAC,"PBA-SHA1-WITH-SHA1-HMAC", NULL, MF_UNKNOWN },
+      { CKM_PBA_SHA1_WITH_SHA1_HMAC,"PBA-SHA1-WITH-SHA1-HMAC", NULL, MF_GENERIC_HMAC_FLAGS },
       { CKM_KEY_WRAP_LYNKS,	"KEY-WRAP-LYNKS", NULL, MF_UNKNOWN },
       { CKM_KEY_WRAP_SET_OAEP,	"KEY-WRAP-SET-OAEP", NULL, MF_UNKNOWN },
       { CKM_SKIPJACK_KEY_GEN,	"SKIPJACK-KEY-GEN", NULL, MF_UNKNOWN },
@@ -8375,11 +8432,11 @@ static struct mech_info	p11_mechanisms[] = {
       { CKM_GOSTR3410_WITH_GOSTR3411_12_256,	"GOSTR3410-WITH-GOSTR3411-12-256", NULL, MF_UNKNOWN },
       { CKM_GOSTR3410_WITH_GOSTR3411_12_512,	"GOSTR3410-WITH-GOSTR3411-12-512", NULL, MF_UNKNOWN },
       { CKM_GOSTR3411,		"GOSTR3411", NULL, MF_UNKNOWN },
-      { CKM_GOSTR3411_HMAC,	"GOSTR3411-HMAC", NULL, MF_UNKNOWN },
+      { CKM_GOSTR3411_HMAC,	"GOSTR3411-HMAC", NULL, MF_GENERIC_HMAC_FLAGS },
       { CKM_GOSTR3411_12_256,	"GOSTR3411-12-256", NULL, MF_UNKNOWN },
       { CKM_GOSTR3411_12_512,	"GOSTR3411-12-512", NULL, MF_UNKNOWN },
-      { CKM_GOSTR3411_12_256_HMAC,	"GOSTR3411-12-256-HMAC", NULL, MF_UNKNOWN },
-      { CKM_GOSTR3411_12_512_HMAC,	"GOSTR3411-12-512-HMAC", NULL, MF_UNKNOWN },
+      { CKM_GOSTR3411_12_256_HMAC,	"GOSTR3411-12-256-HMAC", NULL, MF_GENERIC_HMAC_FLAGS },
+      { CKM_GOSTR3411_12_512_HMAC,	"GOSTR3411-12-512-HMAC", NULL, MF_GENERIC_HMAC_FLAGS },
       { CKM_DSA_PARAMETER_GEN,	"DSA-PARAMETER-GEN", NULL, MF_UNKNOWN },
       { CKM_DH_PKCS_PARAMETER_GEN,"DH-PKCS-PARAMETER-GEN", NULL, MF_UNKNOWN },
       { CKM_X9_42_DH_PARAMETER_GEN,"X9-42-DH-PARAMETER-GEN", NULL, MF_UNKNOWN },

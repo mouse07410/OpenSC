@@ -1976,6 +1976,24 @@ static struct block	root_ops = {
 };
 
 static int
+check_macro_reference_loop(scconf_list *start, scconf_list *current, struct state *cur) {
+	sc_macro_t *mac = NULL;
+	const char *str = NULL;
+
+	if (!start || !current || !cur)
+		return 0;
+
+	str = current->data;
+	if (str[0] != '$')
+		return 0;
+	if (!(mac = find_macro(cur->profile, str + 1)))
+		return 0;
+	if (!strcmp(mac->name, start->data + 1))
+		return 1;
+	return check_macro_reference_loop(start, mac->value, cur);
+}
+
+static int
 build_argv(struct state *cur, const char *cmdname,
 		scconf_list *list, char **argv, unsigned int max)
 {
@@ -2004,6 +2022,9 @@ build_argv(struct state *cur, const char *cmdname,
 		}
 
 		if (list == mac->value) {
+			return SC_ERROR_SYNTAX_ERROR;
+		}
+		if (check_macro_reference_loop(list, mac->value, cur)) {
 			return SC_ERROR_SYNTAX_ERROR;
 		}
 #ifdef DEBUG_PROFILE
@@ -2353,7 +2374,7 @@ struct num_exp_ctx {
 	char **		argv;
 };
 
-static void	expr_eval(struct num_exp_ctx *, unsigned int *, unsigned int);
+static void	expr_eval(struct num_exp_ctx *, unsigned int *, unsigned int, int);
 
 static void
 expr_fail(struct num_exp_ctx *ctx)
@@ -2441,14 +2462,19 @@ expr_expect(struct num_exp_ctx *ctx, int c)
 		expr_fail(ctx);
 }
 
+#define MAX_BRACKETS 32
 static void
-expr_term(struct num_exp_ctx *ctx, unsigned int *vp)
+expr_term(struct num_exp_ctx *ctx, unsigned int *vp, int opening_brackets)
 {
 	char	*tok;
 
 	tok = expr_get(ctx);
 	if (*tok == '(') {
-		expr_eval(ctx, vp, 1);
+		if (opening_brackets + 1 > MAX_BRACKETS) {
+			parse_error(ctx->state, "Too many \"%s\" in expression", tok);
+			expr_fail(ctx);
+		}
+		expr_eval(ctx, vp, 1, opening_brackets + 1);
 		expr_expect(ctx, ')');
 	}
 	else if (isdigit((unsigned char)*tok)) {
@@ -2476,12 +2502,12 @@ expr_term(struct num_exp_ctx *ctx, unsigned int *vp)
 }
 
 static void
-expr_eval(struct num_exp_ctx *ctx, unsigned int *vp, unsigned int pri)
+expr_eval(struct num_exp_ctx *ctx, unsigned int *vp, unsigned int pri, int opening_brackets)
 {
 	unsigned int	left, right, new_pri;
 	char		*tok, op;
 
-	expr_term(ctx, &left);
+	expr_term(ctx, &left, opening_brackets);
 
 	while (1) {
 		tok = __expr_get(ctx, 1);
@@ -2518,7 +2544,7 @@ expr_eval(struct num_exp_ctx *ctx, unsigned int *vp, unsigned int pri)
 		}
 		pri = new_pri;
 
-		expr_eval(ctx, &right, new_pri + 1);
+		expr_eval(ctx, &right, new_pri + 1, opening_brackets);
 		switch (op) {
 		case '*': left *= right; break;
 		case '/':
@@ -2551,7 +2577,7 @@ get_uint_eval(struct state *cur, int argc, char **argv, unsigned int *vp)
 		return SC_ERROR_SYNTAX_ERROR;
 	}
 
-	expr_eval(&ctx, vp, 0);
+	expr_eval(&ctx, vp, 0, 0);
 	if (ctx.str[0] || ctx.argc)
 		expr_fail(&ctx);
 
