@@ -1096,6 +1096,52 @@ sc_pkcs11_decr(struct sc_pkcs11_session *session,
 }
 
 CK_RV
+sc_pkcs11_decr_update(struct sc_pkcs11_session *session,
+		CK_BYTE_PTR pEncryptedData, CK_ULONG ulEncryptedDataLen,
+		CK_BYTE_PTR pData, CK_ULONG_PTR pulDataLen)
+{
+	sc_pkcs11_operation_t *op;
+	CK_RV rv;
+
+	rv = session_get_operation(session, SC_PKCS11_OPERATION_DECRYPT, &op);
+	if (rv != CKR_OK)
+		return rv;
+
+	rv = op->type->decrypt_update(op, pEncryptedData, ulEncryptedDataLen,
+			pData, pulDataLen);
+
+	/* terminate session for any error except CKR_BUFFER_TOO_SMALL */
+	if (rv != CKR_OK && rv != CKR_BUFFER_TOO_SMALL)
+		session_stop_operation(session, SC_PKCS11_OPERATION_DECRYPT);
+	LOG_FUNC_RETURN(context, (int)rv);
+}
+
+CK_RV
+sc_pkcs11_decr_final(struct sc_pkcs11_session *session,
+		CK_BYTE_PTR pData, CK_ULONG_PTR pulDataLen)
+{
+	sc_pkcs11_operation_t *op;
+	CK_RV rv;
+
+	rv = session_get_operation(session, SC_PKCS11_OPERATION_DECRYPT, &op);
+	if (rv != CKR_OK)
+		return rv;
+
+	rv = op->type->decrypt_final(op, pData, pulDataLen);
+
+	/* application is requesting buffer size ? */
+	if (pData == NULL) {
+		/* do not terminate session for CKR_OK */
+		if (rv == CKR_OK)
+			LOG_FUNC_RETURN(context, CKR_OK);
+	} else if (rv == CKR_BUFFER_TOO_SMALL)
+		LOG_FUNC_RETURN(context, CKR_BUFFER_TOO_SMALL);
+
+	session_stop_operation(session, SC_PKCS11_OPERATION_DECRYPT);
+	LOG_FUNC_RETURN(context, (int)rv);
+}
+
+CK_RV
 sc_pkcs11_wrap(struct sc_pkcs11_session *session,
 	CK_MECHANISM_PTR pMechanism,
 	struct sc_pkcs11_object *wrappingKey,	/* wrapping key */
@@ -1449,9 +1495,11 @@ sc_pkcs11_decrypt_init(sc_pkcs11_operation_t *operation,
 			LOG_FUNC_RETURN(context, (int) rv);
 		}
 	}
-
 	operation->priv_data = data;
-	return CKR_OK;
+
+	/* The last parameter is NULL - this is call to INIT code in underlying functions */
+	return key->ops->decrypt(operation->session,
+			key, &operation->mechanism, NULL, 0, NULL, NULL);
 }
 
 static CK_RV
@@ -1461,14 +1509,102 @@ sc_pkcs11_decrypt(sc_pkcs11_operation_t *operation,
 {
 	struct operation_data *data;
 	struct sc_pkcs11_object *key;
+	CK_RV rv;
+	CK_ULONG ulDataLen, ulLastDataLen;
+
+	/* PKCS#11: If pBuf is not NULL_PTR, then *pulBufLen must contain the size in bytes.. */
+	if (pData && !pulDataLen)
+		return CKR_ARGUMENTS_BAD;
+
+	ulDataLen = pulDataLen ? *pulDataLen : 0;
+	ulLastDataLen = ulDataLen;
 
 	data = (struct operation_data *)operation->priv_data;
 
 	key = data->key;
-	return key->ops->decrypt(operation->session,
-				key, &operation->mechanism,
-				pEncryptedData, ulEncryptedDataLen,
-				pData, pulDataLen);
+
+	/* Decrypt */
+	rv = key->ops->decrypt(operation->session, key, &operation->mechanism,
+			pEncryptedData, ulEncryptedDataLen, pData, &ulDataLen);
+
+	if (pulDataLen)
+		*pulDataLen = ulDataLen;
+
+	if (rv != CKR_OK)
+		return rv;
+
+	/* recalculate buffer space */
+	if (ulDataLen <= ulLastDataLen)
+		ulLastDataLen -= ulDataLen;
+	else
+		ulLastDataLen = 0;
+
+	/* DecryptFinalize */
+	rv = key->ops->decrypt(operation->session, key, &operation->mechanism,
+			NULL, 0, pData + ulDataLen, &ulLastDataLen);
+	if (pulDataLen)
+		*pulDataLen = ulDataLen + ulLastDataLen;
+	return rv;
+}
+
+static CK_RV
+sc_pkcs11_decrypt_update(sc_pkcs11_operation_t *operation,
+		CK_BYTE_PTR pEncryptedPart, CK_ULONG ulEncryptedPartLen,
+		CK_BYTE_PTR pPart, CK_ULONG_PTR pulPartLen)
+{
+	struct operation_data *data;
+	struct sc_pkcs11_object *key;
+	CK_RV rv;
+	CK_ULONG ulPartLen;
+
+	/* PKCS#11: If pBuf is not NULL_PTR, then *pulBufLen must contain the size in bytes.. */
+	if (pPart && !pulPartLen)
+		return CKR_ARGUMENTS_BAD;
+
+	ulPartLen = pulPartLen ? *pulPartLen : 0;
+
+	data = (struct operation_data *)operation->priv_data;
+
+	key = data->key;
+
+	rv = key->ops->decrypt(operation->session,
+			key, &operation->mechanism,
+			pEncryptedPart, ulEncryptedPartLen,
+			pPart, &ulPartLen);
+
+	if (pulPartLen)
+		*pulPartLen = ulPartLen;
+	return rv;
+}
+
+static CK_RV
+sc_pkcs11_decrypt_final(sc_pkcs11_operation_t *operation,
+		CK_BYTE_PTR pLastPart,
+		CK_ULONG_PTR pulLastPartLen)
+{
+	struct operation_data *data;
+	struct sc_pkcs11_object *key;
+	CK_RV rv;
+	CK_ULONG ulLastPartLen;
+
+	/* PKCS#11: If pBuf is not NULL_PTR, then *pulBufLen must contain the size in bytes.. */
+	if (pLastPart && !pulLastPartLen)
+		return CKR_ARGUMENTS_BAD;
+
+	ulLastPartLen = pulLastPartLen ? *pulLastPartLen : 0;
+
+	data = (struct operation_data *)operation->priv_data;
+
+	key = data->key;
+
+	rv = key->ops->decrypt(operation->session,
+			key, &operation->mechanism,
+			NULL, 0,
+			pLastPart, &ulLastPartLen);
+
+	if (pulLastPartLen)
+		*pulLastPartLen = ulLastPartLen;
+	return rv;
 }
 
 static CK_RV
@@ -1569,6 +1705,8 @@ sc_pkcs11_new_fw_mechanism(CK_MECHANISM_TYPE mech,
 	if (pInfo->flags & CKF_DECRYPT) {
 		mt->decrypt_init = sc_pkcs11_decrypt_init;
 		mt->decrypt = sc_pkcs11_decrypt;
+		mt->decrypt_update = sc_pkcs11_decrypt_update;
+		mt->decrypt_final = sc_pkcs11_decrypt_final;
 	}
 	if (pInfo->flags & CKF_ENCRYPT) {
 		mt->encrypt_init = sc_pkcs11_encrypt_init;
