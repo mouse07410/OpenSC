@@ -42,6 +42,7 @@ extern "C" {
 #define X509_get_extension_flags(x)	(x->ex_flags)
 #define X509_get_key_usage(x)		(x->ex_kusage)
 #define X509_get_extended_key_usage(x)	(x->ex_xkusage)
+#define EVP_MD_CTX_md_data(x)          (x->md_data)
 #endif
 
 #if defined(LIBRESSL_VERSION_NUMBER)
@@ -53,8 +54,10 @@ extern "C" {
 #define EVP_sha3_256()                          (NULL)
 #define EVP_sha3_384()                          (NULL)
 #define EVP_sha3_512()                          (NULL)
+#if LIBRESSL_VERSION_NUMBER < 0x3070000fL
 #define EVP_PKEY_new_raw_public_key(t, e, p, l) (NULL)
 #define EVP_PKEY_get_raw_public_key(p, pu, l)   (0)
+#endif
 #endif
 
 /* OpenSSL 1.1.1 has FIPS_mode function */

@@ -309,19 +309,19 @@ int callback_private_keys(test_certs_t *objects,
 
 	/* Store attributes, flags and handles */
 	o->private_handle = object_handle;
-	o->sign = (template[0].ulValueLen != (CK_ULONG) -1)
+	o->sign = (template[0].ulValueLen == sizeof(CK_BBOOL))
 		? *((CK_BBOOL *) template[0].pValue) : CK_FALSE;
-	o->decrypt = (template[1].ulValueLen != (CK_ULONG) -1)
+	o->decrypt = (template[1].ulValueLen == sizeof(CK_BBOOL))
 		? *((CK_BBOOL *) template[1].pValue) : CK_FALSE;
-	o->key_type = (template[2].ulValueLen != (CK_ULONG) -1)
+	o->key_type = (template[2].ulValueLen == sizeof(CK_KEY_TYPE))
 		? *((CK_KEY_TYPE *) template[2].pValue) : (CK_KEY_TYPE) -1;
-	o->always_auth = (template[4].ulValueLen != (CK_ULONG) -1)
+	o->always_auth = (template[4].ulValueLen == sizeof(CK_BBOOL))
 		? *((CK_BBOOL *) template[4].pValue) : CK_FALSE;
-	o->unwrap = (template[5].ulValueLen != (CK_ULONG) -1)
+	o->unwrap = (template[5].ulValueLen == sizeof(CK_BBOOL))
 		? *((CK_BBOOL *) template[5].pValue) : CK_FALSE;
-	o->derive_priv = (template[6].ulValueLen != (CK_ULONG) -1)
+	o->derive_priv = (template[6].ulValueLen == sizeof(CK_BBOOL))
 		? *((CK_BBOOL *) template[6].pValue) : CK_FALSE;
-	o->extractable = (template[8].ulValueLen != (CK_ULONG) -1)
+	o->extractable = (template[8].ulValueLen == sizeof(CK_BBOOL))
 		? *((CK_BBOOL *) template[8].pValue) : CK_FALSE;
 
 	debug_print(" [  OK %s ] Private key loaded successfully S:%d D:%d T:%02lX",
@@ -359,16 +359,16 @@ int callback_public_keys(test_certs_t *objects,
 	}
 
 	o->public_handle = object_handle;
-	o->verify = (template[0].ulValueLen != (CK_ULONG) -1)
+	o->verify = (template[0].ulValueLen == sizeof(CK_BBOOL))
 		? *((CK_BBOOL *) template[0].pValue) : CK_FALSE;
-	o->encrypt = (template[1].ulValueLen != (CK_ULONG) -1)
+	o->encrypt = (template[1].ulValueLen == sizeof(CK_BBOOL))
 		? *((CK_BBOOL *) template[1].pValue) : CK_FALSE;
 	/* store key type in case there is no corresponding private key */
-	o->key_type = (template[2].ulValueLen != (CK_ULONG) -1)
+	o->key_type = (template[2].ulValueLen == sizeof(CK_KEY_TYPE))
 		? *((CK_KEY_TYPE *) template[2].pValue) : (CK_KEY_TYPE) -1;
-	o->wrap = (template[8].ulValueLen != (CK_ULONG) -1)
+	o->wrap = (template[8].ulValueLen == sizeof(CK_BBOOL))
 		? *((CK_BBOOL *) template[8].pValue) : CK_FALSE;
-	o->derive_pub = (template[9].ulValueLen != (CK_ULONG) -1)
+	o->derive_pub = (template[9].ulValueLen == sizeof(CK_BBOOL))
 		? *((CK_BBOOL *) template[9].pValue) : CK_FALSE;
 
 	/* check if we get the same public key as from the certificate */
@@ -390,7 +390,7 @@ int callback_public_keys(test_certs_t *objects,
 				BN_free(cert_n);
 				BN_free(n);
 				BN_free(e);
-				return -1; 
+				return -1;
 			}
 #endif
 			rv = BN_cmp(cert_n, n) == 0 && BN_cmp(cert_e, e) == 0;
@@ -492,7 +492,7 @@ int callback_public_keys(test_certs_t *objects,
 
 		ecpoint = EC_POINT_hex2point(ecgroup, BN_bn2hex(bn), NULL, NULL);
 		BN_free(bn);
-		
+
 		if (ecpoint == NULL) {
 			debug_print(" [WARN %s ] Can not convert EC_POINT from"
 				" BIGNUM to OpenSSL format", o->id_str);
@@ -566,7 +566,7 @@ int callback_public_keys(test_certs_t *objects,
 				EC_POINT_free(ecpoint);
 				return -1;
 			}
-			
+
 			if (!(bld = OSSL_PARAM_BLD_new()) ||
 				OSSL_PARAM_BLD_push_utf8_string(bld, "group", curve_name, curve_name_len) != 1 ||
 				OSSL_PARAM_BLD_push_octet_string(bld, "pub", pubkey, pubkey_len) != 1 ||
@@ -751,23 +751,23 @@ int callback_secret_keys(test_certs_t *objects,
 	o->private_handle = object_handle;
 	/* For verification/encryption, we use the same key */
 	o->public_handle = object_handle;
-	o->key_type = (template[0].ulValueLen != (CK_ULONG) -1)
+	o->key_type = (template[0].ulValueLen == sizeof(CK_KEY_TYPE))
 		? *((CK_KEY_TYPE *) template[0].pValue) : (CK_KEY_TYPE) -1;
-	o->sign = (template[3].ulValueLen != (CK_ULONG) -1)
+	o->sign = (template[3].ulValueLen == sizeof(CK_BBOOL))
 		? *((CK_BBOOL *) template[3].pValue) : CK_FALSE;
-	o->sign = (template[4].ulValueLen != (CK_ULONG) -1)
+	o->sign = (template[4].ulValueLen == sizeof(CK_BBOOL))
 		? *((CK_BBOOL *) template[4].pValue) : CK_FALSE;
-	o->encrypt = (template[5].ulValueLen != (CK_ULONG) -1)
+	o->encrypt = (template[5].ulValueLen == sizeof(CK_BBOOL))
 		? *((CK_BBOOL *) template[5].pValue) : CK_FALSE;
-	o->decrypt = (template[6].ulValueLen != (CK_ULONG) -1)
+	o->decrypt = (template[6].ulValueLen == sizeof(CK_BBOOL))
 		? *((CK_BBOOL *) template[6].pValue) : CK_FALSE;
-	o->derive_priv = (template[7].ulValueLen != (CK_ULONG) -1)
+	o->derive_priv = (template[7].ulValueLen == sizeof(CK_BBOOL))
 		? *((CK_BBOOL *) template[7].pValue) : CK_FALSE;
-	o->wrap = (template[8].ulValueLen != (CK_ULONG) -1)
+	o->wrap = (template[8].ulValueLen == sizeof(CK_BBOOL))
 		? *((CK_BBOOL *) template[8].pValue) : CK_FALSE;
-	o->unwrap = (template[9].ulValueLen != (CK_ULONG) -1)
+	o->unwrap = (template[9].ulValueLen == sizeof(CK_BBOOL))
 		? *((CK_BBOOL *) template[9].pValue) : CK_FALSE;
-	o->extractable = (template[12].ulValueLen != (CK_ULONG) -1)
+	o->extractable = (template[12].ulValueLen == sizeof(CK_BBOOL))
 		? *((CK_BBOOL *) template[12].pValue) : CK_FALSE;
 
 	if (template[10].ulValueLen > 0) {
@@ -847,7 +847,8 @@ int search_objects(test_certs_t *objects, token_info_t *info,
 			rv = fp->C_GetAttributeValue(info->session_handle, object_handles[i],
 				&(template[j]), 1);
 			if (rv == CKR_ATTRIBUTE_TYPE_INVALID ||
-			    rv == CKR_ATTRIBUTE_SENSITIVE) {
+			    rv == CKR_ATTRIBUTE_SENSITIVE ||
+			    rv == CKR_DEVICE_ERROR) {
 				continue;
 			} else if (rv != CKR_OK) {
 				fail_msg("C_GetAttributeValue: rv = 0x%.8lX\n", rv);
@@ -1220,10 +1221,21 @@ const char *get_mechanism_flag_name(int mech_id)
 char *convert_byte_string(unsigned char *id, unsigned long length)
 {
 	unsigned int i;
-	char *data = malloc(3 * length * sizeof(char) + 1);
-	for (i = 0; i < length; i++)
-		sprintf(&data[i*3], "%02X:", id[i]);
-	data[length*3-1] = '\0';
+	char *data;
+	if (length == 0) {
+		return NULL;
+	}
+
+	data = malloc(3 * length * sizeof(char) + 1);
+	if (data == NULL) {
+		return NULL;
+	}
+
+	for (i = 0; i < length; i++) {
+		sprintf(&data[i * 3], "%02X:", id[i]);
+	}
+
+	data[length * 3 - 1] = '\0';
 	return data;
 }
 
