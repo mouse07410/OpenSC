@@ -49,10 +49,6 @@
 # include <openssl/provider.h>
 #endif
 
-#if OPENSSL_VERSION_NUMBER >= 0x30000000L
-	static OSSL_PROVIDER *legacy_provider = NULL;
-#endif
-
 #define MAX_RESP_BUFFER_SIZE 2048
 
 /**
@@ -1475,6 +1471,7 @@ int cwa_encode_apdu(sc_card_t * card,
 	u8 *cryptbuf = NULL;
 
 	EVP_CIPHER_CTX *cctx = NULL;
+	EVP_CIPHER *alg = NULL;
 	unsigned char *key = NULL;
 	int tmplen = 0;
 
@@ -1565,7 +1562,9 @@ int cwa_encode_apdu(sc_card_t * card,
 		*cryptbuf = 0x01;
 		key = sm_session->session_enc;
 
-		if (EVP_EncryptInit_ex(cctx, EVP_des_ede_cbc(), NULL, key, iv) != 1 ||
+		alg = sc_evp_cipher(card->ctx, "DES-EDE-CBC");
+
+		if (EVP_EncryptInit_ex(cctx, alg, NULL, key, iv) != 1 ||
 			EVP_CIPHER_CTX_set_padding(cctx, 0) != 1 ||
 			EVP_EncryptUpdate(cctx, cryptbuf + 1, &dlen, msgbuf, dlen) != 1 ||
 			EVP_EncryptFinal_ex(cctx, cryptbuf + 1 + dlen, &tmplen) != 1) {
@@ -1618,17 +1617,9 @@ int cwa_encode_apdu(sc_card_t * card,
 	tmplen = 0;
 	key = sm_session->session_mac;
 
-#if OPENSSL_VERSION_NUMBER >= 0x30000000L
-	if (!legacy_provider) {
-		if (!(legacy_provider = OSSL_PROVIDER_try_load(NULL, "legacy", 1))) {
-			msg = "Failed to load legacy provider";
-			res = SC_ERROR_INTERNAL;
-			goto encode_end;
-		}
-	}
-#endif
-
-	if (EVP_EncryptInit_ex(cctx, EVP_des_ecb(), NULL, key, NULL) != 1 ||
+	sc_evp_cipher_free(alg);
+	alg = sc_evp_cipher(card->ctx, "DES-ECB");
+	if (EVP_EncryptInit_ex(cctx, alg, NULL, key, NULL) != 1 ||
 		EVP_CIPHER_CTX_set_padding(cctx, 0) != 1) {
 		msg = "Error in DES ECB encryption";
 		res = SC_ERROR_INTERNAL;
@@ -1653,7 +1644,10 @@ int cwa_encode_apdu(sc_card_t * card,
 	}
 
 	/* and apply 3DES to result */
-	if (EVP_EncryptInit_ex(cctx, EVP_des_ede_ecb(), NULL, key, NULL) != 1 ||
+	sc_evp_cipher_free(alg);
+	alg = sc_evp_cipher(card->ctx, "DES-EDE-ECB");
+
+	if (EVP_EncryptInit_ex(cctx, alg, NULL, key, NULL) != 1 ||
 		EVP_CIPHER_CTX_set_padding(cctx, 0) != 1 ||
 		EVP_EncryptUpdate(cctx, macbuf, &tmplen, macbuf, 8) != 1 ||
 		EVP_EncryptFinal_ex(cctx, macbuf + tmplen, &tmplen) != 1) {
@@ -1687,6 +1681,7 @@ encode_end:
 	if (from->resp != to->resp)
 		free(to->resp);
 encode_end_apdu_valid:
+	sc_evp_cipher_free(alg);
 	if (cctx)
 		EVP_CIPHER_CTX_free(cctx);
 	if (msg)
@@ -1732,6 +1727,7 @@ int cwa_decode_response(sc_card_t * card,
 	struct sm_cwa_session * sm_session = &card->sm_ctx.info.session.cwa;
 
 	EVP_CIPHER_CTX *cctx = NULL;
+	EVP_CIPHER *alg = NULL;
 	unsigned char *key = NULL;
 	int tmplen = 0;
 
@@ -1860,17 +1856,8 @@ int cwa_decode_response(sc_card_t * card,
 	/* set up key for mac computing */
 	key = sm_session->session_mac;
 
-#if OPENSSL_VERSION_NUMBER >= 0x30000000L
-	if (!legacy_provider) {
-		if (!(legacy_provider = OSSL_PROVIDER_try_load(NULL, "legacy", 1))) {
-			msg = "Failed to load legacy provider";
-			res = SC_ERROR_INTERNAL;
-			goto response_decode_end;
-		}
-	}
-#endif
-
-	if (EVP_EncryptInit_ex(cctx, EVP_des_ecb(), NULL, key, NULL) != 1 ||
+	alg = sc_evp_cipher(card->ctx, "DES-ECB");
+	if (EVP_EncryptInit_ex(cctx, alg, NULL, key, NULL) != 1 ||
 		EVP_CIPHER_CTX_set_padding(cctx, 0) != 1) {
 		msg = "Error in DES ECB encryption";
 		res = SC_ERROR_INTERNAL;
@@ -1896,7 +1883,10 @@ int cwa_decode_response(sc_card_t * card,
 	}
 
 	/* finally apply 3DES to result */
-	if (EVP_EncryptInit_ex(cctx, EVP_des_ede_ecb(), NULL, key, NULL) != 1 ||
+	sc_evp_cipher_free(alg);
+	alg = sc_evp_cipher(card->ctx, "DES-EDE-ECB");
+
+	if (EVP_EncryptInit_ex(cctx, alg, NULL, key, NULL) != 1 ||
 		EVP_CIPHER_CTX_set_padding(cctx, 0) != 1 ||
 		EVP_EncryptUpdate(cctx, macbuf, &tmplen, macbuf, 8) != 1 ||
 		EVP_EncryptFinal_ex(cctx, macbuf + tmplen, &tmplen) != 1) {
@@ -1952,7 +1942,10 @@ int cwa_decode_response(sc_card_t * card,
 
 		/* decrypt into response buffer
 		 * by using 3DES CBC by mean of kenc and iv={0,...0} */
-		if (EVP_DecryptInit_ex(cctx, EVP_des_ede_cbc(), NULL, key, iv) != 1 ||
+		sc_evp_cipher_free(alg);
+		alg = sc_evp_cipher(card->ctx, "DES-EDE-CBC");
+
+		if (EVP_DecryptInit_ex(cctx, alg, NULL, key, iv) != 1 ||
 			EVP_CIPHER_CTX_set_padding(cctx, 0) != 1 ||
 			EVP_DecryptUpdate(cctx, apdu->resp, &dlen, &e_tlv->data[1], e_tlv->len - 1) != 1 ||
 			EVP_DecryptFinal_ex(cctx, apdu->resp + dlen, &tmplen) != 1) {
@@ -1981,6 +1974,7 @@ int cwa_decode_response(sc_card_t * card,
 	res = SC_SUCCESS;
 
  response_decode_end:
+	sc_evp_cipher_free(alg);
  	EVP_CIPHER_CTX_free(cctx);
 	if (buffer)
 		free(buffer);
