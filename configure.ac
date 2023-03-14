@@ -680,7 +680,7 @@ PKG_CHECK_MODULES(
 	[have_openssl="yes"],
 	[AC_CHECK_LIB(
 		[crypto],
-		[RSA_version],
+		[RSA_get_version],
 		[
 			have_openssl="yes"
 			OPENSSL_LIBS="-lcrypto"
