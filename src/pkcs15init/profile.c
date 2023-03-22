@@ -259,7 +259,7 @@ static struct auth_info *	new_key(struct sc_profile *,
 				unsigned int, unsigned int);
 static void		set_pin_defaults(struct sc_profile *,
 				struct pin_info *);
-static void		new_macro(sc_profile_t *, const char *, scconf_list *);
+static int		new_macro(sc_profile_t *, const char *, scconf_list *);
 static sc_macro_t *	find_macro(sc_profile_t *, const char *);
 
 static sc_file_t *
@@ -1575,7 +1575,10 @@ do_acl(struct state *cur, int argc, char **argv)
 	while (argc--) {
 		unsigned int	op, method, id;
 
+		if (strlen(*argv) >= sizeof(oper))
+			goto bad;
 		strlcpy(oper, *argv++, sizeof(oper));
+
 		if ((what = strchr(oper, '=')) == NULL)
 			goto bad;
 		*what++ = '\0';
@@ -1826,6 +1829,7 @@ process_macros(struct state *cur, struct block *info,
 {
 	scconf_item	*item;
 	const char	*name;
+	int		 r;
 
 	for (item = blk->items; item; item = item->next) {
 		name = item->key;
@@ -1834,27 +1838,33 @@ process_macros(struct state *cur, struct block *info,
 #ifdef DEBUG_PROFILE
 		printf("Defining %s\n", name);
 #endif
-		new_macro(cur->profile, name, item->value.list);
+		r = new_macro(cur->profile, name, item->value.list);
+		if (r != SC_SUCCESS)
+			return r;
 	}
 
-	return 0;
+	return SC_SUCCESS;
 }
 
-static void
+static int
 new_macro(sc_profile_t *profile, const char *name, scconf_list *value)
 {
 	sc_macro_t	*mac;
 
+	if (!profile || !name || !value)
+		return SC_ERROR_INVALID_ARGUMENTS;
+
 	if ((mac = find_macro(profile, name)) == NULL) {
 		mac = calloc(1, sizeof(*mac));
 		if (mac == NULL)
-			return;
+			return SC_ERROR_OUT_OF_MEMORY;
 		mac->name = strdup(name);
 		mac->next = profile->macro_list;
 		profile->macro_list = mac;
 	}
 
 	mac->value = value;
+	return SC_SUCCESS;
 }
 
 static sc_macro_t *
@@ -1976,24 +1986,23 @@ static struct block	root_ops = {
 };
 
 static int
-check_macro_reference_loop(scconf_list *start, scconf_list *current, struct state *cur, int depth) {
-	sc_macro_t *mac = NULL;
-	const char *str = NULL;
+check_macro_reference_loop(char *start, char *str, struct state *cur, int depth) {
+	sc_macro_t *macro = NULL;
+	char *name = NULL;
 
-	if (!start || !current || !cur)
+	if (!start || !str || !cur)
 		return 1;
 
 	if (depth == 16)
 		return 1;
 
-	str = current->data;
-	if (str[0] != '$')
+	if (!(name = strchr(str, '$')))
 		return 0;
-	if (!(mac = find_macro(cur->profile, str + 1)))
+	if (!(macro = find_macro(cur->profile, name + 1)))
 		return 0;
-	if (!strcmp(mac->name, start->data + 1))
+	if (!strcmp(macro->name, start + 1))
 		return 1;
-	return check_macro_reference_loop(start, mac->value, cur, depth + 1);
+	return check_macro_reference_loop(start, macro->value->data, cur, depth + 1);
 }
 
 static int
@@ -2002,7 +2011,7 @@ build_argv(struct state *cur, const char *cmdname,
 {
 	unsigned int	argc;
 	const char	*str;
-	sc_macro_t	*mac;
+	sc_macro_t	*macro;
 	int		r;
 
 	for (argc = 0; list; list = list->next) {
@@ -2013,21 +2022,30 @@ build_argv(struct state *cur, const char *cmdname,
 
 		str = list->data;
 		if (str[0] != '$') {
+			/* When str contains macro inside, macro reference loop needs to be checked */
+			char *macro_name = NULL;
+			if ((macro_name = strchr(str, '$'))) {
+				if ((macro = find_macro(cur->profile, macro_name + 1))
+				    && check_macro_reference_loop(macro_name + 1, macro->value->data, cur, 0)) {
+					return SC_ERROR_SYNTAX_ERROR;
+				}
+			}
+
 			argv[argc++] = list->data;
 			continue;
 		}
 
 		/* Expand macro reference */
-		if (!(mac = find_macro(cur->profile, str + 1))) {
+		if (!(macro = find_macro(cur->profile, str + 1))) {
 			parse_error(cur, "%s: unknown macro \"%s\"",
 					cmdname, str);
 			return SC_ERROR_SYNTAX_ERROR;
 		}
 
-		if (list == mac->value) {
+		if (list == macro->value) {
 			return SC_ERROR_SYNTAX_ERROR;
 		}
-		if (check_macro_reference_loop(list, mac->value, cur, 0)) {
+		if (check_macro_reference_loop(list->data, macro->value->data, cur, 0)) {
 			return SC_ERROR_SYNTAX_ERROR;
 		}
 #ifdef DEBUG_PROFILE
@@ -2040,7 +2058,7 @@ build_argv(struct state *cur, const char *cmdname,
 			printf("\n");
 		}
 #endif
-		r = build_argv(cur, cmdname, mac->value,
+		r = build_argv(cur, cmdname, macro->value,
 				argv + argc, max - argc);
 		if (r < 0)
 			return r;
@@ -2272,6 +2290,9 @@ get_authid(struct state *cur, const char *value,
 		*num = 0;
 		return get_uint(cur, value, type);
 	}
+
+	if (strlen(value) >= sizeof(temp))
+		return 1;
 
 	n = strcspn(value, "0123456789x");
 	strlcpy(temp, value, (sizeof(temp) > n) ? n + 1 : sizeof(temp));
