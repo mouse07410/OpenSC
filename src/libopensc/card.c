@@ -496,6 +496,12 @@ int sc_lock(sc_card_t *card)
 	if (r == 0)
 		card->lock_count++;
 
+	r2 = sc_mutex_unlock(card->ctx, card->mutex);
+	if (r2 != SC_SUCCESS) {
+		sc_log(card->ctx, "unable to release card->mutex lock");
+		r = r != SC_SUCCESS ? r : r2;
+	}
+
 	if (r == 0 && was_reset > 0) {
 #ifdef ENABLE_SM
 		if (card->sm_ctx.ops.open)
@@ -503,23 +509,10 @@ int sc_lock(sc_card_t *card)
 #endif
 	}
 
-	r2 = sc_mutex_unlock(card->ctx, card->mutex);
-	if (r2 != SC_SUCCESS) {
-		sc_log(card->ctx, "unable to release card->mutex lock");
-		r = r != SC_SUCCESS ? r : r2;
-	}
-
 	/* give card driver a chance to do something when reader lock first obtained */
 	if (r == 0 && reader_lock_obtained == 1  && card->ops->card_reader_lock_obtained) {
-		r = card->ops->card_reader_lock_obtained(card, was_reset);
-		/* return value of card->reader->ops->lock is overwritten here
-		   by card->ops->card_reader_lock_obtained */
-		if (r != 0) {
-			/* unlock reader and get the card to its original state in case of failure*/
-			if (card->reader->ops->unlock != NULL)
-				r = card->reader->ops->unlock(card->reader);
-			card->lock_count--;
-		}
+		if (SC_SUCCESS != card->ops->card_reader_lock_obtained(card, was_reset))
+			sc_log(card->ctx, "card_reader_lock_obtained failed");
 	}
 
 	LOG_FUNC_RETURN(card->ctx, r);
@@ -536,10 +529,10 @@ int sc_unlock(sc_card_t *card)
 
 	r = sc_mutex_lock(card->ctx, card->mutex);
 	if (r != SC_SUCCESS)
-		return r;
+		LOG_FUNC_RETURN(card->ctx, r);
 
 	if (card->lock_count < 1) {
-		return SC_ERROR_INVALID_ARGUMENTS;
+		LOG_FUNC_RETURN(card->ctx, SC_ERROR_INVALID_ARGUMENTS);
 	}
 	if (--card->lock_count == 0) {
 		if (card->flags & SC_CARD_FLAG_KEEP_ALIVE) {
@@ -659,19 +652,25 @@ int sc_read_binary(sc_card_t *card, unsigned int idx,
 	LOG_TEST_RET(card->ctx, r, "sc_lock() failed");
 
 	while (todo > 0) {
-		size_t chunk = todo > max_le ? max_le : todo;
+		size_t chunk = MIN(todo, max_le);
 
 		r = card->ops->read_binary(card, idx, buf, chunk, flags);
 		if (r == 0 || r == SC_ERROR_FILE_END_REACHED)
 			break;
-		if ((idx > SIZE_MAX - (size_t) r)
-				|| (size_t) r > todo) {
-			/* `idx + r` or `todo - r` would overflow */
-			r = SC_ERROR_OFFSET_TOO_LARGE;
+		if (r < 0 && todo != count) {
+			/* the last command failed, but previous ones succeeded.
+			 * Let's just return what we've successfully read. */
+			sc_log(card->ctx, "Subsequent read failed with %d, returning what was read successfully.", r);
+			break;
 		}
 		if (r < 0) {
 			sc_unlock(card);
 			LOG_FUNC_RETURN(card->ctx, r);
+		}
+		if ((idx > SIZE_MAX - (size_t) r) || (size_t) r > todo) {
+			/* `idx + r` or `todo - r` would overflow */
+			sc_unlock(card);
+			LOG_FUNC_RETURN(card->ctx, SC_ERROR_OFFSET_TOO_LARGE);
 		}
 
 		todo -= (size_t) r;
@@ -707,19 +706,19 @@ int sc_write_binary(sc_card_t *card, unsigned int idx,
 	LOG_TEST_RET(card->ctx, r, "sc_lock() failed");
 
 	while (todo > 0) {
-		size_t chunk = todo > max_lc ? max_lc : todo;
+		size_t chunk = MIN(todo, max_lc);
 
 		r = card->ops->write_binary(card, idx, buf, chunk, flags);
 		if (r == 0 || r == SC_ERROR_FILE_END_REACHED)
 			break;
-		if ((idx > SIZE_MAX - (size_t) r)
-				|| (size_t) r > todo) {
-			/* `idx + r` or `todo - r` would overflow */
-			r = SC_ERROR_OFFSET_TOO_LARGE;
-		}
 		if (r < 0) {
 			sc_unlock(card);
 			LOG_FUNC_RETURN(card->ctx, r);
+		}
+		if ((idx > SIZE_MAX - (size_t) r) || (size_t) r > todo) {
+			/* `idx + r` or `todo - r` would overflow */
+			sc_unlock(card);
+			LOG_FUNC_RETURN(card->ctx, SC_ERROR_OFFSET_TOO_LARGE);
 		}
 
 		todo -= (size_t) r;
@@ -763,19 +762,19 @@ int sc_update_binary(sc_card_t *card, unsigned int idx,
 	LOG_TEST_RET(card->ctx, r, "sc_lock() failed");
 
 	while (todo > 0) {
-		size_t chunk = todo > max_lc ? max_lc : todo;
+		size_t chunk = MIN(todo, max_lc);
 
 		r = card->ops->update_binary(card, idx, buf, chunk, flags);
 		if (r == 0 || r == SC_ERROR_FILE_END_REACHED)
 			break;
-		if ((idx > SIZE_MAX - (size_t) r)
-				|| (size_t) r > todo) {
-			/* `idx + r` or `todo - r` would overflow */
-			r = SC_ERROR_OFFSET_TOO_LARGE;
-		}
 		if (r < 0) {
 			sc_unlock(card);
 			LOG_FUNC_RETURN(card->ctx, r);
+		}
+		if ((idx > SIZE_MAX - (size_t) r) || (size_t) r > todo) {
+			/* `idx + r` or `todo - r` would overflow */
+			sc_unlock(card);
+			LOG_FUNC_RETURN(card->ctx, SC_ERROR_OFFSET_TOO_LARGE);
 		}
 
 		todo -= (size_t) r;
@@ -814,14 +813,14 @@ int sc_erase_binary(struct sc_card *card, unsigned int idx, size_t count,  unsig
 		r = card->ops->erase_binary(card, idx, todo, flags);
 		if (r == 0 || r == SC_ERROR_FILE_END_REACHED)
 			break;
-		if ((idx > SIZE_MAX - (size_t) r)
-				|| (size_t) r > todo) {
-			/* `idx + r` or `todo - r` would overflow */
-			r = SC_ERROR_OFFSET_TOO_LARGE;
-		}
 		if (r < 0) {
 			sc_unlock(card);
 			LOG_FUNC_RETURN(card->ctx, r);
+		}
+		if ((idx > SIZE_MAX - (size_t) r) || (size_t) r > todo) {
+			/* `idx + r` or `todo - r` would overflow */
+			sc_unlock(card);
+			LOG_FUNC_RETURN(card->ctx, SC_ERROR_OFFSET_TOO_LARGE);
 		}
 
 		todo -= (size_t) r;
@@ -955,25 +954,57 @@ int sc_get_challenge(sc_card_t *card, u8 *rnd, size_t len)
 	LOG_FUNC_RETURN(card->ctx, SC_SUCCESS);
 }
 
-int sc_read_record(sc_card_t *card, unsigned int rec_nr, u8 *buf,
-		   size_t count, unsigned long flags)
+int sc_read_record(sc_card_t *card, unsigned int rec_nr, unsigned int idx,
+		   u8 *buf ,size_t count, unsigned long flags)
 {
+	size_t max_le = sc_get_max_recv_size(card);
+	size_t todo = count;
 	int r;
 
-	if (card == NULL) {
+	if (card == NULL || card->ops == NULL || buf == NULL) {
 		return SC_ERROR_INVALID_ARGUMENTS;
 	}
 	LOG_FUNC_CALLED(card->ctx);
+	if (count == 0)
+		LOG_FUNC_RETURN(card->ctx, SC_SUCCESS);
 
 	if (card->ops->read_record == NULL)
 		LOG_FUNC_RETURN(card->ctx, SC_ERROR_NOT_SUPPORTED);
 
-	r = card->ops->read_record(card, rec_nr, buf, count, flags);
-	if (r == SC_SUCCESS) {
-		r = count;
+	/* lock the card now to avoid deselection of the file */
+	r = sc_lock(card);
+	LOG_TEST_RET(card->ctx, r, "sc_lock() failed");
+
+	while (todo > 0) {
+		size_t chunk = MIN(todo, max_le);
+
+		r = card->ops->read_record(card, rec_nr, idx, buf, chunk, flags);
+		if (r == 0 || r == SC_ERROR_FILE_END_REACHED)
+			break;
+		if (r < 0 && todo != count) {
+			/* the last command failed, but previous ones succeeded.
+			 * Let's just return what we've successfully read. */
+			sc_log(card->ctx, "Subsequent read failed with %d, returning what was read successfully.", r);
+			break;
+		}
+		if (r < 0) {
+			sc_unlock(card);
+			LOG_FUNC_RETURN(card->ctx, r);
+		}
+		if ((idx > SIZE_MAX - (size_t) r) || (size_t) r > todo) {
+			/* `idx + r` or `todo - r` would overflow */
+			sc_unlock(card);
+			LOG_FUNC_RETURN(card->ctx, SC_ERROR_OFFSET_TOO_LARGE);
+		}
+
+		todo -= (size_t) r;
+		buf  += (size_t) r;
+		idx  += (size_t) r;
 	}
 
-	LOG_FUNC_RETURN(card->ctx, r);
+	sc_unlock(card);
+
+	LOG_FUNC_RETURN(card->ctx, count - todo);
 }
 
 int sc_write_record(sc_card_t *card, unsigned int rec_nr, const u8 * buf,
@@ -1018,25 +1049,51 @@ int sc_append_record(sc_card_t *card, const u8 * buf, size_t count,
 	LOG_FUNC_RETURN(card->ctx, r);
 }
 
-int sc_update_record(sc_card_t *card, unsigned int rec_nr, const u8 * buf,
-		     size_t count, unsigned long flags)
+int sc_update_record(sc_card_t *card, unsigned int rec_nr, unsigned int idx,
+		     const u8 * buf, size_t count, unsigned long flags)
 {
+	size_t max_lc = sc_get_max_send_size(card);
+	size_t todo = count;
 	int r;
 
-	if (card == NULL) {
+	if (card == NULL || card->ops == NULL || buf == NULL) {
 		return SC_ERROR_INVALID_ARGUMENTS;
 	}
 	LOG_FUNC_CALLED(card->ctx);
+	if (count == 0)
+		LOG_FUNC_RETURN(card->ctx, SC_SUCCESS);
 
 	if (card->ops->update_record == NULL)
 		LOG_FUNC_RETURN(card->ctx, SC_ERROR_NOT_SUPPORTED);
 
-	r = card->ops->update_record(card, rec_nr, buf, count, flags);
-	if (r == SC_SUCCESS) {
-		r = count;
+	/* lock the card now to avoid deselection of the file */
+	r = sc_lock(card);
+	LOG_TEST_RET(card->ctx, r, "sc_lock() failed");
+
+	while (todo > 0) {
+		size_t chunk = MIN(todo, max_lc);
+
+		r = card->ops->update_record(card, rec_nr, idx, buf, chunk, flags);
+		if (r == 0 || r == SC_ERROR_FILE_END_REACHED)
+			break;
+		if (r < 0) {
+			sc_unlock(card);
+			LOG_FUNC_RETURN(card->ctx, r);
+		}
+		if ((idx > SIZE_MAX - (size_t) r) || (size_t) r > todo) {
+			/* `idx + r` or `todo - r` would overflow */
+			sc_unlock(card);
+			LOG_FUNC_RETURN(card->ctx, SC_ERROR_OFFSET_TOO_LARGE);
+		}
+
+		todo -= (size_t) r;
+		buf  += (size_t) r;
+		idx  += (size_t) r;
 	}
 
-	LOG_FUNC_RETURN(card->ctx, r);
+	sc_unlock(card);
+
+	LOG_FUNC_RETURN(card->ctx, count - todo);
 }
 
 int sc_delete_record(sc_card_t *card, unsigned int rec_nr)

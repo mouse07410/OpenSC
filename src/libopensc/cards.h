@@ -137,6 +137,7 @@ enum {
 	SC_CARD_TYPE_PIV_II_OBERTHUR_DUAL_CAC,
 	SC_CARD_TYPE_PIV_II_OBERTHUR,
 	SC_CARD_TYPE_PIV_II_PIVKEY,
+	SC_CARD_TYPE_PIV_II_SWISSBIT,
 
 	/* MuscleApplet */
 	SC_CARD_TYPE_MUSCLE_BASE = 15000,
@@ -184,6 +185,7 @@ enum {
 	SC_CARD_TYPE_ITACNS_BASE = 23000,
 	SC_CARD_TYPE_ITACNS_GENERIC,
 	SC_CARD_TYPE_ITACNS_CNS,
+	SC_CARD_TYPE_ITACNS_CNS_IDEMIA_2021,
 	SC_CARD_TYPE_ITACNS_CIE_V2,
 	SC_CARD_TYPE_ITACNS_CIE_V1,
 
@@ -274,7 +276,11 @@ enum {
 
 	/* Slovak eID cards */
 	SC_CARD_TYPE_SKEID_BASE = 40000,
-	SC_CARD_TYPE_SKEID_V3
+	SC_CARD_TYPE_SKEID_V3,
+
+	/* eOI cards */
+	SC_CARD_TYPE_EOI = 41000,
+	SC_CARD_TYPE_EOI_CONTACTLESS
 };
 
 extern sc_card_driver_t *sc_get_default_driver(void);
@@ -320,6 +326,7 @@ extern sc_card_driver_t *sc_get_idprime_driver(void);
 extern sc_card_driver_t *sc_get_edo_driver(void);
 extern sc_card_driver_t *sc_get_nqApplet_driver(void);
 extern sc_card_driver_t *sc_get_skeid_driver(void);
+extern sc_card_driver_t *sc_get_eoi_driver(void);
 
 #ifdef __cplusplus
 }

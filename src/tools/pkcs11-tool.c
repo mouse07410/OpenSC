@@ -456,8 +456,6 @@ static pthread_t test_threads_handles[MAX_TEST_THREADS];
 struct test_threads_data {
 	int tnum;
 	char * tests;
-	volatile int state;
-	volatile CK_RV rv;
 };
 static struct test_threads_data test_threads_datas[MAX_TEST_THREADS];
 static int test_threads_num = 0;
@@ -765,6 +763,7 @@ int main(int argc, char * argv[])
 	if (!(default_provider = OSSL_PROVIDER_load(osslctx, "default"))) {
 		util_fatal("Failed to load OpenSSL \"default\" provider\n");
 	}
+	legacy_provider = OSSL_PROVIDER_try_load(NULL, "legacy", 1);
 #endif
 
 	while (1) {
@@ -1175,11 +1174,6 @@ int main(int argc, char * argv[])
 	if (do_list_interfaces)
 		list_interfaces();
 
-#if defined(_WIN32) || defined(HAVE_PTHREAD)
-	if (do_test_threads)
-		test_threads();
-#endif
-
 	rv = p11->C_Initialize(c_initialize_args_ptr);
 
 #if defined(_WIN32) || defined(HAVE_PTHREAD)
@@ -1506,8 +1500,13 @@ end:
 	}
 
 #if defined(_WIN32) || defined(HAVE_PTHREAD)
-	if (do_test_threads)
+	if (do_test_threads) {
+		/* running threading tests is deliberately placed after opt_slot was
+		 * initialized so that the command line options allow detailed
+		 * configuration when running with `--test-threads LT` */
+		test_threads();
 		test_threads_cleanup();
+	}
 #endif /* defined(_WIN32) || defined(HAVE_PTHREAD) */
 
 	if (p11)
@@ -1848,9 +1847,9 @@ static int login(CK_SESSION_HANDLE session, int login_type)
 
 	rv = p11->C_Login(session, login_type,
 			(CK_UTF8CHAR *) pin, pin == NULL ? 0 : strlen(pin));
-	if (rv != CKR_OK) {
+	if (rv != CKR_OK && rv != CKR_USER_ALREADY_LOGGED_IN) {
 		fprintf(stderr, "%s:%d C_Login failed with %s\n", __FILE__, __LINE__, CKR2Str(rv));
-		p11_perror("C_Login", rv);
+		p11_fatal("C_Login", rv);
 	}
 	if (pin_allocated)
 		free(pin);
@@ -6135,10 +6134,8 @@ static int test_digest(CK_SESSION_HANDLE session)
 #endif
 #if OPENSSL_VERSION_NUMBER >= 0x30000000L
 		if (!legacy_provider) {
-			if (!(legacy_provider = OSSL_PROVIDER_try_load(NULL, "legacy", 1))) {
-				printf("Failed to load legacy provider\n");
-				return errors;
-			}
+			printf("Failed to load legacy provider\n");
+			return errors;
 		}
 #endif
 	for (; mechTypes[i] != 0xffffff; i++) {
@@ -6356,10 +6353,8 @@ static int sign_verify_openssl(CK_SESSION_HANDLE session,
 #endif
 #if OPENSSL_VERSION_NUMBER >= 0x30000000L && !defined(OPENSSL_NO_RIPEMD)
 	if (!legacy_provider) {
-		if (!(legacy_provider = OSSL_PROVIDER_try_load(NULL, "legacy", 1))) {
-			printf("Failed to load legacy provider");
-			return errors;
-		}
+		printf("Failed to load legacy provider");
+		return errors;
 	}
 #endif
 
@@ -7589,31 +7584,31 @@ static int test_random(CK_SESSION_HANDLE session)
 		printf("  seeding (C_SeedRandom) not supported\n");
 	else if (rv != CKR_OK) {
 		p11_perror("C_SeedRandom", rv);
-		return 1;
+		errors++;
 	}
 
 	rv = p11->C_GenerateRandom(session, buf1, 10);
 	if (rv != CKR_OK) {
 		p11_perror("C_GenerateRandom", rv);
-		return 1;
+		errors++;
 	}
 
 	rv = p11->C_GenerateRandom(session, buf1, 100);
 	if (rv != CKR_OK) {
 		p11_perror("C_GenerateRandom(buf1,100)", rv);
-		return 1;
+		errors++;
 	}
 
 	rv = p11->C_GenerateRandom(session, buf1, 0);
 	if (rv != CKR_OK) {
 		p11_perror("C_GenerateRandom(buf1,0)", rv);
-		return 1;
+		errors++;
 	}
 
 	rv = p11->C_GenerateRandom(session, buf2, 100);
 	if (rv != CKR_OK) {
 		p11_perror("C_GenerateRandom(buf2,100)", rv);
-		return 1;
+		errors++;
 	}
 
 	if (memcmp(buf1, buf2, 100) == 0) {
@@ -7621,9 +7616,10 @@ static int test_random(CK_SESSION_HANDLE session)
 		errors++;
 	}
 
-	printf("  seems to be OK\n");
+	if (!errors)
+		printf("  seems to be OK\n");
 
-	return 0;
+	return errors;
 }
 
 static int test_card_detection(int wait_for_event)
@@ -8802,11 +8798,9 @@ static DWORD WINAPI test_threads_run(_In_ LPVOID pttd)
 static void * test_threads_run(void * pttd)
 #endif
 {
-	int r = 0;
 	CK_RV rv = CKR_OK;
 	CK_INFO info;
 	int l_slots = 0;
-	int state = 0;
 	CK_ULONG l_p11_num_slots = 0;
 	CK_SLOT_ID_PTR l_p11_slots = NULL;
 	char * pctest;
@@ -8818,8 +8812,6 @@ static void * test_threads_run(void * pttd)
 
 	/* series of two character commands */
 	while (pctest && *pctest && *(pctest + 1)) {
-		ttd->state = state++;
-
 		/*  Pn - pause where n is 0 to 9 iseconds */
 		if (*pctest == 'P' && *(pctest + 1) >= '0' && *(pctest + 1) <= '9') {
 			fprintf(stderr, "Test thread %d pauseing for %d seconds\n", ttd->tnum, (*(pctest + 1) - '0'));
@@ -8830,19 +8822,17 @@ static void * test_threads_run(void * pttd)
 #endif
 		}
 
-		/* IN - C_Initialize with NULL args */
 		else if (*pctest == 'I') {
+			/* IN - C_Initialize with NULL args */
 			if (*(pctest + 1) == 'N') {
 				fprintf(stderr, "Test thread %d C_Initialize(NULL)\n", ttd->tnum);
 				rv = p11->C_Initialize(NULL);
-				ttd->rv = rv;
 				fprintf(stderr, "Test thread %d C_Initialize returned %s\n", ttd->tnum, CKR2Str(rv));
 			}
 			/* IL C_Initialize with CKF_OS_LOCKING_OK */
 			else if (*(pctest + 1) == 'L') {
 				fprintf(stderr, "Test thread %d C_Initialize CKF_OS_LOCKING_OK \n", ttd->tnum);
 				rv = p11->C_Initialize(&c_initialize_args_OS);
-				ttd->rv = rv;
 				fprintf(stderr, "Test thread %d C_Initialize  returned %s\n", ttd->tnum, CKR2Str(rv));
 			}
 			else
@@ -8853,7 +8843,6 @@ static void * test_threads_run(void * pttd)
 		else if (*pctest == 'G' && *(pctest + 1) == 'I') {
 			fprintf(stderr, "Test thread %d C_GetInfo\n", ttd->tnum);
 			rv = p11->C_GetInfo(&info);
-			ttd->rv = rv;
 			fprintf(stderr, "Test thread %d C_GetInfo returned %s\n", ttd->tnum, CKR2Str(rv));
 		}
 
@@ -8861,7 +8850,6 @@ static void * test_threads_run(void * pttd)
 		else if (*pctest == 'S' && *(pctest + 1) == 'L') {
 			fprintf(stderr, "Test thread %d C_GetSlotList to get l_p11_num_slots\n", ttd->tnum);
 			rv = p11->C_GetSlotList(1, NULL, &l_p11_num_slots);
-			ttd->rv = rv;
 			fprintf(stderr, "Test thread %d C_GetSlotList returned %s\n", ttd->tnum, CKR2Str(rv));
 			fprintf(stderr, "Test thread %d l_p11_num_slots:%ld\n", ttd->tnum, l_p11_num_slots);
 			if (rv == CKR_OK) {
@@ -8874,7 +8862,6 @@ static void * test_threads_run(void * pttd)
 					}
 					fprintf(stderr, "Test thread %d C_GetSlotList\n", ttd->tnum);
 					rv = p11->C_GetSlotList(1, l_p11_slots, &l_p11_num_slots);
-					ttd->rv = rv;
 					fprintf(stderr, "Test thread %d C_GetSlotList returned %s\n", ttd->tnum, CKR2Str(rv));
 					fprintf(stderr, "Test thread %d l_p11_num_slots:%ld\n", ttd->tnum, l_p11_num_slots);
 					if (rv == CKR_OK && l_p11_num_slots && l_p11_slots)
@@ -8895,10 +8882,27 @@ static void * test_threads_run(void * pttd)
 			}
 		}
 
+		/* LT login and test, just like as if `--login --test` was specified.
+		 * May be combined with `--pin=123456` */
+		else if (*pctest == 'L' && *(pctest + 1) == 'T') {
+			CK_SESSION_HANDLE session = CK_INVALID_HANDLE;
+
+			rv = p11->C_OpenSession(opt_slot, CKF_SERIAL_SESSION|CKF_RW_SESSION, NULL, NULL, &session);
+			if (rv == CKR_OK) {
+				if (opt_login_type == -1)
+					opt_login_type = CKU_USER;
+				login(session, opt_login_type);
+
+				if (p11_test(session))
+					rv = CKR_GENERAL_ERROR;
+				else
+					rv = CKR_OK;
+			}
+		}
+
 		else {
 		err:
 			rv = CKR_GENERAL_ERROR; /* could be vendor error, */
-			ttd->rv = rv;
 			fprintf(stderr, "Test thread %d Unknown test '%c%c'\n", ttd->tnum, *pctest, *(pctest + 1));
 			break;
 		}
@@ -8916,9 +8920,7 @@ static void * test_threads_run(void * pttd)
 	}
 
 	free(l_p11_slots);
-	fprintf(stderr, "Test thread %d returning rv = %d\n", ttd->tnum, r);
-	ttd->state = -1; /* done */
-	ttd->rv = rv;
+	fprintf(stderr, "Test thread %d returning rv:%s\n", ttd->tnum, CKR2Str(rv));
 #ifdef _WIN32
 	ExitThread(0);
 #else
@@ -8929,55 +8931,16 @@ static void * test_threads_run(void * pttd)
 static int test_threads_cleanup()
 {
 
-	int i, j;
-	int ended = 0;
-	int ended_ok = 0;
+	int i;
 
 	fprintf(stderr,"test_threads cleanup starting\n");
-	for (j = 0; j < 4; j++) {
-		ended = 0;
-		ended_ok = 0;
-
-		for (i = 0; i < test_threads_num; i++) {
-			if (test_threads_datas[i].state == -1) {
-				ended++;
-			}
-			if (test_threads_datas[i].rv == CKR_OK) {
-				ended_ok++;
-			}
-		}
-
-		if (ended == test_threads_num) {
-			fprintf(stderr,"test_threads all threads have ended %s\n",
-					(ended_ok == test_threads_num)? "with CKR_OK": "some errors");
-			break;
-		} else {
-			fprintf(stderr,"test_threads threads stills active:%d\n", (test_threads_num - ended));
-			for (i = 0; i < test_threads_num; i++) {
-				fprintf(stderr,"test_threads thread:%d state:%d, rv:%s\n",
-					i, test_threads_datas[i].state, CKR2Str(test_threads_datas[i].rv));
-			}
-			fprintf(stderr,"\ntest_threads waiting for 30 seconds ...\n");
-#ifdef _WIN32
-			Sleep(30*1000);
-#else
-			sleep(30);
-#endif
-		}
-	}
 
 	for (i = 0; i < test_threads_num; i++) {
-		fprintf(stderr,"test_threads thread:%d state:%d, rv:%s\n",
-			i, test_threads_datas[i].state, CKR2Str(test_threads_datas[i].rv));
-		if (test_threads_datas[i].state == -1) {
 #ifdef _WIN32
-			TerminateThread(test_threads_handles[i], 0);
+		WaitForSingleObject(test_threads_handles[i], INFINITE);
 #else
-			pthread_join(test_threads_handles[i], NULL);
-		} else {
-			pthread_cancel(test_threads_handles[i]);
+		pthread_join(test_threads_handles[i], NULL);
 #endif
-		}
 	}
 
 	fprintf(stderr,"test_threads cleanup finished\n");

@@ -2184,6 +2184,10 @@ sc_pkcs15_parse_df(struct sc_pkcs15_card *p15card, struct sc_pkcs15_df *df)
 			sc_log(ctx, "%s: Error adding object", sc_strerror(r));
 			goto ret;
 		}
+		while (bufsize > 0 && *p == 00) {
+			bufsize--;
+			p++;
+		}
 	};
 
 	if (r > 0)
@@ -2393,6 +2397,28 @@ sc_pkcs15_parse_unusedspace(const unsigned char *buf, size_t buflen, struct sc_p
 
 
 int
+sc_decode_do53(sc_context_t *ctx, u8 **data, size_t *data_len,
+		const u8 *buf, size_t buflen)
+{
+	struct sc_asn1_entry c_asn1_do53[] = {
+		{ "do53", SC_ASN1_OCTET_STRING, SC_ASN1_APP|0x13, SC_ASN1_ALLOC|SC_ASN1_UNSIGNED, NULL, NULL },
+		{ NULL, 0, 0, 0, NULL, NULL }
+	};
+	struct sc_asn1_entry asn1_do53[2];
+	int r;
+
+	LOG_FUNC_CALLED(ctx);
+	sc_copy_asn1_entry(c_asn1_do53, asn1_do53);
+	sc_format_asn1_entry(asn1_do53, data, data_len, 0);
+
+	r = sc_asn1_decode(ctx, asn1_do53, buf, buflen, NULL, NULL);
+	LOG_TEST_RET(ctx, r, "ASN.1 parsing of do-53 failed");
+
+	LOG_FUNC_RETURN(ctx, SC_SUCCESS);
+}
+
+
+int
 sc_pkcs15_read_file(struct sc_pkcs15_card *p15card, const struct sc_path *in_path,
 		unsigned char **buf, size_t *buflen, int private_data)
 {
@@ -2434,22 +2460,49 @@ sc_pkcs15_read_file(struct sc_pkcs15_card *p15card, const struct sc_path *in_pat
 
 		/* Handle the case where the ASN.1 Path object specified
 		 * index and length values */
-		if (in_path->count < 0) {
-			if (file->size)
-				len = file->size;
-			else
-				len = 1024;
-			offset = 0;
-		}
-		else {
-			offset = in_path->index;
-			len = in_path->count;
-			/* Make sure we're within proper bounds */
-			if (offset >= file->size || offset + len > file->size) {
-				r = SC_ERROR_INVALID_ASN1_OBJECT;
+
+		if (file->ef_structure == SC_FILE_EF_LINEAR_VARIABLE) {
+
+			// in_path->index: record_no
+			// in_path->count: ignored!
+
+			if(file->record_length > 0) {
+				if(file->record_length > MAX_FILE_SIZE) {
+					len = MAX_FILE_SIZE;
+					sc_log(ctx, "  record size truncated, encoded length: %"SC_FORMAT_LEN_SIZE_T"u", file->record_length);
+				} else {
+					len = file->record_length;
+				}
+			} else {
+				len = MAX_FILE_SIZE;
+			}
+			
+			if ((in_path->index <= 0) || (in_path->index > (int)(file->record_count))) {
+				sc_log(ctx, "  record number out of bounds: %d", in_path->index);
+				r = SC_ERROR_RECORD_NOT_FOUND;
 				goto fail_unlock;
 			}
+		
+		} else {
+
+			if (in_path->count < 0) {
+				if (file->size)
+					len = (file->size > MAX_FILE_SIZE)? MAX_FILE_SIZE:file->size;
+				else
+					len = 1024;
+				offset = 0;
+			}
+			else {
+				offset = in_path->index;
+				len = in_path->count;
+				/* Make sure we're within proper bounds */
+				if (offset >= file->size || offset + len > file->size) {
+					r = SC_ERROR_INVALID_ASN1_OBJECT;
+					goto fail_unlock;
+				}
+			}
 		}
+
 		data = malloc(len);
 		if (data == NULL) {
 			r = SC_ERROR_OUT_OF_MEMORY;
@@ -2466,7 +2519,7 @@ sc_pkcs15_read_file(struct sc_pkcs15_card *p15card, const struct sc_path *in_pat
 				if (l > 256) {
 					l = 256;
 				}
-				r = sc_read_record(p15card->card, i, head, l, SC_RECORD_BY_REC_NR);
+				r = sc_read_record(p15card->card, i, 0, head, l, SC_RECORD_BY_REC_NR);
 				if (r == SC_ERROR_RECORD_NOT_FOUND)
 					break;
 				if (r < 0) {
@@ -2487,6 +2540,14 @@ sc_pkcs15_read_file(struct sc_pkcs15_card *p15card, const struct sc_path *in_pat
 				}
 			}
 			len = head-data;
+		}
+		else if (file->ef_structure == SC_FILE_EF_LINEAR_VARIABLE) {
+			r = sc_read_record(p15card->card, in_path->index, offset, data, len, SC_RECORD_BY_REC_NR);
+			if (r < 0) {
+				goto fail_unlock;
+			}
+			/* sc_read_record may return less than requested */
+			len = r;
 		}
 		else {
 			r = sc_read_binary(p15card->card, offset, data, len, 0);
