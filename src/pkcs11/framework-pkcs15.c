@@ -1176,7 +1176,6 @@ pkcs15_init_slot(struct sc_pkcs15_card *p15card, struct sc_pkcs11_slot *slot,
 			size_t pin_len = 0;
 			if (auth->label[0] && strncmp(auth->label, "PIN", 4) != 0)
 				pin_len = strlen(auth->label);
-
 			if (pin_len) {
 				size_t tokeninfo_len = 0;
 				if (p15card->tokeninfo && p15card->tokeninfo->label)
@@ -1207,6 +1206,13 @@ pkcs15_init_slot(struct sc_pkcs15_card *p15card, struct sc_pkcs11_slot *slot,
 				strcpy_bp(slot->token_info.label,
 						p15card->tokeninfo ? p15card->tokeninfo->label : "",
 						32);
+			}
+			/* Some applications (NSS) do not like the colons in the
+			 * TOKEN_INFO label so replace them here */
+			for (int i = 0; i < 32; i++) {
+				if (slot->token_info.label[i] == ':') {
+					slot->token_info.label[i] = '.';
+				}
 			}
 			if (p15card->tokeninfo->flags & SC_PKCS15_TOKEN_LOGIN_REQUIRED)
 				slot->token_info.flags |= CKF_LOGIN_REQUIRED;
@@ -1413,7 +1419,7 @@ _get_auth_object_by_name(struct sc_pkcs15_card *p15card, char *name, char *label
 		if (id.len > sizeof(id.value))
 			id.len = sizeof(id.value);
 		rv = sc_pkcs15_find_pin_by_auth_id(p15card, &id, &out);
-	} 
+	}
 	else if (!strcmp(name, "UserPIN"))   {
 		/* Try to get 'global' PIN; if no, get the 'local' one */
 		rv = sc_pkcs15_find_pin_by_flags(p15card, SC_PKCS15_PIN_TYPE_FLAGS_PIN_GLOBAL,
