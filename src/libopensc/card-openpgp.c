@@ -2697,15 +2697,23 @@ pgp_calculate_and_store_fingerprint(sc_card_t *card, time_t ctime,
 
 	/* RSA */
 	if (key_info->algorithm == SC_OPENPGP_KEYALGO_RSA) {
+		unsigned short bytes_length = 0;
+
 		*p = 1; /* Algorithm ID, RSA */
 		p += 1;
+
+		/* Modulus */
+		bytes_length = BYTES4BITS(key_info->u.rsa.modulus_len);
 		ushort2bebytes(p, (unsigned short)key_info->u.rsa.modulus_len);
 		p += 2;
-		memcpy(p, key_info->u.rsa.modulus, (BYTES4BITS(key_info->u.rsa.modulus_len)));
-		p += (key_info->u.rsa.modulus_len >> 3);
-		ushort2bebytes(++p, (unsigned short)key_info->u.rsa.exponent_len);
+		memcpy(p, key_info->u.rsa.modulus, bytes_length);
+		p += bytes_length;
+
+		/* Exponent */
+		bytes_length = BYTES4BITS(key_info->u.rsa.exponent_len);
+		ushort2bebytes(p, (unsigned short)key_info->u.rsa.exponent_len);
 		p += 2;
-		memcpy(p, key_info->u.rsa.exponent, (BYTES4BITS(key_info->u.rsa.exponent_len)));
+		memcpy(p, key_info->u.rsa.exponent, bytes_length);
 	}
 	/* ECC */
 	else if (key_info->algorithm == SC_OPENPGP_KEYALGO_ECDH
@@ -2841,6 +2849,7 @@ pgp_update_pubkey_blob(sc_card_t *card, sc_cardctl_openpgp_keygen_info_t *key_in
 
 	sc_log(card->ctx, "Updating blob %04X's content.", blob_id);
 	r = pgp_set_blob(pk_blob, data, len);
+	free(data);
 	LOG_TEST_RET(card->ctx, r, "Cannot update blob content");
 	LOG_FUNC_RETURN(card->ctx, r);
 }
@@ -3645,8 +3654,10 @@ pgp_delete_file(sc_card_t *card, const sc_path_t *path)
 	blob = priv->current;
 
 	/* don't try to delete MF */
-	if (blob == priv->mf)
+	if (blob == priv->mf) {
+		sc_file_free(file);
 		LOG_FUNC_RETURN(card->ctx, SC_ERROR_NOT_SUPPORTED);
+	}
 
 	if (card->type != SC_CARD_TYPE_OPENPGP_GNUK &&
 		(file->id == DO_SIGN_SYM || file->id == DO_ENCR_SYM || file->id == DO_AUTH_SYM)) {
@@ -3666,6 +3677,7 @@ pgp_delete_file(sc_card_t *card, const sc_path_t *path)
 		/* call pgp_put_data() with zero-sized NULL-buffer to zap the DO contents */
 		r = pgp_put_data(card, file->id, NULL, 0);
 	}
+	sc_file_free(file);
 
 	/* set "current" blob to parent */
 	priv->current = blob->parent;

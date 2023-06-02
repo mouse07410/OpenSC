@@ -11,6 +11,7 @@ if [[ ! -f $P11LIB ]]; then
     exit 77;
 fi
 card_setup
+assert $? "Failed to set up card"
 echo "data to sign (max 100 bytes)" > data
 
 echo "======================================================="
@@ -156,10 +157,12 @@ for MECHANISM in "SHA-1-HMAC" "SHA256-HMAC" "SHA384-HMAC" "SHA512-HMAC"; do
 	echo "$MECHANISM: Sign & Verify (KEY (First Found))"
 	echo "======================================================="
 
-	$PKCS11_TOOL --login --pin=1234 --sign --mechanism=$MECHANISM \
+	$PKCS11_TOOL --login --pin=$PIN --sign --mechanism=$MECHANISM \
 		--input-file=data.msg --output-file=data.sig --module $P11LIB
-	$PKCS11_TOOL --login --pin=1234 --verify --mechanism=$MECHANISM \
+	assert $? "Failed to Sign data"
+	$PKCS11_TOOL --login --pin=$PIN --verify --mechanism=$MECHANISM \
 		--input-file=data.msg --signature-file=data.sig --module $P11LIB
+	assert $? "Failed to Verify signature using pkcs11-tool"
 	rm data.sig
 done;
 
