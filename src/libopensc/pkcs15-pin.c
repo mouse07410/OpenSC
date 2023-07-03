@@ -15,7 +15,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
 #if HAVE_CONFIG_H
@@ -307,6 +307,7 @@ sc_pkcs15_verify_pin(struct sc_pkcs15_card *p15card, struct sc_pkcs15_object *pi
 		LOG_FUNC_RETURN(ctx, SC_ERROR_INVALID_PIN_REFERENCE);
 	auth_info = (struct sc_pkcs15_auth_info *)pin_obj->data;
 
+#if 1 /* I don't care for upstream presumed fix of PIN auth fallthrough */
 	/*
 	 * if pin cache is disabled, we can get here with no PIN data.
 	 * in this case, to avoid error or unnecessary pin prompting on pinpad,
@@ -322,6 +323,7 @@ sc_pkcs15_verify_pin(struct sc_pkcs15_card *p15card, struct sc_pkcs15_object *pi
 	    if (r == SC_SUCCESS && auth_info->logged_in == SC_PIN_STATE_LOGGED_IN)
 		LOG_FUNC_RETURN(ctx, r);
 	}
+#endif /* presumed fix of PIN auth fallthrough */
 
 	r = _validate_pin(p15card, auth_info, pinlen);
 

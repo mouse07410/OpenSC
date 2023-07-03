@@ -15,7 +15,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
 #ifdef HAVE_CONFIG_H
@@ -1241,6 +1241,7 @@ const char *pkcs15_get_default_use_file_cache(struct sc_card *card)
 		"jpki",
 		"MaskTech",
 		"mcrd",
+		"myeid",
 		"npa",
 		"nqapplet",
 		"tcos",

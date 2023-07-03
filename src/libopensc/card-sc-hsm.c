@@ -18,7 +18,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
 #if HAVE_CONFIG_H
@@ -1202,7 +1202,7 @@ static int sc_hsm_get_serialnr(sc_card_t *card, sc_serial_number_t *serial)
 		 * this for `opensc-tool --serial` to avoid unnecessary card commands
 		 * in all other cases. */
 		sc_pkcs15_card_t *p15card = NULL;
-		sc_pkcs15_bind(card, NULL, &p15card);
+		(void)sc_pkcs15_bind(card, NULL, &p15card);
 		sc_pkcs15_unbind(p15card);
 	}
 
