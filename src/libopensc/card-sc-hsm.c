@@ -1007,6 +1007,10 @@ static int sc_hsm_set_security_env(sc_card_t *card,
 				priv->algorithm = ALGO_RSA_PKCS1;
 			}
 		} else if (env->algorithm_flags & SC_ALGORITHM_RSA_PAD_PSS) {
+			if ((env->algorithm_flags & SC_ALGORITHM_RSA_HASHES) &&
+					(((env->algorithm_flags & SC_ALGORITHM_MGF1_HASHES) >> 8) != (env->algorithm_flags & SC_ALGORITHM_RSA_HASHES))) {
+				LOG_FUNC_RETURN(card->ctx, SC_ERROR_INVALID_ARGUMENTS);
+			}
 			priv->algorithm = ALGO_RSA_PSS;
 		} else {
 			if (env->operation == SC_SEC_OPERATION_DECIPHER) {
@@ -1780,7 +1784,9 @@ static int sc_hsm_init(struct sc_card *card)
 
 	LOG_FUNC_CALLED(card->ctx);
 
-	flags = SC_ALGORITHM_RSA_RAW|SC_ALGORITHM_RSA_PAD_PSS|SC_ALGORITHM_ONBOARD_KEY_GEN;
+	flags = SC_ALGORITHM_RSA_RAW|SC_ALGORITHM_RSA_PAD_PSS|SC_ALGORITHM_ONBOARD_KEY_GEN
+			|SC_ALGORITHM_RSA_HASH_SHA256|SC_ALGORITHM_RSA_HASH_SHA384|SC_ALGORITHM_RSA_HASH_SHA512
+			|SC_ALGORITHM_MGF1_SHA256|SC_ALGORITHM_MGF1_SHA384|SC_ALGORITHM_MGF1_SHA512;
 
 	_sc_card_add_rsa_alg(card, 1024, flags, 0);
 	_sc_card_add_rsa_alg(card, 1536, flags, 0);
