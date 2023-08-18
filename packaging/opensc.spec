@@ -75,7 +75,7 @@ CFLAGS="$CFLAGS -Wstrict-aliasing=2 -Wno-deprecated-declarations"
 
 
 %check
-make check
+make check || (cat tests/*.log src/tests/unittests/*.log && exit 1)
 
 
 %install
@@ -161,8 +161,10 @@ rm %{buildroot}%{_mandir}/man1/opensc-notify.1*
 %{_libdir}/lib*.so.*
 %{_libdir}/opensc-pkcs11.so
 %{_libdir}/pkcs11-spy.so
+%{_libdir}/onepin-opensc-pkcs11.so
 %dir %{_libdir}/pkcs11
 %{_libdir}/pkcs11/opensc-pkcs11.so
+%{_libdir}/pkcs11/onepin-opensc-pkcs11.so
 %{_libdir}/pkcs11/pkcs11-spy.so
 %{_datadir}/opensc/
 %{_mandir}/man1/cardos-tool.1*
