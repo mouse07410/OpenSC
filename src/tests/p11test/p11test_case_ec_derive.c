@@ -31,12 +31,14 @@ pkcs11_derive(test_cert_t *o, token_info_t * info,
 	CK_OBJECT_HANDLE newkey;
 	CK_OBJECT_CLASS newkey_class = CKO_SECRET_KEY;
 	CK_KEY_TYPE newkey_type = CKK_GENERIC_SECRET;
+	CK_ULONG newkey_len = o->bits / 8;
 	CK_BBOOL true = TRUE;
 	CK_BBOOL false = FALSE;
 	CK_ATTRIBUTE template[] = {
 		{CKA_TOKEN, &false, sizeof(false)}, /* session only object */
 		{CKA_CLASS, &newkey_class, sizeof(newkey_class)},
 		{CKA_KEY_TYPE, &newkey_type, sizeof(newkey_type)},
+		{CKA_VALUE_LEN, &newkey_len, sizeof(newkey_len)},
 		{CKA_SENSITIVE, &false, sizeof(false)},
 		{CKA_EXTRACTABLE, &true, sizeof(true)},
 		{CKA_ENCRYPT, &true, sizeof(true)},
@@ -45,7 +47,7 @@ pkcs11_derive(test_cert_t *o, token_info_t * info,
 		{CKA_UNWRAP, &true, sizeof(true)}
 	};
 	CK_ATTRIBUTE get_value = {CKA_VALUE, NULL_PTR, 0};
-	CK_ULONG template_len = 9;
+	CK_ULONG template_len = 10;
 
 	params.pSharedData = NULL;
 	params.ulSharedDataLen = 0;
@@ -281,7 +283,7 @@ int test_derive(test_cert_t *o, token_info_t *info, test_mech_t *mech)
 	if (pctx == NULL ||
 		EVP_PKEY_derive_init(pctx) != 1 ||
 		EVP_PKEY_derive_set_peer(pctx, o->key) != 1) {
-		debug_print(" [ KEY %s ] Can not derive key", o->id_str);
+		debug_print(" [ KEY %s ] Cannot derive key", o->id_str);
 		EVP_PKEY_free(evp_pkey);
 		return 1;
 	}
@@ -346,7 +348,7 @@ int test_derive(test_cert_t *o, token_info_t *info, test_mech_t *mech)
 #else
 	if (EVP_PKEY_get_octet_string_param(evp_pkey, OSSL_PKEY_PARAM_ENCODED_PUBLIC_KEY, pub, pub_len, NULL) != 1) {
 #endif
-		debug_print(" [ KEY %s ] Can not get public key", o->id_str);
+		debug_print(" [ KEY %s ] Cannot get public key", o->id_str);
 		EVP_PKEY_free(evp_pkey);
 		free(secret);
 		free(pub);
