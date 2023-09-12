@@ -236,6 +236,25 @@ app default {
 		# in the 'pkcs11' section below
 	}
 
+	card_driver PIV-II {
+		# *NOTE* The following are only usable if OpenSC is configured with --enable-piv-sm
+
+		# "piv_pairing_code"
+		# Virtual Contact Interface (VCI) an optional feature, to allow
+		# contactless access to card as if it was using the contact reader.
+		# VCI requires SM. It may also require a pairing code which may be printed on the
+		# card, given to card owner when card issued or available from the card when used
+		# with a contact reader. Contact your card issuing agency for details on what your
+		# card supports.
+		# Pairing code can be set in opensc.conf or via environment (recommended).
+		# It is an 8 digit string.
+		# Default: no pairing code.
+		# piv_pairing_code = 12345678;
+		# May be set via environment: PIV_PAIRING_CODE=12345678
+
+		# Environment variables override opensc.conf
+	}
+
 	# In addition to the built-in list of known cards in the
 	# card driver, you can configure a new card for the driver
 	# using the card_atr block. The goal is to centralize
