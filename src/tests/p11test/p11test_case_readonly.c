@@ -199,6 +199,7 @@ int decrypt_message(test_cert_t *o, token_info_t *info, CK_BYTE *enc_message,
 		enc_message_length, *dec_message, &dec_message_length);
 	if (rv != CKR_OK) {
 		free(*dec_message);
+		*dec_message = NULL;
 		debug_print("  C_Decrypt: rv = 0x%.8lX\n", rv);
 		return -1;
 	}
@@ -711,14 +712,24 @@ void readonly_tests(void **state) {
 		/* XXX some keys do not have appropriate flags, but we can use them
 		 * or vice versa */
 		//if (o->sign && o->verify)
-			for (j = 0; j < o->num_mechs; j++)
-				used |= sign_verify_test(&(objects.data[i]), info,
-					&(o->mechs[j]), 32, 0);
+			for (j = 0; j < o->num_mechs; j++) {
+				test_mech_t *m = &(objects.data[i].mechs[j]);
+				if ((m->usage_flags & CKF_SIGN) == 0) {
+					/* Skip non-signature mechanisms (for example derive ones) */
+					continue;
+				}
+				used |= sign_verify_test(o, info, m, 32, 0);
+			}
 
 		//if (o->encrypt && o->decrypt)
-			for (j = 0; j < o->num_mechs; j++)
-				used |= encrypt_decrypt_test(&(objects.data[i]), info,
-					&(o->mechs[j]), 32, 0);
+			for (j = 0; j < o->num_mechs; j++) {
+				test_mech_t *m = &(objects.data[i].mechs[j]);
+				if ((m->usage_flags & CKF_DECRYPT) == 0) {
+					/* Skip non-decrypt mechanisms (for example derive ones) */
+					continue;
+				}
+				used |= encrypt_decrypt_test(o, info, m, 32, 0);
+			}
 
 		if (!used) {
 			debug_print(" [ WARN %s ] Private key with unknown purpose T:%02lX",

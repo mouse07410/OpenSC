@@ -150,7 +150,7 @@ enum {
  * If the file listed in the history object offCardCertURL was found,
  * its certs will be read into the cache and PIV_OBJ_CACHE_VALID set
  * and PIV_OBJ_CACHE_NOT_PRESENT unset.
- * 
+ *
  */
 
 #define PIV_OBJ_CACHE_VALID		1
@@ -206,7 +206,6 @@ enum {
 
 		int o0len; /* first in otherinfo */
 		u8 o0_char;
-		size_t IDshlen;
 		size_t CBhlen;
 		size_t T16Qehlen;
 		size_t IDsicclen;
@@ -229,7 +228,7 @@ enum {
 static cipher_suite_t css[PIV_CSS_SIZE] = {
 		{PIV_CS_CS2, 256, NID_X9_62_prime256v1, {{1, 2, 840, 10045, 3, 1, 7, -1}},
 		PIV_CS_CS2, 65, 16, 32, 61,
-		4, 0x09, 8, 1, 16, 8, 16, 1,
+		4, 0x09, 1, 16, 8, 16, 1,
 		4, 128/8, SHA256_DIGEST_LENGTH,
 		(EVP_MD *(*)(void)) EVP_sha256,
 		(const EVP_CIPHER *(*)(void)) EVP_aes_128_cbc,
@@ -239,7 +238,7 @@ static cipher_suite_t css[PIV_CSS_SIZE] = {
 
 		{PIV_CS_CS7, 384, NID_secp384r1, {{1, 3, 132, 0, 34, -1}},
 		PIV_CS_CS7, 97, 16, 48, 69,
-		4, 0x0D, 8, 1, 16, 8, 24, 1,
+		4, 0x0D, 1, 16, 8, 24, 1,
 		4, 256/8, SHA384_DIGEST_LENGTH,
 		(EVP_MD *(*)(void)) EVP_sha384,
 		(const EVP_CIPHER *(*)(void)) EVP_aes_256_cbc,
@@ -1521,9 +1520,12 @@ static int piv_decode_cvc(sc_card_t * card, u8 **buf, size_t *buflen,
 
 	SC_FUNC_CALLED(card->ctx, SC_LOG_DEBUG_VERBOSE);
 
+	if (buf == NULL || *buf == NULL || cvc == NULL) {
+		LOG_FUNC_RETURN(card->ctx, SC_ERROR_INVALID_ARGUMENTS);
+	}
+
 	/* If already read and matches previous version return SC_SUCCESS */
-	if (cvc->der.value && (cvc->der.len == *buflen) && buf && *buf
-			&& (memcmp(cvc->der.value, *buf, *buflen) == 0))
+	if (cvc->der.value && (cvc->der.len == *buflen) && (memcmp(cvc->der.value, *buf, *buflen) == 0))
 		LOG_FUNC_RETURN(card->ctx, SC_SUCCESS);
 
 	piv_clear_cvc_content(cvc);
@@ -1982,7 +1984,7 @@ static int piv_sm_verify_certs(struct sc_card *card)
 		sc_log(card->ctx, "PIV compression not supported, no zlib");
 		LOG_FUNC_RETURN(card->ctx, SC_ERROR_NOT_SUPPORTED);
 #endif
-	
+
 	} else {
 		cert_blob = priv->obj_cache[PIV_OBJ_SM_CERT_SIGNER].internal_obj_data;
 		cert_bloblen = priv->obj_cache[PIV_OBJ_SM_CERT_SIGNER].internal_obj_len;
@@ -2197,7 +2199,11 @@ static int piv_sm_open(struct sc_card *card)
 	if (cs == NULL)
 		LOG_FUNC_RETURN(card->ctx, SC_ERROR_NOT_SUPPORTED);
 
-	sc_lock(card);
+	r = sc_lock(card);
+	if (r != SC_SUCCESS) {
+		sc_log(card->ctx, "sc_lock failed");
+		return r;
+	}
 
 	/* use for several hash operations */
 	if ((hash_ctx = EVP_MD_CTX_new()) == NULL) {
@@ -2259,7 +2265,7 @@ static int piv_sm_open(struct sc_card *card)
 		goto err;
 	}
 
-	r = len2a = sc_asn1_put_tag(0x81, NULL, 1 + cs->IDshlen + Qehlen, NULL, 0, NULL);
+	r = len2a = sc_asn1_put_tag(0x81, NULL, 1 + sizeof(IDsh) + Qehlen, NULL, 0, NULL);
 	if (r < 0)
 		goto err;
 	r = len2b = sc_asn1_put_tag(0x80, NULL, 0, NULL, 0, NULL);
@@ -2280,7 +2286,7 @@ static int piv_sm_open(struct sc_card *card)
 	if (r != SC_SUCCESS)
 		goto err;
 
-	r = sc_asn1_put_tag(0x81, NULL, 1 + cs->IDshlen + Qehlen, p, sbuflen - (p - sbuf), &p);
+	r = sc_asn1_put_tag(0x81, NULL, 1 + sizeof(IDsh) + Qehlen, p, sbuflen - (p - sbuf), &p);
 	if (r != SC_SUCCESS)
 		goto err;
 
@@ -2292,9 +2298,9 @@ static int piv_sm_open(struct sc_card *card)
 #else
 	pid = (unsigned long) getpid(); /* use PID as our ID so different from other processes */
 #endif
-	memcpy(IDsh, &pid, MIN(sizeof(pid), cs->IDshlen));
-	memcpy(p, IDsh, cs->IDshlen);
-	p += cs->IDshlen;
+	memcpy(IDsh, &pid, MIN(sizeof(pid), sizeof(IDsh)));
+	memcpy(p, IDsh, sizeof(IDsh));
+	p += sizeof(IDsh);
 	memcpy(p, Qeh, Qehlen);
 	p += Qehlen;
 
@@ -2487,9 +2493,9 @@ static int piv_sm_open(struct sc_card *card)
 	for (i = 0; i <  cs->o0len; i++)
 		*p++ = cs->o0_char; /* 0x09 or 0x0d */
 
-	*p++ = cs->IDshlen;
-	memcpy(p, IDsh, cs->IDshlen);
-	p += cs->IDshlen;
+	*p++ = sizeof(IDsh);
+	memcpy(p, IDsh, sizeof(IDsh));
+	p += sizeof(IDsh);
 
 	*p++ = cs->CBhlen;
 	memcpy(p, &CBh, cs->CBhlen);
@@ -2581,8 +2587,8 @@ static int piv_sm_open(struct sc_card *card)
 		p += 6;
 		memcpy(p, IDsicc, cs->IDsicclen);
 		p += cs->IDsicclen;
-		memcpy(p, IDsh, cs->IDshlen);
-		p += cs->IDshlen;
+		memcpy(p, IDsh, sizeof(IDsh));
+		p += sizeof(IDsh);
 
 		memcpy(p, Qeh_OS, Qeh_OSlen);
 		p += Qeh_OSlen;
@@ -3138,7 +3144,7 @@ piv_get_cached_data(sc_card_t * card, int enumtag, u8 **buf, size_t *buf_len)
 	 * If we know it can not be on the card  i.e. History object
 	 * has been read, and we know what other certs may or
 	 * may not be on the card. We can avoid extra overhead
-	 * Also used if object on card was not parsable 
+	 * Also used if object on card was not parsable
 	 */
 
 	if (priv->obj_cache[enumtag].flags & PIV_OBJ_CACHE_NOT_PRESENT) {
@@ -4636,7 +4642,7 @@ piv_compute_signature(sc_card_t *card, const u8 * data, size_t datalen,
 		r = piv_validate_general_authentication(card, data, datalen, rbuf, sizeof rbuf);
 		if (r < 0)
 			goto err;
-		
+
 		r = sc_asn1_decode_ecdsa_signature(card->ctx, rbuf, r, nLen, &out, outlen);
 	} else { /* RSA is all set */
 		r = piv_validate_general_authentication(card, data, datalen, out, outlen);
@@ -5260,7 +5266,7 @@ piv_finish(sc_card_t *card)
 static int piv_match_card(sc_card_t *card)
 {
 	int r = 0;
-	
+
 	sc_debug(card->ctx,SC_LOG_DEBUG_MATCH, "PIV_MATCH card->type:%d\n", card->type);
 	/* piv_match_card may be called with card->type, set by opensc.conf */
 	/* user provided card type must be one we know */
@@ -5466,7 +5472,7 @@ static int piv_match_card_continued(sc_card_t *card)
 		piv_obj_cache_free_entry(card, PIV_OBJ_DISCOVERY, 0); /* don't cache  on failure */
 		r = piv_find_aid(card);
 	}
-	
+
 	/*if both fail, its not a PIV card */
 	if (r < 0) {
 		goto err;

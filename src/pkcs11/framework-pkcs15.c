@@ -865,9 +865,9 @@ __pkcs15_create_secret_key_object(struct pkcs15_fw_data *fw_data,
 
 	rv = __pkcs15_create_object(fw_data, &any_object,
 			object, &pkcs15_skey_ops, sizeof(struct pkcs15_skey_object));
-        skey = (struct pkcs15_skey_object *) any_object;
+	skey = (struct pkcs15_skey_object *)any_object;
 	if (rv >= 0)
-		skey->info = (struct sc_pkcs15_skey_info *) object->data;
+		skey->info = (struct sc_pkcs15_skey_info *)object->data;
 
 	if (skey_object != NULL)
 		*skey_object = any_object;
@@ -5315,7 +5315,16 @@ struct sc_pkcs11_object_ops pkcs15_profile_ops = {
 static void
 pkcs15_skey_release(void *object)
 {
-	__pkcs15_release_object((struct pkcs15_any_object *) object);
+	struct pkcs15_skey_object *skey = (struct pkcs15_skey_object *)object;
+	struct sc_pkcs15_skey_info *skey_info = skey->info;
+	struct sc_pkcs15_object *p15obj = skey->skey_p15obj;
+
+	if (__pkcs15_release_object((struct pkcs15_any_object *)skey) == 0) {
+		if (p15obj->session_object) {
+			sc_pkcs15_free_skey_info(skey_info);
+			free(p15obj);
+		}
+	}
 }
 
 
@@ -5333,6 +5342,7 @@ pkcs15_skey_set_attribute(struct sc_pkcs11_session *session,
 	switch (attr->type) {
 	case CKA_VALUE:
 		if (attr->pValue) {
+			free(skey->info->data.value);
 			skey->info->data.value = calloc(1,attr->ulValueLen);
 			if (!skey->info->data.value)
 				return CKR_HOST_MEMORY;
@@ -5746,6 +5756,7 @@ pkcs15_skey_decrypt(struct sc_pkcs11_session *session, void *obj,
 		return sc_to_cryptoki_error(rv, "C_Decrypt...");
 
 	/* pointer CK_ULONG_PTR to size_t conversion */
+	lDataLen = pulDataLen ? *pulDataLen : 0;
 	lpDataLen = pulDataLen ? &lDataLen : NULL;
 
 	rv = sc_pkcs15_decrypt_sym(fw_data->p15_card, skey->prv_p15obj, flags,
