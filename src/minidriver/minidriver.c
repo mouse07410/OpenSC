@@ -36,9 +36,12 @@
 #include <time.h>
 
 #include <windows.h>
-#include <Commctrl.h>
+#include <commctrl.h>
+#ifdef __MINGW32__
+#include <mmsystem.h>
+#else
 #include <timeapi.h>
-#include "cardmod.h"
+#endif
 
 #include "common/compat_strlcpy.h"
 #include "libopensc/asn1.h"
@@ -85,7 +88,7 @@
 #define MD_FUNC_RETURN(pCardData, level, ...) do { \
 	DWORD _ret = __VA_ARGS__; \
 	logprintf(pCardData, level,\
-		"MD_Function:%s:%d returning with: 0x%08X\n", __FUNCTION__, __LINE__, _ret); \
+		"MD_Function:%s:%d returning with: 0x%08X\n", __FUNCTION__, __LINE__, (unsigned)_ret); \
 	return _ret; \
 	} while(0)
 
@@ -434,8 +437,8 @@ check_card_reader_status(PCARD_DATA pCardData, const char *name)
 	if(!vs)
 		MD_FUNC_RETURN(pCardData, 3, SCARD_E_INVALID_PARAMETER);
 
-	logprintf(pCardData, 7, "sizeof(size_t):%d sizeof(ULONG_PTR):%d sizeof(__int3264):%d sizeof pCardData->hSCardCtx:%d\n",
-		sizeof(size_t), sizeof(ULONG_PTR), sizeof(__int3264), sizeof pCardData->hSCardCtx);
+	logprintf(pCardData, 7, "sizeof(size_t):%u sizeof(ULONG_PTR):%u sizeof(__int3264):%u sizeof pCardData->hSCardCtx:%u\n",
+		(unsigned)sizeof(size_t), (unsigned)sizeof(ULONG_PTR), (unsigned)sizeof(__int3264), (unsigned)sizeof(pCardData->hSCardCtx));
 
 	logprintf(pCardData, 1, "pCardData->hSCardCtx:0x%08"SC_FORMAT_LEN_SIZE_T"X hScard:0x%08"SC_FORMAT_LEN_SIZE_T"X\n",
 		(size_t)pCardData->hSCardCtx,
@@ -619,14 +622,9 @@ md_get_config_str(PCARD_DATA pCardData, enum ui_str id)
 
 	vs = (VENDOR_SPECIFIC*) pCardData->pvVendorSpecific;
 	if (vs->ctx && vs->reader) {
-		const char *preferred_language = NULL;
 		struct sc_atr atr;
 		atr.len = pCardData->cbAtr;
 		memcpy(atr.value, pCardData->pbAtr, atr.len);
-		if (vs->p15card && vs->p15card->tokeninfo
-				&& vs->p15card->tokeninfo->preferred_language) {
-			preferred_language = vs->p15card->tokeninfo->preferred_language;
-		}
 		ret = ui_get_str(vs->ctx, &atr, vs->p15card, id);
 	}
 
@@ -1029,7 +1027,7 @@ md_fs_find_directory(PCARD_DATA pCardData, struct md_directory *parent, char *na
 
 static DWORD
 md_fs_add_directory(PCARD_DATA pCardData, struct md_directory **head, char *name,
-		CARD_FILE_ACCESS_CONDITION acl,
+		CARD_DIRECTORY_ACCESS_CONDITION acl,
 		struct md_directory **out)
 {
 	struct md_directory *new_dir = NULL;
@@ -2190,7 +2188,7 @@ md_fs_init(PCARD_DATA pCardData)
 	if (dwret != SCARD_S_SUCCESS)
 		goto ret_cleanup;
 
-	dwret = md_fs_add_directory(pCardData, &(vs->root.subdirs), "mscp", UserCreateDeleteDirAc, &mscp);
+	dwret = md_fs_add_directory(pCardData, &(vs->root.subdirs), "mscp", (CARD_DIRECTORY_ACCESS_CONDITION)UserCreateDeleteDirAc, &mscp);
 	if (dwret != SCARD_S_SUCCESS)
 		goto ret_cleanup;
 
@@ -3008,7 +3006,6 @@ static HRESULT CALLBACK md_dialog_proc(HWND hWnd, UINT message, WPARAM wParam, L
 					param = GetWindowLongPtr(hWnd, GWLP_USERDATA);
 					if (param) {
 						PCARD_DATA pCardData = (PCARD_DATA)((LONG_PTR*)param)[7];
-						VENDOR_SPECIFIC* vs = (VENDOR_SPECIFIC*) pCardData->pvVendorSpecific;
 
 						int timeout = md_get_pinpad_dlg_timeout(pCardData);
 						if (timeout > 0) {
@@ -3062,7 +3059,6 @@ md_dialog_perform_pin_operation(PCARD_DATA pCardData, int operation, struct sc_p
 {
 	LONG_PTR parameter[12];
 	INT_PTR result = 0;
-	HWND hWndDlg = 0;
 	TASKDIALOGCONFIG tc = {0};
 	int rv = 0;
 	BOOL checked, user_checked;
