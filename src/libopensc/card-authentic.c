@@ -1937,12 +1937,14 @@ authentic_manage_sdo(struct sc_card *card, struct sc_authentic_sdo *sdo, unsigne
 
 	rv = sc_transmit_apdu(card, &apdu);
 	card->max_send_size = save_max_send;
-	LOG_TEST_RET(ctx, rv, "APDU transmit failed");
+	free(data);
+	if (rv != SC_SUCCESS) {
+		LOG_TEST_RET(ctx, rv, "APDU transmit failed");
+	}
 
 	rv = sc_check_sw(card, apdu.sw1, apdu.sw2);
 	LOG_TEST_RET(ctx, rv, "authentic_sdo_create() SDO put data error");
 
-	free(data);
 	LOG_FUNC_RETURN(ctx, rv);
 }
 

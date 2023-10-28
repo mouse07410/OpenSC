@@ -2301,9 +2301,9 @@ static void sign_data(CK_SLOT_ID slot, CK_SESSION_HANDLE session,
 			fprintf(stderr, "%s:%d C_SignInit failed with %s\n", __FILE__, __LINE__, CKR2Str(rv));
 			p11_fatal("C_SignInit", rv);
 		}
-		if ((getKEY_TYPE(session, key) == CKO_PRIVATE_KEY) && getALWAYS_AUTHENTICATE(session, key)) {
+		if ((getCLASS(session, key) == CKO_PRIVATE_KEY) && getALWAYS_AUTHENTICATE(session, key)) {
 			//login(session,CKU_CONTEXT_SPECIFIC);
-                }
+		}
 
 		sig_len = sizeof(sig_buffer);
 		rv =  p11->C_Sign(session, in_buffer, r, sig_buffer, &sig_len);
@@ -2330,7 +2330,7 @@ static void sign_data(CK_SLOT_ID slot, CK_SESSION_HANDLE session,
 			fprintf(stderr, "%s:%d C_SignInit failed with %s\n", __FILE__, __LINE__, CKR2Str(rv));
 			p11_fatal("C_SignInit", rv);
 		}
-		if ((getKEY_TYPE(session, key) == CKO_PRIVATE_KEY) && getALWAYS_AUTHENTICATE(session, key)) {
+		if ((getCLASS(session, key) == CKO_PRIVATE_KEY) && getALWAYS_AUTHENTICATE(session, key)) {
 			//login(session,CKU_CONTEXT_SPECIFIC);
 		}
 
@@ -2672,9 +2672,9 @@ static void decrypt_data(CK_SLOT_ID slot, CK_SESSION_HANDLE session,
 			fprintf(stderr, "%s:%d C_DecryptInit failed with %s\n", __FILE__, __LINE__, CKR2Str(rv));
 			p11_fatal("C_DecryptInit", rv);
 		}
-		if ((getKEY_TYPE(session, key) == CKO_PRIVATE_KEY) && getALWAYS_AUTHENTICATE(session, key)) {
+		if ((getCLASS(session, key) == CKO_PRIVATE_KEY) && getALWAYS_AUTHENTICATE(session, key)) {
 			//login(session, CKU_CONTEXT_SPECIFIC);
-                }
+		}
 		rv = p11->C_Decrypt(session, in_buffer, in_len, out_buffer, &out_len);
 		if (rv == CKR_USER_NOT_LOGGED_IN) {
 			rv = p11->C_DecryptInit(session, &mech, key);
@@ -2697,9 +2697,9 @@ static void decrypt_data(CK_SLOT_ID slot, CK_SESSION_HANDLE session,
 			p11_fatal("C_DecryptInit", rv);
 		}
 
-		if ((getKEY_TYPE(session, key) == CKO_PRIVATE_KEY) && getALWAYS_AUTHENTICATE(session, key)) {
+		if ((getCLASS(session, key) == CKO_PRIVATE_KEY) && getALWAYS_AUTHENTICATE(session, key)) {
 			//login(session, CKU_CONTEXT_SPECIFIC);
-                }
+		}
 		do {
 			out_len = sizeof(out_buffer);
 			rv = p11->C_DecryptUpdate(session, in_buffer, in_len, out_buffer, &out_len);
@@ -2805,10 +2805,9 @@ static void encrypt_data(CK_SLOT_ID slot, CK_SESSION_HANDLE session,
 		rv = p11->C_EncryptInit(session, &mech, key);
 		if (rv != CKR_OK)
 			p11_fatal("C_EncryptInit", rv);
-		
-                if ((getKEY_TYPE(session, key) == CKO_PRIVATE_KEY) && getALWAYS_AUTHENTICATE(session, key)) {
+		if ((getCLASS(session, key) == CKO_PRIVATE_KEY) && getALWAYS_AUTHENTICATE(session, key)) {
 			//login(session, CKU_CONTEXT_SPECIFIC);
-                }
+		}
 		out_len = sizeof(out_buffer);
 		rv = p11->C_Encrypt(session, in_buffer, in_len, out_buffer, &out_len);
 		if (rv == CKR_USER_NOT_LOGGED_IN) {
@@ -2826,9 +2825,9 @@ static void encrypt_data(CK_SLOT_ID slot, CK_SESSION_HANDLE session,
 		rv = p11->C_EncryptInit(session, &mech, key);
 		if (rv != CKR_OK)
 			p11_fatal("C_EncryptInit", rv);
-		if ((getKEY_TYPE(session, key) == CKO_PRIVATE_KEY) && getALWAYS_AUTHENTICATE(session, key)) {
+		if ((getCLASS(session, key) == CKO_PRIVATE_KEY) && getALWAYS_AUTHENTICATE(session, key)) {
 			//login(session, CKU_CONTEXT_SPECIFIC);
-                }
+		}
 		do {
 			out_len = sizeof(out_buffer);
 			rv = p11->C_EncryptUpdate(session, in_buffer, in_len, out_buffer, &out_len);
@@ -6685,9 +6684,9 @@ static int sign_verify_openssl(CK_SESSION_HANDLE session,
 		p11_fatal("C_SignInit", rv);
 	}
 
-	if ((getKEY_TYPE(session, privKeyObject) == CKO_PRIVATE_KEY) && getALWAYS_AUTHENTICATE(session, privKeyObject)) {
+	if ((getCLASS(session, privKeyObject) == CKO_PRIVATE_KEY) && getALWAYS_AUTHENTICATE(session, privKeyObject)) {
 		//login(session,CKU_CONTEXT_SPECIFIC);
-        }
+	}
 	printf("    %s: ", p11_mechanism_to_name(ck_mech->mechanism));
 	fflush(stdout);
 
@@ -6893,9 +6892,10 @@ static int test_signature(CK_SESSION_HANDLE sess)
 		p11_fatal("C_SignInit", rv);
 	}
 
-	if ((getKEY_TYPE(sess, privKeyObject) == CKO_PRIVATE_KEY) && getALWAYS_AUTHENTICATE(sess, privKeyObject)) {
+	if ((getCLASS(sess, privKeyObject) == CKO_PRIVATE_KEY) && getALWAYS_AUTHENTICATE(sess, privKeyObject)) {
 		//login(sess,CKU_CONTEXT_SPECIFIC);
-        }
+	}
+
 
 	rv = p11->C_SignUpdate(sess, data, 5);
 	if (rv == CKR_FUNCTION_NOT_SUPPORTED) {
@@ -6939,8 +6939,9 @@ static int test_signature(CK_SESSION_HANDLE sess)
 			fprintf(stderr, "%s:%d C_SignInit failed with %s\n", __FILE__, __LINE__, CKR2Str(rv));
 			p11_fatal("C_SignInit", rv);
 		}
-		//if ((getKEY_TYPE(sess, privKeyObject) == CKO_PRIVATE_KEY) && getALWAYS_AUTHENTICATE(sess, privKeyObject))
-		//	login(sess,CKU_CONTEXT_SPECIFIC);
+		if ((getCLASS(sess, privKeyObject) == CKO_PRIVATE_KEY) && getALWAYS_AUTHENTICATE(sess, privKeyObject)) {
+			//login(sess,CKU_CONTEXT_SPECIFIC);
+		}
 
 		sigLen2 = sizeof(sig2);
 		rv = p11->C_Sign(sess, data, dataLen, sig2, &sigLen2);
@@ -6992,8 +6993,9 @@ static int test_signature(CK_SESSION_HANDLE sess)
 	   printf("  ERR: C_Sign() didn't return CKR_OK for a NULL output buf, but %s (0x%0x)\n",
 	   		CKR2Str(rv), (int) rv);
 	}
-	//if ((getKEY_TYPE(sess, privKeyObject) == CKO_PRIVATE_KEY) && getALWAYS_AUTHENTICATE(sess, privKeyObject))
-	//	login(sess,CKU_CONTEXT_SPECIFIC);
+	if ((getCLASS(sess, privKeyObject) == CKO_PRIVATE_KEY) && getALWAYS_AUTHENTICATE(sess, privKeyObject)) {
+		//login(sess,CKU_CONTEXT_SPECIFIC);
+	}
 
 	rv = p11->C_Sign(sess, data, dataLen, sig2, &sigLen2);
 	if (rv == CKR_OPERATION_NOT_INITIALIZED) {
@@ -7165,8 +7167,9 @@ static int sign_verify(CK_SESSION_HANDLE session,
 					__FILE__, __LINE__, CKR2Str(rv), (int) rv);
 			return ++errors;
 		}
-		//if ((getKEY_TYPE(session, priv_key) == CKO_PRIVATE_KEY) && getALWAYS_AUTHENTICATE(session, priv_key))
-		//	login(session,CKU_CONTEXT_SPECIFIC);
+		if ((getCLASS(session, priv_key) == CKO_PRIVATE_KEY) && getALWAYS_AUTHENTICATE(session, priv_key)) {
+			//login(session,CKU_CONTEXT_SPECIFIC);
+		}
 		printf("    %s: ", p11_mechanism_to_name(*mech_type));
 
 		//if (getALWAYS_AUTHENTICATE(session, priv_key))
@@ -7285,7 +7288,7 @@ static int test_verify(CK_SESSION_HANDLE sess)
 	return errors;
 }
 
-#if OPENSC_VERSION_MAJOR == 0 && OPENSC_VERSION_MINOR <= 23
+#if OPENSC_VERSION_MAJOR == 0 && OPENSC_VERSION_MINOR <= 24
 #else
 #ifdef ENABLE_OPENSSL
 static int wrap_unwrap(CK_SESSION_HANDLE session,
@@ -7409,7 +7412,7 @@ static int wrap_unwrap(CK_SESSION_HANDLE session,
  */
 static int test_unwrap(CK_SESSION_HANDLE sess)
 {
-#if OPENSC_VERSION_MAJOR == 0 && OPENSC_VERSION_MINOR <= 23
+#if OPENSC_VERSION_MAJOR == 0 && OPENSC_VERSION_MINOR <= 24
 	/* temporarily disable test, see https://github.com/OpenSC/OpenSC/issues/1796 */
 	return 0;
 #else
@@ -7772,7 +7775,7 @@ static int encrypt_decrypt(CK_SESSION_HANDLE session,
 	}
 	if (rv != CKR_OK)
 		p11_fatal("C_DecryptInit", rv);
-	if ((getKEY_TYPE(session, privKeyObject) == CKO_PRIVATE_KEY) && getALWAYS_AUTHENTICATE(session, privKeyObject))
+	if ((getCLASS(session, privKeyObject) == CKO_PRIVATE_KEY) && getALWAYS_AUTHENTICATE(session, privKeyObject))
 		login(session,CKU_CONTEXT_SPECIFIC);
 
 	data_len = encrypted_len;
@@ -8105,8 +8108,9 @@ static CK_SESSION_HANDLE test_kpgen_certwrite(CK_SLOT_ID slot, CK_SESSION_HANDLE
 		fprintf(stderr, "%s:%d C_SignInit failed with %s\n", __FILE__, __LINE__, CKR2Str(rv));
 		p11_fatal("C_SignInit", rv);
 	}
-	//if ((getKEY_TYPE(session, priv_key) == CKO_PRIVATE_KEY) && getALWAYS_AUTHENTICATE(session, priv_key))
-	//	login(session,CKU_CONTEXT_SPECIFIC);
+	if ((getCLASS(session, priv_key) == CKO_PRIVATE_KEY) && getALWAYS_AUTHENTICATE(session, priv_key)) {
+		//login(session,CKU_CONTEXT_SPECIFIC);
+	}
 
 	rv = p11->C_Sign(session, data, data_len, NULL, &sig_len);
 	if (rv == CKR_USER_NOT_LOGGED_IN) {
@@ -8152,8 +8156,9 @@ static CK_SESSION_HANDLE test_kpgen_certwrite(CK_SLOT_ID slot, CK_SESSION_HANDLE
 		fprintf(stderr, "%s:%d C_SignInit failed with %s\n", __FILE__, __LINE__, CKR2Str(rv));
 		p11_fatal("C_SignInit", rv);
 	}
-	//if ((getKEY_TYPE(session, priv_key) == CKO_PRIVATE_KEY) && getALWAYS_AUTHENTICATE(session, priv_key))
-	//	login(session,CKU_CONTEXT_SPECIFIC);
+	if ((getCLASS(session, priv_key) == CKO_PRIVATE_KEY) && getALWAYS_AUTHENTICATE(session, priv_key)) {
+		//login(session,CKU_CONTEXT_SPECIFIC);
+	}
 
 	rv = p11->C_Sign(session, data, data_len, sig, &sig_len);
 	if (rv == CKR_USER_NOT_LOGGED_IN) {
@@ -8325,8 +8330,9 @@ static void test_ec(CK_SLOT_ID slot, CK_SESSION_HANDLE session)
 		fprintf(stderr, "%s:%d C_SignInit failed with %s\n", __FILE__, __LINE__, CKR2Str(rv));
 		p11_fatal("C_SignInit", rv);
 	}
-	//if ((getKEY_TYPE(session, priv_key) == CKO_PRIVATE_KEY) && getALWAYS_AUTHENTICATE(session, priv_key))
-	//	login(session,CKU_CONTEXT_SPECIFIC);
+	if ((getCLASS(session, priv_key) == CKO_PRIVATE_KEY) && getALWAYS_AUTHENTICATE(session, priv_key)) {
+		//login(session,CKU_CONTEXT_SPECIFIC);
+	}
 	rv = p11->C_Sign(session, data, data_len, NULL, &sig_len);
 	if (rv == CKR_USER_NOT_LOGGED_IN) {
 		rv = p11->C_SignInit(session, &mech, priv_key);
@@ -8358,8 +8364,10 @@ static void test_ec(CK_SLOT_ID slot, CK_SESSION_HANDLE session)
 		fprintf(stderr, "%s:%d C_SignInit failed with %s\n", __FILE__, __LINE__, CKR2Str(rv));
 		p11_fatal("C_SignInit", rv);
 	}
-	//if ((getKEY_TYPE(session, priv_key) == CKO_PRIVATE_KEY) && getALWAYS_AUTHENTICATE(session, priv_key))
-	//	login(session,CKU_CONTEXT_SPECIFIC);
+	if ((getCLASS(session, priv_key) == CKO_PRIVATE_KEY) && getALWAYS_AUTHENTICATE(session, priv_key)) {
+		//login(session,CKU_CONTEXT_SPECIFIC);
+	}
+
 	rv = p11->C_Sign(session, data, data_len, sig, &sig_len);
 	if (rv == CKR_USER_NOT_LOGGED_IN) {
 		rv = p11->C_SignInit(session, &mech, priv_key);
