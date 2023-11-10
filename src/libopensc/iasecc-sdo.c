@@ -44,7 +44,8 @@ iasecc_parse_acls(struct sc_card *card, struct iasecc_sdo_docp *docp, int flags)
 {
 	struct sc_context *ctx = card->ctx;
 	struct iasecc_extended_tlv *acls = &docp->acls_contact;
-	int ii, offs;
+	int ii;
+	size_t offs;
 	unsigned char mask = 0x40;
 
 	if (flags)
@@ -56,8 +57,12 @@ iasecc_parse_acls(struct sc_card *card, struct iasecc_sdo_docp *docp, int flags)
 	docp->amb = *(acls->value + 0);
 	memset(docp->scbs, 0xFF, sizeof(docp->scbs));
 	for (ii=0, offs = 1; ii<7; ii++, mask >>= 1)
-		if (mask & docp->amb)
+		if (mask & docp->amb) {
+			if (offs >= acls->size) {
+				LOG_FUNC_RETURN(ctx, SC_ERROR_INVALID_DATA);
+			}
 			docp->scbs[ii] = *(acls->value + offs++);
+		}
 
 	sc_log(ctx, "iasecc_parse_docp() SCBs %02X:%02X:%02X:%02X:%02X:%02X:%02X",
 			docp->scbs[0],docp->scbs[1],docp->scbs[2],docp->scbs[3],
@@ -455,8 +460,10 @@ iasecc_parse_chv(struct sc_card *card, unsigned char *data, size_t data_len, str
 			chv->size_min = tlv;
 		else if (tlv.tag == IASECC_SDO_CHV_TAG_VALUE)
 			chv->value = tlv;
-		else
+		else {
+			free(tlv.value);
 			LOG_TEST_RET(ctx, SC_ERROR_UNKNOWN_DATA_RECEIVED, "parse error: non CHV SDO tag");
+		}
 
 		offs += rv;
 	}
@@ -485,8 +492,10 @@ iasecc_parse_prvkey(struct sc_card *card, unsigned char *data, size_t data_len, 
 
 		if (tlv.tag == IASECC_SDO_PRVKEY_TAG_COMPULSORY)
 			prvkey->compulsory = tlv;
-		else
+		else {
+			free(tlv.value);
 			LOG_TEST_RET(ctx, SC_ERROR_UNKNOWN_DATA_RECEIVED, "parse error: non PrvKey SDO tag");
+		}
 
 		offs += rv;
 	}
@@ -523,8 +532,10 @@ iasecc_parse_pubkey(struct sc_card *card, unsigned char *data, size_t data_len, 
 			pubkey->cha = tlv;
 		else if (tlv.tag == IASECC_SDO_PUBKEY_TAG_COMPULSORY)
 			pubkey->compulsory = tlv;
-		else
+		else {
+			free(tlv.value);
 			LOG_TEST_RET(ctx, SC_ERROR_UNKNOWN_DATA_RECEIVED, "parse error: non PubKey SDO tag");
+		}
 
 		offs += rv;
 	}
