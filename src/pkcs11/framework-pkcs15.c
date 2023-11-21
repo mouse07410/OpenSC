@@ -1474,12 +1474,38 @@ _get_auth_object_by_name(struct sc_pkcs15_card *p15card, char *name, char *label
 	return rv ? NULL : out;
 }
 
+/* If all certificates and public keys are visible, we can claim conformance
+ * to Public Certificate Token profile, making life easier for many applications
+ * saying, they do not need to login to see all keys available */
+static void _add_profile_object(struct sc_pkcs11_slot *slot, struct pkcs15_fw_data *fw_data, int public_certificates)
+{
+	/* Public Certificates Token in PKCS #11 3.0 */
+	struct pkcs15_any_object *any_pobj = NULL;
+	int rv;
+
+	if (slot->profile) {
+		struct pkcs15_profile_object *pobj = (struct pkcs15_profile_object *)slot->profile;;
+		/* already exists -- downgrade if we found some non-public certificates */
+		if (pobj->profile_id == CKP_PUBLIC_CERTIFICATES_TOKEN && !public_certificates) {
+			pobj->profile_id = CKP_AUTHENTICATION_TOKEN;
+		}
+		return;
+	}
+
+	rv = __pkcs15_create_profile_object(fw_data, public_certificates, &any_pobj);
+	if (rv != CKR_OK || any_pobj == NULL) {
+		return;
+	}
+	pkcs15_add_object(slot, any_pobj, NULL);
+	slot->profile = any_pobj;
+}
 
 static void
 _add_pin_related_objects(struct sc_pkcs11_slot *slot, struct sc_pkcs15_object *pin_obj,
 		struct pkcs15_fw_data *fw_data, struct pkcs15_fw_data *move_to_fw)
 {
 	struct sc_pkcs15_auth_info *pin_info = (struct sc_pkcs15_auth_info *)pin_obj->data;
+	int public_certificates = 1;
 	unsigned i;
 
 	sc_log(context, "Add objects related to PIN('%.*s',ID:%s)", (int) sizeof pin_obj->label, pin_obj->label, sc_pkcs15_print_id(&pin_info->auth_id));
@@ -1511,6 +1537,7 @@ _add_pin_related_objects(struct sc_pkcs11_slot *slot, struct sc_pkcs15_object *p
 		else if (is_cert(obj)) {
 			sc_log(context, "Slot:%p Adding cert object %d to PIN '%.*s'", slot, i, (int) sizeof pin_obj->label, pin_obj->label);
 			pkcs15_add_object(slot, obj, NULL);
+			public_certificates = 0;
 		}
 		else if (is_skey(obj)) {
 			sc_log(context, "Slot:%p Adding secret key object %d to PIN '%.*s'", slot, i, (int) sizeof pin_obj->label, pin_obj->label);
@@ -1531,16 +1558,14 @@ _add_pin_related_objects(struct sc_pkcs11_slot *slot, struct sc_pkcs15_object *p
 			fw_data->num_objects--;
 		}
 	}
+	_add_profile_object(slot, fw_data, public_certificates);
 }
 
 
 static void
 _add_public_objects(struct sc_pkcs11_slot *slot, struct pkcs15_fw_data *fw_data)
 {
-	/* Public Certificates Token in PKCS #11 3.0 */
-	struct pkcs15_any_object *pobj = NULL;
 	int public_certificates = 1;
-	CK_RV rv;
 	unsigned i;
 
 	if (slot == NULL || fw_data == NULL)
@@ -1579,17 +1604,8 @@ _add_public_objects(struct sc_pkcs11_slot *slot, struct pkcs15_fw_data *fw_data)
 			obj->p15_object->type);
 		pkcs15_add_object(slot, obj, NULL);
 	}
-
-	/* If all certificates and public keys are visible, we can claim conformance
-	 * to Public Certificate Token profile, making life easier for many applications
-	 * saying, they do not need to login to see all keys available */
-	rv = __pkcs15_create_profile_object(fw_data, public_certificates, &pobj);
-	if (rv != CKR_OK || pobj == NULL) {
-		return;
-	}
-	pkcs15_add_object(slot, pobj, NULL);
+	_add_profile_object(slot, fw_data, public_certificates);
 }
-
 
 static CK_RV
 pkcs15_create_tokens(struct sc_pkcs11_card *p11card, struct sc_app_info *app_info)
@@ -3260,6 +3276,8 @@ pkcs15_gen_keypair(struct sc_pkcs11_slot *slot, CK_MECHANISM_PTR pMechanism,
 	int		rc;
 	CK_RV rv = CKR_OK;
 	CK_BBOOL always_auth = CK_FALSE;
+	CK_BBOOL sensitive = CK_FALSE;
+	CK_BBOOL extractable = CK_FALSE;
 
 	sc_log(context, "Key pair generation, mech = 0x%0lx",
 		   pMechanism->mechanism);
@@ -3410,6 +3428,24 @@ pkcs15_gen_keypair(struct sc_pkcs11_slot *slot, CK_MECHANISM_PTR pMechanism,
 	if (rv == CKR_OK && always_auth == CK_TRUE) {
 		keygen_args.prkey_args.user_consent = 1;
 	}
+
+	/* set EXTRACTABLE and SENSITIVESE flags */
+	len = sizeof(extractable);
+	rv = attr_find(pPrivTpl, ulPrivCnt, CKA_EXTRACTABLE, &extractable, &len);
+	if (rv == CKR_OK && extractable == CK_TRUE)
+		keygen_args.prkey_args.access_flags |= SC_PKCS15_PRKEY_ACCESS_EXTRACTABLE;
+	else
+		keygen_args.prkey_args.access_flags |= SC_PKCS15_PRKEY_ACCESS_NEVEREXTRACTABLE;
+
+	len = sizeof(sensitive);
+	rv = attr_find(pPrivTpl, ulPrivCnt, CKA_SENSITIVE, &sensitive, &len);
+	if (rv == CKR_OK && sensitive == CK_TRUE) {
+		keygen_args.prkey_args.access_flags |= SC_PKCS15_PRKEY_ACCESS_SENSITIVE;
+		keygen_args.prkey_args.access_flags |= SC_PKCS15_PRKEY_ACCESS_ALWAYSSENSITIVE;
+	}
+
+	/* This is called form C_GenerateKey, key is alwways LOCAL (PKCS#11 v3.0 section 4.7.2) */
+	keygen_args.prkey_args.access_flags |= SC_PKCS15_PRKEY_ACCESS_LOCAL;
 
 	/* 3.a Try on-card key pair generation */
 
@@ -4068,7 +4104,7 @@ pkcs15_prkey_get_attribute(struct sc_pkcs11_session *session,
 		break;
 	case CKA_EXTRACTABLE:
 		check_attribute_buffer(attr, sizeof(CK_BBOOL));
-		*(CK_BBOOL*)attr->pValue = FALSE;
+		*(CK_BBOOL *)attr->pValue = (prkey->prv_info->access_flags & SC_PKCS15_PRKEY_ACCESS_EXTRACTABLE) != 0;
 		break;
 	case CKA_LABEL:
 		len = strnlen(prkey->prv_p15obj->label, sizeof prkey->prv_p15obj->label);
@@ -5309,6 +5345,10 @@ pkcs15_profile_get_attribute(struct sc_pkcs11_session *session, void *object, CK
 		/* TODO */
 		check_attribute_buffer(attr, sizeof(CK_ULONG));
 		*(CK_ULONG*)attr->pValue = pobj->profile_id;
+		break;
+	case CKA_TOKEN:
+		check_attribute_buffer(attr, sizeof(CK_BBOOL));
+		*(CK_BBOOL*)attr->pValue = CK_TRUE;
 		break;
 	default:
 		return CKR_ATTRIBUTE_TYPE_INVALID;

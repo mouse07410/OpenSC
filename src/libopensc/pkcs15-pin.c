@@ -325,6 +325,7 @@ sc_pkcs15_verify_pin(struct sc_pkcs15_card *p15card, struct sc_pkcs15_object *pi
 	}
 #endif /* presumed fix of PIN auth fallthrough */
 
+	/* Check the provided pin matches pin requirements */
 	r = _validate_pin(p15card, auth_info, pinlen);
 
 	if (r)
