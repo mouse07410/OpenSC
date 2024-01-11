@@ -58,7 +58,7 @@ static const struct sc_atr_table idprime_atrs[] = {
 	  "Gemalto IDPrime 930/3930",
 	  SC_CARD_TYPE_IDPRIME_930, 0, NULL },
 	{ "3b:7f:96:00:00:80:31:80:65:b0:85:59:56:fb:12:0f:fe:82:90:00",
-	  "ff:ff:00:ff:ff:ff:ff:ff:ff:ff:ff:ff:ff:ff:ff:00:00:ff:ff:ff",
+	  "ff:ff:00:ff:ff:ff:ff:ff:ff:ff:ff:00:00:00:ff:00:00:ff:ff:ff",
 	  "Gemalto IDPrime 940",
 	  SC_CARD_TYPE_IDPRIME_940, 0, NULL },
 	{ "3b:7f:96:00:00:80:31:80:65:b0:85:05:00:39:12:0f:fe:82:90:00",
@@ -848,10 +848,8 @@ static int idprime_card_ctl(sc_card_t *card, unsigned long cmd, void *ptr)
 
 static int idprime_select_file(sc_card_t *card, const sc_path_t *in_path, sc_file_t **file_out)
 {
-	int r, len;
+	int r;
 	idprime_private_data_t * priv = card->drv_data;
-	u8 data[HEADER_LEN];
-	size_t data_len = HEADER_LEN;
 
 	SC_FUNC_CALLED(card->ctx, SC_LOG_DEBUG_VERBOSE);
 
@@ -865,13 +863,8 @@ static int idprime_select_file(sc_card_t *card, const sc_path_t *in_path, sc_fil
 
 	r = iso_ops->select_file(card, in_path, file_out);
 	if (r == SC_SUCCESS && file_out != NULL) {
-		/* Try to read first bytes of the file to fix FCI in case of
-		 * compressed certififcate */
-		len = iso_ops->read_binary(card, 0, data, data_len, 0);
-		if (len == HEADER_LEN && data[0] == 0x01 && data[1] == 0x00) {
-			/* Cache the real file size for the caching read_binary() */
-			priv->file_size = (*file_out)->size;
-		}
+ 	 	/* Cache the real file size for the caching read_binary() */
+ 	 	priv->file_size = (*file_out)->size;
 	}
 	/* Return the exit code of the select command */
 	return r;
@@ -916,7 +909,9 @@ static int idprime_read_binary(sc_card_t *card, unsigned int offset,
 			r = priv->file_size - 4;
 			if (flags)
 				*flags |= SC_FILE_FLAG_COMPRESSED_AUTO;
-		}
+		} else {
+ 	 	 	r = priv->file_size;
+ 	 	}
 		priv->cache_buf = malloc(r);
 		if (priv->cache_buf == NULL) {
 			return SC_ERROR_OUT_OF_MEMORY;
