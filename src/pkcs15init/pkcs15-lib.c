@@ -140,7 +140,6 @@ static struct profile_operations {
 	void *func;
 } profile_operations[] = {
 	{ "rutoken", (void *) sc_pkcs15init_get_rutoken_ops },
-	{ "gpk", (void *) sc_pkcs15init_get_gpk_ops },
 	{ "flex", (void *) sc_pkcs15init_get_cryptoflex_ops },
 	{ "cyberflex", (void *) sc_pkcs15init_get_cyberflex_ops },
 	{ "cardos", (void *) sc_pkcs15init_get_cardos_ops },
@@ -149,14 +148,12 @@ static struct profile_operations {
 	{ "oberthur", (void *) sc_pkcs15init_get_oberthur_ops },
 	{ "openpgp", (void *) sc_pkcs15init_get_openpgp_ops },
 	{ "setcos", (void *) sc_pkcs15init_get_setcos_ops },
-	{ "incrypto34", (void *) sc_pkcs15init_get_incrypto34_ops },
 	{ "muscle", (void*) sc_pkcs15init_get_muscle_ops },
 	{ "asepcos", (void*) sc_pkcs15init_get_asepcos_ops },
 	{ "entersafe",(void*) sc_pkcs15init_get_entersafe_ops },
 	{ "epass2003",(void*) sc_pkcs15init_get_epass2003_ops },
 	{ "rutoken_ecp", (void *) sc_pkcs15init_get_rtecp_ops },
 	{ "rutoken_lite", (void *) sc_pkcs15init_get_rtecp_ops },
-	{ "westcos", (void *) sc_pkcs15init_get_westcos_ops },
 	{ "myeid", (void *) sc_pkcs15init_get_myeid_ops },
 	{ "sc-hsm", (void *) sc_pkcs15init_get_sc_hsm_ops },
 	{ "isoApplet", (void *) sc_pkcs15init_get_isoApplet_ops },
@@ -3703,7 +3700,7 @@ sc_pkcs15init_update_certificate(struct sc_pkcs15_card *p15card,
 
 	/* Fill the remaining space in the EF (if any) with zeros */
 	if (certlen < file->size) {
-		unsigned char *tmp = calloc(file->size - certlen, 1);
+		unsigned char *tmp = calloc(1, file->size - certlen);
 		if (tmp == NULL) {
 			r = SC_ERROR_OUT_OF_MEMORY;
 			goto done;

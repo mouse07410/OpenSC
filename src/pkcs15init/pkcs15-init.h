@@ -427,21 +427,18 @@ extern int	sc_pkcs15init_unwrap_key(struct sc_pkcs15_card *p15card, struct sc_pr
 
 
 
-extern struct sc_pkcs15init_operations *sc_pkcs15init_get_gpk_ops(void);
 extern struct sc_pkcs15init_operations *sc_pkcs15init_get_cryptoflex_ops(void);
 extern struct sc_pkcs15init_operations *sc_pkcs15init_get_cyberflex_ops(void);
 extern struct sc_pkcs15init_operations *sc_pkcs15init_get_cardos_ops(void);
 extern struct sc_pkcs15init_operations *sc_pkcs15init_get_starcos_ops(void);
 extern struct sc_pkcs15init_operations *sc_pkcs15init_get_oberthur_ops(void);
 extern struct sc_pkcs15init_operations *sc_pkcs15init_get_setcos_ops(void);
-extern struct sc_pkcs15init_operations *sc_pkcs15init_get_incrypto34_ops(void);
 extern struct sc_pkcs15init_operations *sc_pkcs15init_get_muscle_ops(void);
 extern struct sc_pkcs15init_operations *sc_pkcs15init_get_asepcos_ops(void);
 extern struct sc_pkcs15init_operations *sc_pkcs15init_get_rutoken_ops(void);
 extern struct sc_pkcs15init_operations *sc_pkcs15init_get_entersafe_ops(void);
 extern struct sc_pkcs15init_operations *sc_pkcs15init_get_epass2003_ops(void);
 extern struct sc_pkcs15init_operations *sc_pkcs15init_get_rtecp_ops(void);
-extern struct sc_pkcs15init_operations *sc_pkcs15init_get_westcos_ops(void);
 extern struct sc_pkcs15init_operations *sc_pkcs15init_get_myeid_ops(void);
 extern struct sc_pkcs15init_operations *sc_pkcs15init_get_authentic_ops(void);
 extern struct sc_pkcs15init_operations *sc_pkcs15init_get_iasecc_ops(void);

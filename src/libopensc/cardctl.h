@@ -48,17 +48,6 @@ enum {
 	SC_CARDCTL_PKCS11_INIT_PIN,
 
 	/*
-	 * GPK specific calls
-	 */
-	SC_CARDCTL_GPK_BASE = _CTL_PREFIX('G', 'P', 'K'),
-	SC_CARDCTL_GPK_VARIANT,
-	SC_CARDCTL_GPK_LOCK,
-	SC_CARDCTL_GPK_PKINIT,
-	SC_CARDCTL_GPK_PKLOAD,
-	SC_CARDCTL_GPK_IS_LOCKED,
-	SC_CARDCTL_GPK_GENERATE_KEY,
-
-	/*
 	 * Cryptoflex specific calls
 	 */
 	SC_CARDCTL_CRYPTOFLEX_BASE = _CTL_PREFIX('C', 'F', 'X'),
@@ -106,17 +95,6 @@ enum {
 	SC_CARDCTL_SETCOS_GETDATA,
 	SC_CARDCTL_SETCOS_GENERATE_STORE_KEY,
 	SC_CARDCTL_SETCOS_ACTIVATE_FILE,
-
-	/*
-	 * Incrypto34 specific calls
-	 */
-	SC_CARDCTL_INCRYPTO34_BASE = _CTL_PREFIX('I', '3', '4'),
-	SC_CARDCTL_INCRYPTO34_PUT_DATA_FCI,
-	SC_CARDCTL_INCRYPTO34_PUT_DATA_OCI,
-	SC_CARDCTL_INCRYPTO34_PUT_DATA_SECI,
-	SC_CARDCTL_INCRYPTO34_GENERATE_KEY,
-	SC_CARDCTL_INCRYPTO34_CHANGE_KEY_DATA,
-	SC_CARDCTL_INCRYPTO34_ERASE_FILES,
 	
 	/*
 	 * Muscle specific calls
@@ -354,41 +332,6 @@ struct sc_cardctl_parsed_token_info {
 };
 
 /*
- * GPK lock file.
- * Parent DF of file must be selected.
- */
-struct sc_cardctl_gpk_lock {
-	struct sc_file *	file;
-	unsigned int		operation;
-};
-
-/*
- * GPK initialize private key file.
- * Parent DF must be selected.
- */
-struct sc_cardctl_gpk_pkinit {
-	struct sc_file *	file;
-	unsigned int		privlen;
-};
-
-/*
- * GPK load private key portion.
- */
-struct sc_cardctl_gpk_pkload {
-	struct sc_file *	file;
-	u8 *			data;
-	unsigned int		len;
-	unsigned int		datalen;
-};
-
-struct sc_cardctl_gpk_genkey {
-	unsigned int		fid;
-	unsigned int		privlen;
-	unsigned char *		pubkey;
-	unsigned int		pubkey_len;
-};
-
-/*
  * Siemens CardOS PIN info
  */
 struct sc_cardctl_cardos_obj_info {
@@ -409,22 +352,6 @@ struct sc_cardctl_cardos_pass_algo_flags {
 	unsigned long new_flags; /* set in pkcs15-cardos.c */
 	unsigned long ec_flags; /* for EC keys */
 	unsigned long ext_flags; /* for EC keys */
-};
-
-/*
- * Incrypto34 PIN info
- */
-struct sc_cardctl_incrypto34_obj_info {
-	u8 *		data;
-	size_t		len;
-	unsigned int	key_id;
-	unsigned int	key_class;
-};
-
-struct sc_cardctl_incrypto34_genkey_info {
-	unsigned int	key_id;
-	unsigned int	key_bits;
-	unsigned short	fid;
 };
 
 /*

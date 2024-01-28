@@ -550,7 +550,7 @@ sc_pkcs15_get_lastupdate(struct sc_pkcs15_card *p15card)
 	size = file->size ? file->size : 1024;
 	sc_file_free(file);
 
-	content = calloc(size, 1);
+	content = calloc(1, size);
 	if (!content)
 		return NULL;
 
@@ -1227,7 +1227,6 @@ const char *pkcs15_get_default_use_file_cache(struct sc_card *card)
 	 * The following list was initialized with the cards that can't be modified
 	 * with OpenSC i.e. which don't have a profile/driver for pkcs15-init. */
 	const char *card_drivers_with_file_cache[] = {
-		"akis",
 		"atrust-acos",
 		"belpic",
 		"cac1",
