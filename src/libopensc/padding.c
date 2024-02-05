@@ -32,10 +32,13 @@
 #include <string.h>
 #include <stdlib.h>
 
+#include "common/constant-time.h"
 #include "internal.h"
 #include "pkcs11/pkcs11.h"
 
 /* TODO doxygen comments */
+
+#define SC_PKCS1_PADDING_MIN_SIZE 11
 
 /*
  * Prefixes for pkcs-v1 signatures
@@ -103,7 +106,7 @@ static int sc_pkcs1_add_01_padding(const u8 *in, size_t in_len,
 	memmove(out + i, in, in_len);
 	*out++ = 0x00;
 	*out++ = 0x01;
-	
+
 	memset(out, 0xFF, i - 3);
 	out += i - 3;
 	*out = 0x00;
@@ -144,45 +147,82 @@ sc_pkcs1_strip_01_padding(struct sc_context *ctx, const u8 *in_dat, size_t in_le
 	return SC_SUCCESS;
 }
 
-
-/* remove pkcs1 BT02 padding (adding BT02 padding is currently not
- * needed/implemented) */
+/* Remove pkcs1 BT02 padding (adding BT02 padding is currently not
+ * needed/implemented) in constant-time.
+ * Original source: https://github.com/openssl/openssl/blob/9890cc42daff5e2d0cad01ac4bf78c391f599a6e/crypto/rsa/rsa_pk1.c#L171 */
 int
-sc_pkcs1_strip_02_padding(sc_context_t *ctx, const u8 *data, size_t len, u8 *out, size_t *out_len)
+sc_pkcs1_strip_02_padding_constant_time(sc_context_t *ctx, unsigned int n, const u8 *data, unsigned int data_len, u8 *out, unsigned int *out_len)
 {
-	unsigned int	n = 0;
-
+	unsigned int i = 0;
+	u8 *msg, *msg_orig = NULL;
+	unsigned int good, found_zero_byte, mask;
+	unsigned int zero_index = 0, msg_index, mlen = -1, len = 0;
 	LOG_FUNC_CALLED(ctx);
-	if (data == NULL || len < 3)
+
+	if (data == NULL || data_len <= 0 || data_len > n || n < SC_PKCS1_PADDING_MIN_SIZE)
 		LOG_FUNC_RETURN(ctx, SC_ERROR_INTERNAL);
 
-	/* skip leading zero byte */
-	if (*data == 0) {
-		data++;
-		len--;
+	msg = msg_orig = calloc(n, sizeof(u8));
+	if (msg == NULL)
+		LOG_FUNC_RETURN(ctx, SC_ERROR_INTERNAL);
+
+	/*
+	 * We can not check length of input data straight away and still we need to read
+	 * from input even when the input is not as long as needed to keep the time constant.
+	 * If data has wrong size, it is padded by zeroes from left and the following checks
+	 * do not pass.
+	 */
+	len = data_len;
+	for (data += len, msg += n, i = 0; i < n; i++) {
+		mask = ~constant_time_is_zero(len);
+		len -= 1 & mask;
+		data -= 1 & mask;
+		*--msg = *data & mask;
 	}
-	if (data[0] != 0x02)
-		LOG_FUNC_RETURN(ctx, SC_ERROR_WRONG_PADDING);
-	/* skip over padding bytes */
-	for (n = 1; n < len && data[n]; n++)
-		;
-	/* Must be at least 8 pad bytes */
-	if (n >= len || n < 9)
-		LOG_FUNC_RETURN(ctx, SC_ERROR_WRONG_PADDING);
-	n++;
-	if (out == NULL)
-		/* just check the padding */
-		LOG_FUNC_RETURN(ctx, SC_SUCCESS);
+	// check first byte to be 0x00
+	good = constant_time_is_zero(msg[0]);
+	// check second byte to be 0x02
+	good &= constant_time_eq(msg[1], 2);
 
-	/* Now move decrypted contents to head of buffer */
-	if (*out_len < len - n)
-		LOG_FUNC_RETURN(ctx, SC_ERROR_INTERNAL);
-	*out_len = len - n;
-	memmove(out, data + n, *out_len);
+	// find zero byte after random data in padding
+	found_zero_byte = 0;
+	for (i = 2; i < n; i++) {
+		unsigned int equals0 = constant_time_is_zero(msg[i]);
+		zero_index = constant_time_select(~found_zero_byte & equals0, i, zero_index);
+		found_zero_byte |= equals0;
+	}
 
-	sc_log(ctx, "stripped output(%"SC_FORMAT_LEN_SIZE_T"u): %s", len - n,
-	       sc_dump_hex(out, len - n));
-	LOG_FUNC_RETURN(ctx, len - n);
+	// zero_index stands for index of last found zero
+	good &= constant_time_ge(zero_index, 2 + 8);
+
+	// start of the actual message in data
+	msg_index = zero_index + 1;
+
+	// length of message
+	mlen = data_len - msg_index;
+
+	// check that message fits into out buffer
+	good &= constant_time_ge(*out_len, mlen);
+
+	// move the result in-place by |num|-SC_PKCS1_PADDING_MIN_SIZE-|mlen| bytes to the left.
+	*out_len = constant_time_select(constant_time_lt(n - SC_PKCS1_PADDING_MIN_SIZE, *out_len),
+			n - SC_PKCS1_PADDING_MIN_SIZE, *out_len);
+	for (msg_index = 1; msg_index < n - SC_PKCS1_PADDING_MIN_SIZE; msg_index <<= 1) {
+		mask = ~constant_time_eq(msg_index & (n - SC_PKCS1_PADDING_MIN_SIZE - mlen), 0);
+		for (i = SC_PKCS1_PADDING_MIN_SIZE; i < n - msg_index; i++)
+			msg[i] = constant_time_select_8(mask, msg[i + msg_index], msg[i]);
+	}
+	// move message into out buffer, if good
+	for (i = 0; i < *out_len; i++) {
+		unsigned int msg_index;
+		// when out is longer than message in data, use some bogus index in msg
+		mask = good & constant_time_lt(i, mlen);
+		msg_index = constant_time_select(mask, i + SC_PKCS1_PADDING_MIN_SIZE, 0); // to now overflow msg buffer
+		out[i] = constant_time_select_8(mask, msg[msg_index], out[i]);
+	}
+
+	free(msg_orig);
+	return constant_time_select(good, mlen, SC_ERROR_WRONG_PADDING);
 }
 
 #ifdef ENABLE_OPENSSL
@@ -232,8 +272,8 @@ static int mgf1(u8 *mask, size_t len, u8 *seed, size_t seedLen, const EVP_MD *dg
 }
 
 /* forward declarations */
-static EVP_MD *mgf1_flag2md(sc_context_t *ctx, unsigned int mgf1);
-static EVP_MD *hash_flag2md(sc_context_t *ctx, unsigned int hash);
+static EVP_MD *mgf1_flag2md(sc_context_t *ctx, unsigned long mgf1);
+static EVP_MD *hash_flag2md(sc_context_t *ctx, unsigned long hash);
 
 /* check/remove OAEP - RFC 8017 padding */
 int sc_pkcs1_strip_oaep_padding(sc_context_t *ctx, u8 *data, size_t len, unsigned long flags, uint8_t *param, size_t paramlen)
@@ -320,7 +360,7 @@ int sc_pkcs1_strip_oaep_padding(sc_context_t *ctx, u8 *data, size_t len, unsigne
 				/* OK correct padding found */
 				len = dblen - i;
 				memcpy(data, db + i, len);
-				LOG_FUNC_RETURN(ctx, len);
+				LOG_FUNC_RETURN(ctx, (int)len);
 			}
 		}
 	}
@@ -363,7 +403,7 @@ int sc_pkcs1_strip_digest_info_prefix(unsigned int *algorithm,
 		size_t    hdr_len  = digest_info_prefix[i].hdr_len,
 		          hash_len = digest_info_prefix[i].hash_len;
 		const u8 *hdr      = digest_info_prefix[i].hdr;
-		
+
 		if (in_len == (hdr_len + hash_len) &&
 		    !memcmp(in_dat, hdr, hdr_len)) {
 			if (algorithm)
@@ -383,7 +423,7 @@ int sc_pkcs1_strip_digest_info_prefix(unsigned int *algorithm,
 
 #ifdef ENABLE_OPENSSL
 
-static EVP_MD* hash_flag2md(sc_context_t *ctx, unsigned int hash)
+static EVP_MD* hash_flag2md(sc_context_t *ctx, unsigned long hash)
 {
 	switch (hash & SC_ALGORITHM_RSA_HASHES) {
 	case SC_ALGORITHM_RSA_HASH_SHA1:
@@ -401,7 +441,7 @@ static EVP_MD* hash_flag2md(sc_context_t *ctx, unsigned int hash)
 	}
 }
 
-static EVP_MD* mgf1_flag2md(sc_context_t *ctx, unsigned int mgf1)
+static EVP_MD* mgf1_flag2md(sc_context_t *ctx, unsigned long mgf1)
 {
 	switch (mgf1 & SC_ALGORITHM_MGF1_HASHES) {
 	case SC_ALGORITHM_MGF1_SHA1:
@@ -426,7 +466,8 @@ static int sc_pkcs1_add_pss_padding(sc_context_t *scctx, unsigned int hash, unsi
     const u8 *in, size_t in_len, u8 *out, size_t *out_len, size_t mod_bits, size_t sLen)
 {
 	/* hLen = sLen in our case */
-	int rv = SC_ERROR_INTERNAL, i, j, hlen, dblen, plen, round, mgf_rounds;
+	int rv = SC_ERROR_INTERNAL, j, hlen;
+	size_t dblen, plen, round, mgf_rounds, i;
 	int mgf1_hlen;
 	EVP_MD* md = NULL, *mgf1_md = NULL;
 	EVP_MD_CTX* ctx = NULL;
@@ -457,7 +498,7 @@ static int sc_pkcs1_add_pss_padding(sc_context_t *scctx, unsigned int hash, unsi
 		sc_evp_md_free(md);
 		return SC_ERROR_INVALID_ARGUMENTS;
 	}
-	if (RAND_bytes(salt, sLen) != 1) {
+	if (RAND_bytes(salt, (unsigned)sLen) != 1) {
 		sc_evp_md_free(md);
 		return SC_ERROR_INTERNAL;
 	}
@@ -573,7 +614,7 @@ int sc_pkcs1_encode(sc_context_t *ctx, unsigned long flags,
 		pad_algo = SC_ALGORITHM_RSA_PAD_NONE;
 	sc_log(ctx, "hash algorithm 0x%X, pad algorithm 0x%X", hash_algo, pad_algo);
 
-	if ((pad_algo == SC_ALGORITHM_RSA_PAD_PKCS1 || pad_algo == SC_ALGORITHM_RSA_PAD_NONE) &&
+	if ((pad_algo == SC_ALGORITHM_RSA_PAD_PKCS1_TYPE_01 || pad_algo == SC_ALGORITHM_RSA_PAD_NONE) &&
 	    hash_algo != SC_ALGORITHM_RSA_HASH_NONE) {
 		i = sc_pkcs1_add_digest_info_prefix(hash_algo, in, in_len, out, &tmp_len);
 		if (i != SC_SUCCESS) {
@@ -592,7 +633,7 @@ int sc_pkcs1_encode(sc_context_t *ctx, unsigned long flags,
 			memcpy(out, tmp, tmp_len);
 		*out_len = tmp_len;
 		LOG_FUNC_RETURN(ctx, SC_SUCCESS);
-	case SC_ALGORITHM_RSA_PAD_PKCS1:
+	case SC_ALGORITHM_RSA_PAD_PKCS1_TYPE_01:
 		/* add pkcs1 bt01 padding */
 		rv = sc_pkcs1_add_01_padding(tmp, tmp_len, out, out_len, mod_len);
 		LOG_FUNC_RETURN(ctx, rv);
@@ -681,11 +722,16 @@ int sc_get_encoding_flags(sc_context_t *ctx,
 		*sflags = SC_ALGORITHM_RSA_PAD_NONE;
 		*pflags = iflags;
 
-	} else if ((caps & (SC_ALGORITHM_RSA_PAD_PKCS1 | SC_ALGORITHM_RSA_HASH_NONE)) &&
-			(iflags & SC_ALGORITHM_RSA_PAD_PKCS1)) {
+	} else if ((caps & (SC_ALGORITHM_RSA_PAD_PKCS1_TYPE_01 | SC_ALGORITHM_RSA_HASH_NONE)) &&
+			(iflags & SC_ALGORITHM_RSA_PAD_PKCS1_TYPE_01)) {
 		/* A corner case - the card can partially do PKCS1, if we prepend the
 		 * DigestInfo bit it will do the rest. */
-		*sflags = SC_ALGORITHM_RSA_PAD_PKCS1 | SC_ALGORITHM_RSA_HASH_NONE;
+		*sflags = SC_ALGORITHM_RSA_PAD_PKCS1_TYPE_01 | SC_ALGORITHM_RSA_HASH_NONE;
+		*pflags = iflags & SC_ALGORITHM_RSA_HASHES;
+
+	} else if ((caps & (SC_ALGORITHM_RSA_PAD_PKCS1_TYPE_02 | SC_ALGORITHM_RSA_HASH_NONE)) &&
+			(iflags & SC_ALGORITHM_RSA_PAD_PKCS1_TYPE_02)) {
+		*sflags = SC_ALGORITHM_RSA_PAD_PKCS1_TYPE_02 | SC_ALGORITHM_RSA_HASH_NONE;
 		*pflags = iflags & SC_ALGORITHM_RSA_HASHES;
 
 	} else if ((iflags & SC_ALGORITHM_AES) == SC_ALGORITHM_AES) { /* TODO: seems like this constant does not belong to the same set of flags used form asymmetric algos. Fix this! */

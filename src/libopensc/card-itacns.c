@@ -234,7 +234,7 @@ static int itacns_set_security_env(sc_card_t *card,
 	sc_apdu_t apdu;
 	u8	data[3];
 	int	key_id, r;
-	
+
 	/* Do not complain about se_num; the argument is part of the API. */
 	(void) se_num;
 
@@ -315,19 +315,20 @@ static int itacns_read_binary(sc_card_t *card,
 			       unsigned long *flags)
 {
 	size_t already_read = 0;
-	int requested;
+	size_t requested;
 	int r;
 	while(1) {
 		requested = count - already_read;
 		if(requested > ITACNS_MAX_PAYLOAD)
 			requested = ITACNS_MAX_PAYLOAD;
-		r = default_ops->read_binary(card, idx+already_read,
+		r = default_ops->read_binary(card, (unsigned)(idx + already_read),
 			&buf[already_read], requested, flags);
-		if(r < 0) return r;
+		if(r < 0)
+			return r;
 		already_read += r;
-		if (r == 0 || r < requested || already_read == count) {
+		if (r == 0 || (size_t)r < requested || already_read == count) {
 			/* We have finished */
-			return already_read;
+			return (int)already_read;
 		}
 	}
 }
@@ -456,12 +457,12 @@ static int itacns_get_serialnr(sc_card_t *card, sc_serial_number_t *serial)
 	len = file->size;
 	sc_file_free(file);
 
-	//Returned file->size should be 16. 
-	//We choose to not consider it as critical, because some cards 
+	//Returned file->size should be 16.
+	//We choose to not consider it as critical, because some cards
 	//do not return FCI/FCP templates that include the file size.
 	//Notify abnormal length anyway.
 	if (len != 16) {
-		sc_log(card->ctx, 
+		sc_log(card->ctx,
 				"Unexpected file length of EF_IDCarta (%lu)\n",
 				(unsigned long) len);
 	}

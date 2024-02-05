@@ -597,8 +597,12 @@ static int cwa_prepare_external_auth(sc_card_t * card,
 
 	/* compose buffer data */
 	buf3[0] = 0x6A;		/* iso padding */
-	RAND_bytes(buf3 + 1, 74);	/* pRND */
-	RAND_bytes(sm->ifd.k, 32);	/* Kifd */
+	if (RAND_bytes(buf3 + 1, 74) != 1 ||		  /* pRND */
+			RAND_bytes(sm->ifd.k, 32) != 1) { /* Kifd */
+		msg = "prepare external auth: random data error";
+		res = SC_ERROR_INTERNAL;
+		goto prepare_external_auth_end;
+	}
 	memcpy(buf3 + 1 + 74, sm->ifd.k, 32);	/* copy Kifd into buffer */
 	/* prepare data to be hashed */
 	memcpy(sha_buf, buf3 + 1, 74);	/* copy pRND into sha_buf */
@@ -625,7 +629,7 @@ static int cwa_prepare_external_auth(sc_card_t * card,
 	pctx = NULL;
 
 	/* evaluate value of minsig and store into buf3 */
-	bn = BN_bin2bn(buf2, len2, NULL);
+	bn = BN_bin2bn(buf2, (int)len2, NULL);
 	bnsub = BN_new();
 	if (!bn || !bnsub) {
 		msg = "Prepare external auth: BN creation failed";
@@ -980,7 +984,6 @@ static int cwa_verify_internal_auth(sc_card_t * card,
 	}
 
 	EVP_PKEY_CTX_free(pctx);
-	pctx = NULL;
 
 	res = cwa_compare_signature(buf3, len3, ifdbuf);
 	if (res == SC_SUCCESS)
@@ -991,7 +994,7 @@ static int cwa_verify_internal_auth(sc_card_t * card,
 	 * Arriving here means need to evaluate N.ICC-SIG
 	 * So convert buffers to bignums to operate
 	 */
-	bn = BN_bin2bn(buf1, len1, NULL);	/* create BN data */
+	bn = BN_bin2bn(buf1, (int)len1, NULL);	/* create BN data */
 	sigbn = BN_new();
 	if (!bn || !sigbn) {
 		msg = "Verify Signature: cannot bignums creation error";
@@ -1344,7 +1347,12 @@ int cwa_create_secure_channel(sc_card_t * card,
 		msg = "Cannot get ifd serial number from provider";
 		goto csc_end;
 	}
-	RAND_bytes(sm->ifd.rnd, 8);	/* generate 8 random bytes */
+	/* generate 8 random bytes */
+	if (RAND_bytes(sm->ifd.rnd, 8) != 1) {
+		msg = "Cannot generate random data";
+		res = SC_ERROR_INTERNAL;
+		goto csc_end;
+	}
 	memcpy(rndbuf, sm->ifd.rnd, 8);	/* insert RND.IFD into rndbuf */
 	memcpy(rndbuf + 8, sm->ifd.sn, 8);	/* insert SN.IFD into rndbuf */
 	res = cwa_internal_auth(card, sig, 128, rndbuf, 16);
@@ -1550,13 +1558,13 @@ int cwa_encode_apdu(sc_card_t * card,
 	/* if no data, skip data encryption step */
 	if (from->lc != 0) {
 		unsigned char iv[8] = { 0, 0, 0, 0, 0, 0, 0, 0 };
-		int dlen = from->lc;
+		int dlen = (int)from->lc;
 		size_t len = dlen;
 
 		/* pad message */
 		memcpy(msgbuf, from->data, dlen);
 		cwa_iso7816_padding(msgbuf, &len);
-		dlen = len;
+		dlen = (int)len;
 
 		/* start kriptbuff with iso padding indicator */
 		*cryptbuf = 0x01;
@@ -1924,7 +1932,7 @@ int cwa_decode_response(sc_card_t * card,
 	/* if encoded data, decode and store into apdu response */
 	else if (e_tlv->buf) {	/* encoded data */
 		unsigned char iv[8] = { 0, 0, 0, 0, 0, 0, 0, 0 };
-		int dlen = apdu->resplen;
+		int dlen = (int)apdu->resplen;
 		/* check data len */
 		if ((e_tlv->len < 9) || ((e_tlv->len - 1) % 8) != 0) {
 			msg = "Invalid length for Encoded data TLV";
@@ -1947,7 +1955,7 @@ int cwa_decode_response(sc_card_t * card,
 
 		if (EVP_DecryptInit_ex(cctx, alg, NULL, key, iv) != 1 ||
 			EVP_CIPHER_CTX_set_padding(cctx, 0) != 1 ||
-			EVP_DecryptUpdate(cctx, apdu->resp, &dlen, &e_tlv->data[1], e_tlv->len - 1) != 1 ||
+			EVP_DecryptUpdate(cctx, apdu->resp, &dlen, &e_tlv->data[1], (int)(e_tlv->len - 1)) != 1 ||
 			EVP_DecryptFinal_ex(cctx, apdu->resp + dlen, &tmplen) != 1) {
 			res = SC_ERROR_INTERNAL;
 			msg = "Can not decrypt 3DES CBC";

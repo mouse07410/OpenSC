@@ -592,7 +592,7 @@ static int list_data_objects(void)
 	return 0;
 }
 
-static void print_key_usages(int usage)
+static void print_key_usages(unsigned int usage)
 {
 	size_t i;
 	const char *usages[] = {
@@ -638,7 +638,7 @@ static void print_prkey_info(const struct sc_pkcs15_object *obj)
 		printf("  Ref:0x%02X", prkey->key_reference);
 		if (obj->auth_id.len != 0)
 			printf("  AuthID:%s", sc_pkcs15_print_id(&obj->auth_id));
-		printf("\n\t     %-18.*s [0x%02X", (int) sizeof obj->label, obj->label, prkey->usage);
+		printf("\n\t     %-18.*s [0x%02X", (int)sizeof obj->label, obj->label, prkey->usage);
 		print_key_usages(prkey->usage);
 		printf("]");
 		return;
@@ -729,7 +729,7 @@ static void print_pubkey_info(const struct sc_pkcs15_object *obj)
 		printf("  Ref:0x%02X", pubkey->key_reference);
 		if (obj->auth_id.len != 0)
 			printf("  AuthID:%s", sc_pkcs15_print_id(&obj->auth_id));
-		printf("  %-18.*s [0x%02X", (int) sizeof obj->label, obj->label, pubkey->usage);
+		printf("  %-18.*s [0x%02X", (int)sizeof obj->label, obj->label, pubkey->usage);
 		print_key_usages(pubkey->usage);
 		printf("]");
 		return;
@@ -919,7 +919,7 @@ static int list_skeys(void)
 
 #if defined(ENABLE_OPENSSL) && (defined(_WIN32) || defined(HAVE_INTTYPES_H))
 
-static void print_ssh_key(FILE *outf, const char * alg, struct sc_pkcs15_object *obj, unsigned char * buf, uint32_t len) {
+static void print_ssh_key(FILE *outf, const char * alg, struct sc_pkcs15_object *obj, unsigned char * buf, size_t len) {
 	unsigned char *uu;
 	int r;
 
@@ -1025,8 +1025,7 @@ static int read_ssh_key(void)
 		 * 2 x 4B item length headers
 		 * max 11B algorithm name, 32B key data */
 		unsigned char buf[64];
-		unsigned int n;
-		int len;
+		size_t n, len;
 
 		n = pubkey->u.eddsa.pubkey.len;
 		if (n != 32) {
@@ -1070,7 +1069,8 @@ static int read_ssh_key(void)
 		 * 3 x 4B item length headers
 		 * max 20B algorithm name, 9B curve name, max 256B key data */
 		unsigned char buf[300];
-		unsigned int i, tmp, n;
+		unsigned int i, tmp;
+		size_t n;
 		int len;
 
 		for (n = 0,i = 0; ec_curves[i].curve_name != NULL; i++) {
@@ -1086,7 +1086,7 @@ static int read_ssh_key(void)
 			goto fail2;
 		}
 
-		len = snprintf(alg, sizeof alg, "ecdsa-sha2-nistp%d", n);
+		len = snprintf(alg, sizeof alg, "ecdsa-sha2-nistp%zu", n);
 		if (len < 0) {
 			fprintf(stderr, "failed to write algorithm\n");
 			goto fail2;
@@ -1101,7 +1101,7 @@ static int read_ssh_key(void)
 		buf[len++] = 0;
 		buf[len++] = 0;
 		buf[len++] = 0;
-		tmp = snprintf((char *) buf+len+1, 9, "nistp%d", n);
+		tmp = snprintf((char *) buf+len+1, 9, "nistp%zu", n);
 		buf[len++] = tmp;
 		len += tmp;
 
@@ -1122,7 +1122,7 @@ static int read_ssh_key(void)
 
 	if (pubkey->algorithm == SC_ALGORITHM_RSA) {
 		unsigned char buf[2048];
-		uint32_t len, n;
+		size_t len, n;
 
 		if (!pubkey->u.rsa.modulus.data || !pubkey->u.rsa.modulus.len ||
 				!pubkey->u.rsa.exponent.data || !pubkey->u.rsa.exponent.len)  {

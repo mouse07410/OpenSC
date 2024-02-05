@@ -260,12 +260,13 @@ static int idprime_select_file_by_path(sc_card_t *card, const char *str_path)
 	if (r != SC_SUCCESS) {
 		LOG_FUNC_RETURN(card->ctx, r);
 	}
-	r = file->size;
-	sc_file_free(file);
 	/* Ignore too large files */
-	if (r > MAX_FILE_SIZE) {
+	if (file->size > MAX_FILE_SIZE) {
 		r = SC_ERROR_INVALID_DATA;
+	} else {
+		r = (int)file->size;
 	}
+	sc_file_free(file);
 	LOG_FUNC_RETURN(card->ctx, r);
 }
 
@@ -480,6 +481,15 @@ static int idprime_process_index(sc_card_t *card, idprime_private_data_t *priv, 
 			memcpy(priv->tinfo_df, new_object.df, sizeof(priv->tinfo_df));
 			priv->tinfo_present = 1;
 			sc_debug(card->ctx, SC_LOG_DEBUG_VERBOSE, "Found p11/tinfo object");
+		} else if ((memcmp(&start[4], "cmapfile", 8) == 0) && (memcmp(&start[12], "mscp", 4) == 0)) {
+			sc_debug(card->ctx, SC_LOG_DEBUG_VERBOSE, "Found mscp/cmapfile object %s",
+					(start[0] == 02 && start[1] == 04 ? "(already processed)" : "(in non-standard path!)"));
+		} else if (memcmp(&start[4], "cardapps", 8) == 0) {
+			sc_debug(card->ctx, SC_LOG_DEBUG_VERBOSE, "Found cardapps object");
+		} else if (memcmp(&start[4], "cardid", 6) == 0) {
+			sc_debug(card->ctx, SC_LOG_DEBUG_VERBOSE, "Found cardid object");
+		} else if (memcmp(&start[4], "cardcf", 6) == 0) {
+			sc_debug(card->ctx, SC_LOG_DEBUG_VERBOSE, "Found cardcf object");
 		}
 	}
 
@@ -877,14 +887,15 @@ static int idprime_read_binary(sc_card_t *card, unsigned int offset,
 	struct idprime_private_data *priv = card->drv_data;
 	int r = 0;
 	int size;
+	size_t sz;
 
 	sc_log(card->ctx, "called; %"SC_FORMAT_LEN_SIZE_T"u bytes at offset %d",
 		count, offset);
 
 	if (!priv->cached && offset == 0) {
 		/* Read what was reported by FCI from select command */
-		int left = priv->file_size;
-		size_t read = 0;
+		size_t left = priv->file_size;
+		unsigned read = 0;
 
 		// this function is called to read and uncompress the certificate
 		u8 buffer[SC_MAX_EXT_APDU_BUFFER_SIZE];
@@ -906,18 +917,18 @@ static int idprime_read_binary(sc_card_t *card, unsigned int offset,
 		if (buffer[0] == 1 && buffer[1] == 0) {
 			/* Data will be decompressed later */
 			data_buffer += 4;
-			r = priv->file_size - 4;
+			sz = priv->file_size - 4;
 			if (flags)
 				*flags |= SC_FILE_FLAG_COMPRESSED_AUTO;
 		} else {
- 	 	 	r = priv->file_size;
- 	 	}
-		priv->cache_buf = malloc(r);
+			sz = priv->file_size;
+		}
+		priv->cache_buf = malloc(sz);
 		if (priv->cache_buf == NULL) {
 			return SC_ERROR_OUT_OF_MEMORY;
 		}
-		memcpy(priv->cache_buf, data_buffer, r);
-		priv->cache_buf_len = r;
+		memcpy(priv->cache_buf, data_buffer, sz);
+		priv->cache_buf_len = sz;
 		priv->cached = 1;
 	}
 	if (offset >= priv->cache_buf_len) {
@@ -974,7 +985,7 @@ idprime_set_security_env(struct sc_card *card,
 				new_env.algorithm_ref = 0x65;
 			}
 			priv->current_op = SC_ALGORITHM_RSA;
-		} else if (env->algorithm_flags & (SC_ALGORITHM_RSA_PAD_PKCS1 | SC_ALGORITHM_RSA_PAD_OAEP)) {
+		} else if (env->algorithm_flags & (SC_ALGORITHM_RSA_PAD_PKCS1_TYPE_01 | SC_ALGORITHM_RSA_PAD_OAEP)) {
 			if (env->algorithm_flags & SC_ALGORITHM_RSA_HASH_SHA256) {
 				new_env.algorithm_ref = 0x42;
 			} else if (env->algorithm_flags & SC_ALGORITHM_RSA_HASH_SHA384) {
@@ -1072,7 +1083,7 @@ idprime_compute_signature(struct sc_card *card,
 	LOG_TEST_RET(card->ctx, r, "APDU transmit failed");
 
 	if (apdu.sw1 == 0x90 && apdu.sw2 == 0x00)
-		LOG_FUNC_RETURN(card->ctx, apdu.resplen);
+		LOG_FUNC_RETURN(card->ctx, (int)apdu.resplen);
 
 	r = sc_check_sw(card, apdu.sw1, apdu.sw2);
 	LOG_TEST_RET(card->ctx, r, "Card returned error");
@@ -1131,7 +1142,7 @@ idprime_decipher(struct sc_card *card,
 	LOG_TEST_RET(card->ctx, r, "APDU transmit failed");
 
 	if (apdu.sw1 == 0x90 && apdu.sw2 == 0x00)
-		LOG_FUNC_RETURN(card->ctx, apdu.resplen);
+		LOG_FUNC_RETURN(card->ctx, (int)apdu.resplen);
 	else
 		LOG_FUNC_RETURN(card->ctx, sc_check_sw(card, apdu.sw1, apdu.sw2));
 }
