@@ -2970,11 +2970,10 @@ static int gen_keypair(CK_SLOT_ID slot, CK_SESSION_HANDLE session,
 				if (!find_mechanism(slot, CKF_GENERATE_KEY_PAIR, mtypes, mtypes_num, &opt_mechanism))
 					util_fatal("Generate RSA mechanism not supported");
 
-			if (size == NULL)
-				util_fatal("Unknown key pair type %s, expecting RSA:<nbytes>", type);
 			key_length = (unsigned long)atol(size);
-			if (key_length != 0)
-				modulusBits = key_length;
+			if (key_length == 0)
+				util_fatal("Unknown key pair type %s, expecting RSA:<nbytes>", type);
+			modulusBits = key_length;
 
 			FILL_ATTR(publicKeyTemplate[n_pubkey_attr], CKA_MODULUS_BITS, &modulusBits, sizeof(modulusBits));
 			n_pubkey_attr++;
@@ -3019,8 +3018,13 @@ static int gen_keypair(CK_SLOT_ID slot, CK_SESSION_HANDLE session,
 				if (!strcmp(ec_curve_infos[ii].oid, type + 3))
 					break;
 			}
-			if (!ec_curve_infos[ii].name)
-				util_fatal("Unknown EC key params '%s'", type + 3);
+			if (!ec_curve_infos[ii].name) {
+				fprintf(stderr, "EC key parameters may be specified by their canonic name or object identifier. Possible values are:\n");
+				for (ii = 0; ec_curve_infos[ii].name; ii++) {
+					fprintf(stderr, "%s (%s)\n", ec_curve_infos[ii].name, ec_curve_infos[ii].oid);
+				}
+				util_fatal("Unknown EC key parameter '%s'", type + 3);
+			}
 
 			switch (ec_curve_infos[ii].mechanism) {
 			case CKM_EC_EDWARDS_KEY_PAIR_GEN:
@@ -3091,9 +3095,6 @@ static int gen_keypair(CK_SLOT_ID slot, CK_SESSION_HANDLE session,
 			CK_MECHANISM_TYPE mtypes[] = {-1};
 			size_t mtypes_num = sizeof(mtypes)/sizeof(mtypes[0]);
 			const char *p_param_set = type + strlen("GOSTR3410");
-
-			if (p_param_set == NULL)
-				util_fatal("Unknown key pair type %s, expecting GOSTR3410:<nbytes>", type);
 
 			if (!strcmp(":A", p_param_set) || !strcmp("-2001:A", p_param_set)) {
 				gost_key_type = CKK_GOSTR3410;
@@ -3293,11 +3294,9 @@ gen_key(CK_SLOT_ID slot, CK_SESSION_HANDLE session, CK_OBJECT_HANDLE *hSecretKey
 				if (!find_mechanism(slot, CKF_GENERATE, mtypes, mtypes_num, &opt_mechanism))
 					util_fatal("Generate Key mechanism not supported\n");
 
-			if (size == NULL)
-				util_fatal("Unknown key type %s, expecting AES:<nbytes>", type);
 			key_length = (unsigned long)atol(size);
 			if (key_length == 0)
-				key_length = 32;
+				util_fatal("Unknown key type %s, expecting AES:<nbytes>", type);
 
 			FILL_ATTR(keyTemplate[n_attr], CKA_KEY_TYPE, &key_type, sizeof(key_type));
 			n_attr++;
@@ -3313,11 +3312,9 @@ gen_key(CK_SLOT_ID slot, CK_SESSION_HANDLE session, CK_OBJECT_HANDLE *hSecretKey
 				if (!find_mechanism(slot, CKF_GENERATE, mtypes, mtypes_num, &opt_mechanism))
 					util_fatal("Generate Key mechanism not supported\n");
 
-			if (size == NULL)
-				util_fatal("Unknown key type %s, expecting DES:<nbytes>", type);
 			key_length = (unsigned long)atol(size);
 			if (key_length == 0)
-				key_length = 8;
+				util_fatal("Unknown key type %s, expecting DES:<nbytes>", type);
 
 			FILL_ATTR(keyTemplate[n_attr], CKA_KEY_TYPE, &key_type, sizeof(key_type));
 			n_attr++;
@@ -3333,11 +3330,9 @@ gen_key(CK_SLOT_ID slot, CK_SESSION_HANDLE session, CK_OBJECT_HANDLE *hSecretKey
 				if (!find_mechanism(slot, CKF_GENERATE, mtypes, mtypes_num, &opt_mechanism))
 					util_fatal("Generate Key mechanism not supported\n");
 
-			if (size == NULL)
-				util_fatal("Unknown key type %s, expecting DES3:<nbytes>", type);
 			key_length = (unsigned long)atol(size);
 			if (key_length == 0)
-				key_length = 16;
+				util_fatal("Unknown key type %s, expecting DES3:<nbytes>", type);
 
 			FILL_ATTR(keyTemplate[n_attr], CKA_KEY_TYPE, &key_type, sizeof(key_type));
 			n_attr++;
@@ -3353,11 +3348,9 @@ gen_key(CK_SLOT_ID slot, CK_SESSION_HANDLE session, CK_OBJECT_HANDLE *hSecretKey
 				if (!find_mechanism(slot, CKF_GENERATE, mtypes, mtypes_num, &opt_mechanism))
 					util_fatal("Generate Key mechanism not supported\n");
 
-			if (size == NULL)
-				util_fatal("Unknown key type %s, expecting GENERIC:<nbytes>", type);
 			key_length = (unsigned long)atol(size);
 			if (key_length == 0)
-				key_length = 32;
+				util_fatal("Unknown key type %s, expecting GENERIC:<nbytes>", type);
 
 			FILL_ATTR(keyTemplate[n_attr], CKA_KEY_TYPE, &key_type, sizeof(key_type));
 			n_attr++;
