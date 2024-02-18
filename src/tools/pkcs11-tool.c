@@ -7419,7 +7419,7 @@ static int wrap_unwrap(CK_SESSION_HANDLE session,
 
 	/* Try to decrypt */
 	key = getVALUE(session, cipherKeyObject, &key_len_ul);
-	key_len = key_len_ul;
+	key_len = (int)key_len_ul;
 	if (key == NULL) {
 		fprintf(stderr, "Could not get unwrapped key\n");
 		return 1;
@@ -7497,7 +7497,7 @@ static int test_unwrap(CK_SESSION_HANDLE sess)
 
 	printf("Key unwrap (currently only for RSA)\n");
 	for (j = 0; find_object(sess, CKO_PRIVATE_KEY, &privKeyObject, NULL, 0, j); j++) {
-		printf("  testing key %ld ", j);
+		printf("  testing key %d ", j);
 		if ((label = getLABEL(sess, privKeyObject, NULL)) != NULL) {
 			printf("(%s) ", label);
 			free(label);
