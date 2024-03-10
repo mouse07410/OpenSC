@@ -54,7 +54,7 @@ else
 	fi
 	# normal procedure
 
-	CONFIGURE_FLAGS="--disable-dependency-tracking"
+	CONFIGURE_FLAGS="--disable-dependency-tracking --enable-doc"
 	if [ "$1" == "piv-sm" ]; then
 		CONFIGURE_FLAGS="$CONFIGURE_FLAGS --enable-piv-sm"
 	fi
@@ -92,6 +92,7 @@ fi
 # this is broken in old ubuntu
 if [ "$1" == "dist" -o "$2" == "dist" ]; then
 	set +e
+	DISTCHECK_CONFIGURE_FLAGS="$CONFIGURE_FLAGS"
 	make distcheck
 	RV=$?
 	if [ $RV -ne 0 ]; then
