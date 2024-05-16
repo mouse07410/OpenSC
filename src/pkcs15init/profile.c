@@ -2001,25 +2001,30 @@ static struct block	root_ops = {
 };
 
 static int
-is_macro_character(char c) {
+is_macro_character(char c)
+{
 	if (isalnum(c) || c == '-' || c == '_')
 		return 1;
 	return 0;
 }
 
-static void
-get_inner_word(char *str, char word[WORD_SIZE]) {
+static int
+get_inner_word(char *str, char word[WORD_SIZE])
+{
 	char *inner = NULL;
 	size_t len = 0;
 
 	inner = str;
+
 	while (is_macro_character(*inner)) {
 		inner++;
 		len++;
 	}
-	len = len >= WORD_SIZE ? WORD_SIZE - 1 : len;
+	if (len >= WORD_SIZE)
+		return 1;
 	memcpy(word, str, len);
 	word[len] = '\0';
+	return 0;
 }
 
 /*
@@ -2044,7 +2049,8 @@ check_macro_reference_loop(const char *start_name, sc_macro_t *macro, sc_profile
 		if (!(name = strchr(macro_value, '$')))
 			continue;
 		/* Extract the macro name from the string */
-		get_inner_word(name + 1, word);
+		if (get_inner_word(name + 1, word))
+			return 1;
 		/* Find whether name corresponds to some other macro */
 		if (!(m = find_macro(profile, word)))
 			continue;
