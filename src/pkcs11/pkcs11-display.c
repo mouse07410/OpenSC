@@ -245,6 +245,7 @@ print_print(FILE *f, CK_LONG type, CK_VOID_PTR value, CK_ULONG size, CK_VOID_PTR
 	fprintf(f, "\n");
 }
 
+// clang-format off
 static enum_specs ck_cls_s[] = {
   { CKO_DATA             , "CKO_DATA             " },
   { CKO_CERTIFICATE      , "CKO_CERTIFICATE      " },
@@ -315,9 +316,14 @@ static enum_specs ck_mec_s[] = {
   { CKM_MD2_RSA_PKCS             , "CKM_MD2_RSA_PKCS             " },
   { CKM_MD5_RSA_PKCS             , "CKM_MD5_RSA_PKCS             " },
   { CKM_SHA1_RSA_PKCS            , "CKM_SHA1_RSA_PKCS            " },
+  { CKM_SHA224_RSA_PKCS          , "CKM_SHA224_RSA_PKCS          " },
   { CKM_SHA256_RSA_PKCS          , "CKM_SHA256_RSA_PKCS          " },
   { CKM_SHA384_RSA_PKCS          , "CKM_SHA384_RSA_PKCS          " },
   { CKM_SHA512_RSA_PKCS          , "CKM_SHA512_RSA_PKCS          " },
+  { CKM_SHA3_224_RSA_PKCS        , "CKM_SHA3_224_RSA_PKCS        " },
+  { CKM_SHA3_256_RSA_PKCS        , "CKM_SHA3_256_RSA_PKCS        " },
+  { CKM_SHA3_384_RSA_PKCS        , "CKM_SHA3_383_RSA_PKCS        " },
+  { CKM_SHA3_512_RSA_PKCS        , "CKM_SHA3_512_RSA_PKCS        " },
   { CKM_RIPEMD128_RSA_PKCS       , "CKM_RIPEMD128_RSA_PKCS       " },
   { CKM_RIPEMD160_RSA_PKCS       , "CKM_RIPEMD160_RSA_PKCS       " },
   { CKM_RSA_PKCS_OAEP            , "CKM_RSA_PKCS_OAEP            " },
@@ -326,9 +332,14 @@ static enum_specs ck_mec_s[] = {
   { CKM_SHA1_RSA_X9_31           , "CKM_SHA1_RSA_X9_31           " },
   { CKM_RSA_PKCS_PSS             , "CKM_RSA_PKCS_PSS             " },
   { CKM_SHA1_RSA_PKCS_PSS        , "CKM_SHA1_RSA_PKCS_PSS        " },
+  { CKM_SHA224_RSA_PKCS_PSS      , "CKM_SHA224_RSA_PKCS_PSS      " },
   { CKM_SHA256_RSA_PKCS_PSS      , "CKM_SHA256_RSA_PKCS_PSS      " },
   { CKM_SHA384_RSA_PKCS_PSS      , "CKM_SHA384_RSA_PKCS_PSS      " },
   { CKM_SHA512_RSA_PKCS_PSS      , "CKM_SHA512_RSA_PKCS_PSS      " },
+  { CKM_SHA3_224_RSA_PKCS_PSS    , "CKM_SHA3_224_RSA_PKCS_PSS    " },
+  { CKM_SHA3_256_RSA_PKCS_PSS    , "CKM_SHA3_256_RSA_PKCS_PSS    " },
+  { CKM_SHA3_384_RSA_PKCS_PSS    , "CKM_SHA3_384_RSA_PKCS_PSS    " },
+  { CKM_SHA3_512_RSA_PKCS_PSS    , "CKM_SHA3_512_RSA_PKCS_PSS    " },
   { CKM_DSA_KEY_PAIR_GEN         , "CKM_DSA_KEY_PAIR_GEN         " },
   { CKM_DSA                      , "CKM_DSA                      " },
   { CKM_DSA_SHA1                 , "CKM_DSA_SHA1                 " },
@@ -394,6 +405,9 @@ static enum_specs ck_mec_s[] = {
   { CKM_RIPEMD160                , "CKM_RIPEMD160                " },
   { CKM_RIPEMD160_HMAC           , "CKM_RIPEMD160_HMAC           " },
   { CKM_RIPEMD160_HMAC_GENERAL   , "CKM_RIPEMD160_HMAC_GENERAL   " },
+  { CKM_SHA224                   , "CKM_SHA224                   " },
+  { CKM_SHA224_HMAC              , "CKM_SHA224_HMAC              " },
+  { CKM_SHA224_HMAC_GENERAL      , "CKM_SHA224_HMAC_GENERAL      " },
   { CKM_SHA256                   , "CKM_SHA256                   " },
   { CKM_SHA256_HMAC              , "CKM_SHA256_HMAC              " },
   { CKM_SHA256_HMAC_GENERAL      , "CKM_SHA256_HMAC_GENERAL      " },
@@ -497,11 +511,19 @@ static enum_specs ck_mec_s[] = {
   { CKM_EC_KEY_PAIR_GEN          , "CKM_EC_KEY_PAIR_GEN          " },
   { CKM_ECDSA                    , "CKM_ECDSA                    " },
   { CKM_ECDSA_SHA1               , "CKM_ECDSA_SHA1               " },
+  { CKM_ECDSA_SHA224             , "CKM_ECDSA_SHA224             " },
+  { CKM_ECDSA_SHA256             , "CKM_ECDSA_SHA256             " },
+  { CKM_ECDSA_SHA384             , "CKM_ECDSA_SHA384             " },
+  { CKM_ECDSA_SHA512             , "CKM_ECDSA_SHA512             " },
+  { CKM_ECDSA_SHA3_224           , "CKM_ECDSA_SHA3_224           " },
+  { CKM_ECDSA_SHA3_256           , "CKM_ECDSA_SHA3_256           " },
+  { CKM_ECDSA_SHA3_384           , "CKM_ECDSA_SHA3_384           " },
+  { CKM_ECDSA_SHA3_512           , "CKM_ECDSA_SHA3_512           " },
   { CKM_ECDH1_DERIVE             , "CKM_ECDH1_DERIVE             " },
   { CKM_ECDH1_COFACTOR_DERIVE    , "CKM_ECDH1_COFACTOR_DERIVE    " },
   { CKM_ECMQV_DERIVE             , "CKM_ECMQV_DERIVE             " },
   { CKM_EDDSA                    , "CKM_EDDSA                    " },
-  { CKM_XEDDSA                   , "CKM_XEDDSA                    " },
+  { CKM_XEDDSA                   , "CKM_XEDDSA                   " },
   { CKM_JUNIPER_KEY_GEN          , "CKM_JUNIPER_KEY_GEN          " },
   { CKM_JUNIPER_ECB128           , "CKM_JUNIPER_ECB128           " },
   { CKM_JUNIPER_CBC128           , "CKM_JUNIPER_CBC128           " },
@@ -520,6 +542,11 @@ static enum_specs ck_mec_s[] = {
   { CKM_AES_CCM                  , "CKM_AES_CCM                  " },
   { CKM_AES_CMAC                 , "CKM_AES_CMAC                 " },
   { CKM_AES_CTS                  , "CKM_AES_CTS                  " },
+  { CKM_AES_OFB                  , "CKM_AES_OFB                  " },
+  { CKM_AES_CFB64                , "CKM_AES_CFB64                " },
+  { CKM_AES_CFB8                 , "CKM_AES_CFB8                 " },
+  { CKM_AES_CFB128               , "CKM_AES_CFB128               " },
+  { CKM_AES_CFB1                 , "CKM_AES_CFB1                 " },
   { CKM_BLOWFISH_KEY_GEN         , "CKM_BLOWFISH_KEY_GEN         " },
   { CKM_BLOWFISH_CBC             , "CKM_BLOWFISH_CBC             " },
   { CKM_TWOFISH_KEY_GEN          , "CKM_TWOFISH_KEY_GEN          " },
@@ -550,11 +577,15 @@ static enum_specs ck_mec_s[] = {
 };
 
 static enum_specs ck_mgf_s[] = {
-  { CKG_MGF1_SHA1  , "CKG_MGF1_SHA1  " },
-  { CKG_MGF1_SHA224, "CKG_MGF1_SHA224" },
-  { CKG_MGF1_SHA256, "CKG_MGF1_SHA256" },
-  { CKG_MGF1_SHA384, "CKG_MGF1_SHA384" },
-  { CKG_MGF1_SHA512, "CKG_MGF1_SHA512" },
+  { CKG_MGF1_SHA1    , "CKG_MGF1_SHA1    " },
+  { CKG_MGF1_SHA224  , "CKG_MGF1_SHA224  " },
+  { CKG_MGF1_SHA256  , "CKG_MGF1_SHA256  " },
+  { CKG_MGF1_SHA384  , "CKG_MGF1_SHA384  " },
+  { CKG_MGF1_SHA512  , "CKG_MGF1_SHA512  " },
+  { CKG_MGF1_SHA3_224, "CKG_MGF1_SHA3_224" },
+  { CKG_MGF1_SHA3_256, "CKG_MGF1_SHA3_256" },
+  { CKG_MGF1_SHA3_384, "CKG_MGF1_SHA3_384" },
+  { CKG_MGF1_SHA3_512, "CKG_MGF1_SHA3_512" },
 };
 
 static enum_specs ck_err_s[] = {
@@ -724,6 +755,7 @@ type_spec ck_attribute_specs[] = {
   { CKA_SUBJECT           , "CKA_SUBJECT          ", print_generic, NULL },
 #endif
   { CKA_ID                , "CKA_ID               ", print_generic, NULL },
+  { CKA_UNIQUE_ID         , "CKA_UNIQUE_ID        ", print_generic, NULL },
   { CKA_SENSITIVE         , "CKA_SENSITIVE        ", print_boolean, NULL },
   { CKA_ENCRYPT           , "CKA_ENCRYPT          ", print_boolean, NULL },
   { CKA_DECRYPT           , "CKA_DECRYPT          ", print_boolean, NULL },
@@ -835,6 +867,7 @@ type_spec ck_attribute_specs[] = {
   { CKA_CERT_SHA1_HASH, "CKA_CERT_SHA1_HASH(Netsc)                     ", print_generic, NULL },
   { CKA_CERT_MD5_HASH, "CKA_CERT_MD5_HASH(Netsc)                       ", print_generic, NULL },
 };
+// clang-format on
 
 CK_ULONG ck_attribute_num = sizeof(ck_attribute_specs)/sizeof(type_spec);
 
@@ -1122,9 +1155,12 @@ print_interfaces_list(FILE *f, CK_INTERFACE_PTR pInterfacesList, CK_ULONG ulCoun
 
 	if (pInterfacesList) {
 		for (i = 0; i < ulCount; i++) {
-			fprintf(f, "Interface '%s' flags=%lx\n",
-				pInterfacesList[i].pInterfaceName,
-				pInterfacesList[i].flags);
+			CK_INTERFACE_PTR in = &pInterfacesList[i];
+			fprintf(f, "Interface '%s' version=%d.%d flags=%lx\n",
+					in->pInterfaceName,
+					((CK_VERSION *)(in->pFunctionList))->major,
+					((CK_VERSION *)(in->pFunctionList))->minor,
+					in->flags);
 		}
 	}
 	else {

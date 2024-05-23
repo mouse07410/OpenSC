@@ -261,6 +261,11 @@ int callback_certificates(test_certs_t *objects,
 	if (*(CK_CERTIFICATE_TYPE *)template[3].pValue != CKC_X_509)
 		return 0;
 
+	/* Ignore objects with empty ID -- we don't know what to do with them */
+	if (template[0].ulValueLen == 0) {
+		return 0;
+	}
+
 	if ((o = add_object(objects, template[0], template[2])) == NULL)
 		return -1;
 
@@ -303,6 +308,11 @@ int callback_private_keys(test_certs_t *objects,
 {
 	test_cert_t *o = NULL;
 	char *key_id;
+
+	/* Ignore objects with empty ID -- we don't know what to do with them */
+	if (template[3].ulValueLen == 0) {
+		return 0;
+	}
 
 	/* Search for already stored certificate with same ID */
 	if ((o = search_certificate(objects, &(template[3]))) == NULL) {
@@ -763,7 +773,7 @@ int callback_secret_keys(test_certs_t *objects,
 
 	/* Ignore objects with empty ID and label that are left in SoftHSM after deriving key even after
 	 * destroying them */
-	if (template[13].ulValueLen == 0 && template[1].ulValueLen == 0) {
+	if (template[13].pValue == NULL || template[1].pValue == NULL) {
 		return 0;
 	}
 
@@ -801,9 +811,13 @@ int callback_secret_keys(test_certs_t *objects,
 		/* pass the pointer to our structure */
 		o->value = template[10].pValue;
 		template[10].pValue = NULL;
+		/* if there is CKA_VALUE_LEN it will be rewritten later */
+		o->bits = template[10].ulValueLen * 8;
 	}
 
-	o->bits = template[11].ulValueLen > 0 ? *((CK_ULONG *) template[11].pValue)*8 : 0;
+	if (template[11].pValue != NULL && template[11].ulValueLen > 0) {
+		o->bits = *((CK_ULONG *)template[11].pValue) * 8;
+	}
 
 	add_supported_mechs(o);
 
@@ -1023,6 +1037,14 @@ const char *get_mechanism_name(unsigned long mech_id)
 			return "SHA384_RSA_PKCS";
 		case CKM_SHA512_RSA_PKCS:
 			return "SHA512_RSA_PKCS";
+		case CKM_SHA3_224_RSA_PKCS:
+			return "SHA3_224_RSA_PKCS";
+		case CKM_SHA3_256_RSA_PKCS:
+			return "SHA3_256_RSA_PKCS";
+		case CKM_SHA3_384_RSA_PKCS:
+			return "SHA3_384_RSA_PKCS";
+		case CKM_SHA3_512_RSA_PKCS:
+			return "SHA3_512_RSA_PKCS";
 		case CKM_RSA_X_509:
 			return "RSA_X_509";
 		case CKM_ECDSA:
@@ -1037,6 +1059,14 @@ const char *get_mechanism_name(unsigned long mech_id)
 			return "ECDSA_SHA384";
 		case CKM_ECDSA_SHA512:
 			return "ECDSA_SHA512";
+		case CKM_ECDSA_SHA3_224:
+			return "ECDSA_SHA3_224";
+		case CKM_ECDSA_SHA3_256:
+			return "ECDSA_SHA3_256";
+		case CKM_ECDSA_SHA3_384:
+			return "ECDSA_SHA3_384";
+		case CKM_ECDSA_SHA3_512:
+			return "ECDSA_SHA3_512";
 		case CKM_EDDSA:
 			return "EDDSA";
 		case CKM_XEDDSA:
@@ -1069,18 +1099,36 @@ const char *get_mechanism_name(unsigned long mech_id)
 			return "SHA384_RSA_PKCS_PSS";
 		case CKM_SHA512_RSA_PKCS_PSS:
 			return "SHA512_RSA_PKCS_PSS";
+		case CKM_SHA3_224_RSA_PKCS_PSS:
+			return "SHA3_224_RSA_PKCS_PSS";
+		case CKM_SHA3_256_RSA_PKCS_PSS:
+			return "SHA3_256_RSA_PKCS_PSS";
+		case CKM_SHA3_384_RSA_PKCS_PSS:
+			return "SHA3_384_RSA_PKCS_PSS";
+		case CKM_SHA3_512_RSA_PKCS_PSS:
+			return "SHA3_512_RSA_PKCS_PSS";
 		case CKM_MD5_HMAC:
 			return "MD5_HMAC";
 		case CKM_SHA_1_HMAC:
 			return "SHA_1_HMAC";
+		case CKM_SHA_1_HMAC_GENERAL:
+			return "SHA_1_HMAC_GENERAL";
 		case CKM_SHA224_HMAC:
 			return "SHA224_HMAC";
+		case CKM_SHA224_HMAC_GENERAL:
+			return "SHA224_HMAC_GENERAL";
 		case CKM_SHA256_HMAC:
 			return "SHA256_HMAC";
+		case CKM_SHA256_HMAC_GENERAL:
+			return "SHA256_HMAC_GENERAL";
 		case CKM_SHA384_HMAC:
 			return "SHA384_HMAC";
+		case CKM_SHA384_HMAC_GENERAL:
+			return "SHA384_HMAC_GENERAL";
 		case CKM_SHA512_HMAC:
 			return "SHA512_HMAC";
+		case CKM_SHA512_HMAC_GENERAL:
+			return "SHA512_HMAC_GENERAL";
 		case CKM_RSA_PKCS_OAEP:
 			return "RSA_PKCS_OAEP";
 		case CKM_RIPEMD160:
@@ -1182,9 +1230,37 @@ const char *get_mgf_name(unsigned long mgf_id)
 			return "MGF1_SHA384";
 		case CKG_MGF1_SHA512:
 			return "MGF1_SHA512";
+		case CKG_MGF1_SHA3_224:
+			return "MGF1_SHA3_224";
+		case CKG_MGF1_SHA3_256:
+			return "MGF1_SHA3_256";
+		case CKG_MGF1_SHA3_384:
+			return "MGF1_SHA3_384";
+		case CKG_MGF1_SHA3_512:
+			return "MGF1_SHA3_512";
 		default:
 			sprintf(name_buffer, "0x%.8lX", mgf_id);
 			return name_buffer;
+	}
+}
+
+const char *
+get_key_type(test_cert_t * key)
+{
+	switch (key->key_type) {
+	case CKK_RSA:
+		return "RSA";
+	case CKK_EC:
+		return "EC";
+	case CKK_EC_EDWARDS:
+		return "EC_EDWARDS";
+	case CKK_EC_MONTGOMERY:
+		return "EC_MONTGOMERY";
+	case CKK_AES:
+		return "AES";
+	default:
+		sprintf(name_buffer, "0x%.8lX", key->key_type);
+		return name_buffer;
 	}
 }
 
@@ -1312,12 +1388,16 @@ void write_data_row(token_info_t *info, int cols, ...)
 
 int is_pss_mechanism(CK_MECHANISM_TYPE mech)
 {
-	return (mech == CKM_RSA_PKCS_PSS
-		|| mech == CKM_SHA1_RSA_PKCS_PSS
-		|| mech == CKM_SHA256_RSA_PKCS_PSS
-		|| mech == CKM_SHA384_RSA_PKCS_PSS
-		|| mech == CKM_SHA512_RSA_PKCS_PSS
-		|| mech == CKM_SHA224_RSA_PKCS_PSS);
+	return (mech == CKM_RSA_PKCS_PSS ||
+			mech == CKM_SHA1_RSA_PKCS_PSS ||
+			mech == CKM_SHA256_RSA_PKCS_PSS ||
+			mech == CKM_SHA384_RSA_PKCS_PSS ||
+			mech == CKM_SHA512_RSA_PKCS_PSS ||
+			mech == CKM_SHA224_RSA_PKCS_PSS ||
+			mech == CKM_SHA3_256_RSA_PKCS_PSS ||
+			mech == CKM_SHA3_384_RSA_PKCS_PSS ||
+			mech == CKM_SHA3_512_RSA_PKCS_PSS ||
+			mech == CKM_SHA3_224_RSA_PKCS_PSS);
 }
 
 CK_RV

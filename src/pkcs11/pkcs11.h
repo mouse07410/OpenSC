@@ -809,6 +809,7 @@ typedef unsigned long ck_mechanism_type_t;
 #define CKM_AES_CFB64			(0x2105UL)
 #define CKM_AES_CFB8			(0x2106UL)
 #define CKM_AES_CFB128			(0x2107UL)
+#define CKM_AES_CFB1			(0x2108UL)
 #define CKM_AES_KEY_WRAP		(0x2109UL)
 #define CKM_AES_KEY_WRAP_PAD		(0x210AUL)
 #define CKM_XEDDSA			(0x4029UL)
@@ -932,6 +933,15 @@ typedef struct CK_GCM_PARAMS {
 	unsigned long ulAADLen;
 	unsigned long ulTagBits;
 } CK_GCM_PARAMS;
+
+typedef struct CK_CCM_PARAMS {
+	unsigned long ulDataLen;
+	unsigned char *pNonce;
+	unsigned long ulNonceLen;
+	unsigned char *pAAD;
+	unsigned long ulAADLen;
+	unsigned long ulMACLen;
+} CK_CCM_PARAMS;
 
 /* EDDSA */
 typedef struct CK_EDDSA_PARAMS {

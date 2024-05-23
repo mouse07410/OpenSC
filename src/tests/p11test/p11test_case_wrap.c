@@ -156,6 +156,7 @@ test_wrap(test_cert_t *o, token_info_t *info, test_cert_t *key, test_mech_t *mec
 {
 	CK_FUNCTION_LIST_PTR fp = info->function_pointer;
 	CK_MECHANISM mechanism = { mech->mech, NULL_PTR, 0 };
+	CK_MECHANISM tmp_mechanism = {mech->mech, NULL_PTR, 0};
 	/* SoftHSM supports only SHA1 with OAEP encryption */
 	CK_RSA_PKCS_OAEP_PARAMS oaep_params = {CKM_SHA_1, CKG_MGF1_SHA1, CKZ_DATA_SPECIFIED, NULL, 0};
 	CK_BYTE iv[] = {0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
@@ -170,6 +171,17 @@ test_wrap(test_cert_t *o, token_info_t *info, test_cert_t *key, test_mech_t *mec
 		.pAAD = aad, /* TODO: SoftHSM crashes without AAD */
 		.ulAADLen = sizeof(aad),
 		.ulTagBits = 128,
+	};
+	/* It is very unclear from the PKCS#11 specs what
+	 * value we should provide here to DataLen for
+	 * wrapping and unwrapping operation. */
+	CK_CCM_PARAMS ccm_params = {
+			.ulDataLen = key->bits,
+			.pNonce = (void *)iv,
+			.ulNonceLen = 13,
+			.pAAD = aad,
+			.ulAADLen = sizeof(aad),
+			.ulMACLen = 16,
 	};
 	//unsigned char key[16];
 	CK_BYTE *wrapped = NULL;
@@ -188,8 +200,8 @@ test_wrap(test_cert_t *o, token_info_t *info, test_cert_t *key, test_mech_t *mec
 		return 0;
 	}
 
-	debug_print(" [ KEY %s ] Wrap a key [%s] using CKM_%s", o->id_str, key->id_str,
-	            get_mechanism_name(mech->mech));
+	debug_print(" [ KEY %s ] Wrap a key [%s] (%s) using CKM_%s", o->id_str, key->id_str,
+			get_key_type(key), get_mechanism_name(mech->mech));
 	/* RSA mechanisms */
 	switch (mech->mech) {
 	case CKM_RSA_X_509:
@@ -215,6 +227,10 @@ test_wrap(test_cert_t *o, token_info_t *info, test_cert_t *key, test_mech_t *mec
 	/* AES mechanisms */
 	case CKM_AES_CBC:
 	case CKM_AES_CBC_PAD:
+	case CKM_AES_CTS:
+	case CKM_AES_OFB:
+	case CKM_AES_CFB8:
+	case CKM_AES_CFB128:
 		mech->params = &iv;
 		mech->params_len = sizeof(iv);
 		break;
@@ -225,6 +241,25 @@ test_wrap(test_cert_t *o, token_info_t *info, test_cert_t *key, test_mech_t *mec
 	case CKM_AES_GCM:
 		mech->params = &gcm_params;
 		mech->params_len = sizeof(gcm_params);
+		break;
+	case CKM_AES_CCM:
+		/* The CCM parameters need to match with the input data length
+		 * for encryption but we do not know the size for asymmetric
+		 * keys so try to figure out by querying size in different mode */
+		tmp_mechanism.mechanism = CKM_AES_CTR;
+		tmp_mechanism.pParameter = &ctr_params;
+		tmp_mechanism.ulParameterLen = sizeof(ctr_params);
+		rv = fp->C_WrapKey(info->session_handle, &tmp_mechanism, o->public_handle,
+				key->private_handle, wrapped, &wrapped_len);
+		if (rv != CKR_OK) {
+			mech->params = NULL;
+			mech->params_len = 0;
+			debug_print(" [ KEY %s ] Failed to find CCM param dataLen", o->id_str);
+			return 1;
+		}
+		ccm_params.ulDataLen = wrapped_len;
+		mech->params = &ccm_params;
+		mech->params_len = sizeof(ccm_params);
 		break;
 	case CKM_AES_ECB:
 	case CKM_AES_KEY_WRAP:
@@ -305,8 +340,12 @@ test_wrap(test_cert_t *o, token_info_t *info, test_cert_t *key, test_mech_t *mec
 		} else {
 			fprintf(stderr, " [ ERROR %s ] Wrapped key does not match\n", o->id_str);
 			fprintf(stderr, "\nplaintext:\n");
-			for (unsigned long i = 0; i < plain_len; i++) {
-				fprintf(stderr, ":%x", plain[i]);
+			if (plain != NULL) {
+				for (unsigned long i = 0; i < plain_len; i++) {
+					fprintf(stderr, ":%x", plain[i]);
+				}
+			} else {
+				fprintf(stderr, "NULL");
 			}
 			fprintf(stderr, "\nkey->value:\n");
 			for (unsigned long i = 0; i < key->bits / 8; i++) {
@@ -316,7 +355,7 @@ test_wrap(test_cert_t *o, token_info_t *info, test_cert_t *key, test_mech_t *mec
 			return 1;
 		}
 		free(plain);
-	} else {
+	} else if (key->key_type == CKK_AES) {
 		rv = check_encrypt_decrypt_secret(plain, plain_len, key, info);
 		free(plain);
 		if (rv == 0) {
@@ -348,7 +387,7 @@ test_unwrap_aes(test_cert_t *o, token_info_t *info, test_mech_t *mech)
 			0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f};
 	CK_BYTE *key_padded = key;
 	CK_ULONG key_len = sizeof(key);
-	CK_ULONG key_padded_len = sizeof(key_padded);
+	CK_ULONG key_padded_len = sizeof(key);
 	CK_OBJECT_CLASS keyClass = CKO_SECRET_KEY;
 	CK_KEY_TYPE keyType = CKK_AES;
 	CK_BBOOL true = CK_TRUE;
@@ -389,7 +428,7 @@ test_unwrap_aes(test_cert_t *o, token_info_t *info, test_mech_t *mech)
 		mech->params_len = sizeof(oaep_params);
 		/* fall through */
 	case CKM_RSA_X_509:
-		if ((key_padded = rsa_x_509_pad_message(key, &key_padded_len, o, 1)) == NULL) {
+		if (mech->mech == CKM_RSA_X_509 && (key_padded = rsa_x_509_pad_message(key, &key_padded_len, o, 1)) == NULL) {
 			debug_print(" [ERROR %s ] Could not pad message", o->id_str);
 			return 1;
 		}
@@ -488,12 +527,14 @@ wrap_tests(void **state)
 	test_certs_t objects;
 	test_cert_t *aes_key = NULL, *aes2_key = NULL;
 	test_cert_t *rsa_key = NULL, *rsa2_key = NULL;
+	test_cert_t *ec_key = NULL;
 
 	test_certs_init(&objects);
 
 	P11TEST_START(info);
 	search_for_all_objects(&objects, info);
 
+	/* Find keys to wrap */
 	for (i = 0; i < objects.count; i++) {
 		test_cert_t *o = &objects.data[i];
 		if (aes_key == NULL && o->key_type == CKK_AES && o->extractable) {
@@ -504,6 +545,8 @@ wrap_tests(void **state)
 			rsa_key = o;
 		} else if (rsa2_key == NULL && o->key_type == CKK_RSA && o->extractable) {
 			rsa2_key = o;
+		} else if (ec_key == NULL && o->key_type == CKK_EC && o->extractable) {
+			ec_key = o;
 		}
 	}
 
@@ -535,6 +578,9 @@ wrap_tests(void **state)
 				if (aes_key) {
 					errors += test_wrap(o, info, aes_key, &(o->mechs[j]));
 				}
+				if (ec_key) {
+					errors += test_wrap(o, info, ec_key, &(o->mechs[j]));
+				}
 				errors += test_unwrap_aes(o, info, &(o->mechs[j]));
 				break;
 			case CKK_AES:
@@ -547,10 +593,14 @@ wrap_tests(void **state)
 				if (rsa_key) {
 					errors += test_wrap(o, info, rsa_key, &(o->mechs[j]));
 				}
+				/* TODO differentiate the RSA and EC key */
+				if (ec_key) {
+					errors += test_wrap(o, info, ec_key, &(o->mechs[j]));
+				}
 				// errors += test_unwrap_aes(o, info, &(o->mechs[j]));
 				break;
 			default:
-				/* Other keys do not support derivation */
+				/* Other keys do not support wrapping */
 				break;
 			}
 		}

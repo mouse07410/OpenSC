@@ -21,7 +21,6 @@
 #set -x
 SOPIN="12345678"
 PIN="123456"
-export GNUTLS_PIN=$PIN
 GENERATE_KEYS=1
 PKCS11_TOOL="../../tools/pkcs11-tool";
 PKCS15_INIT="env OPENSC_CONF=p11test_opensc.conf ../../tools/pkcs15-init"
@@ -34,7 +33,8 @@ function generate_sym() {
 
 	# Generate key
 	$PKCS11_TOOL --keygen --key-type="$TYPE" --login --pin=$PIN \
-		--extractable --module="$P11LIB" --label="$LABEL" --id=$ID
+		--extractable --usage-wrap --usage-decrypt \
+		--module="$P11LIB" --label="$LABEL" --id=$ID
 
 	if [[ "$?" -ne "0" ]]; then
 		echo "Couldn't generate $TYPE key pair"
@@ -52,7 +52,8 @@ function generate_cert() {
 
 	# Generate key pair
 	$PKCS11_TOOL --keypairgen --key-type="$TYPE" --login --pin=$PIN \
-		--extractable --module="$P11LIB" --label="$LABEL" --id=$ID
+		--extractable --usage-wrap --usage-sign --usage-decrypt \
+		--module="$P11LIB" --label="$LABEL" --id=$ID
 
 	if [[ "$?" -ne "0" ]]; then
 		echo "Couldn't generate $TYPE key pair"
@@ -64,6 +65,7 @@ function generate_cert() {
 	if [[ "$CERT" -ne 0 ]]; then
 		# check type value for the PKCS#11 URI (RHEL7 is using old "object-type")
 		TYPE_KEY="type"
+		export GNUTLS_PIN=$PIN
 		p11tool --list-all --provider="$P11LIB" --login | grep "object-type" && \
 			TYPE_KEY="object-type"
 
@@ -119,6 +121,15 @@ function card_setup() {
 			echo "test_swtok" | /usr/sbin/pkcsconf -I -c $SLOT_ID -S $SO_PIN
 			/usr/sbin/pkcsconf -u -c $SLOT_ID -S $SO_PIN -n $PIN
 			;;
+		"kryoptic")
+			PIN="$SOPIN"
+			P11LIB="/home/jjelen/devel/kryoptic/target/debug/libkryoptic_pkcs11.so"
+			KRYOPTIC_DB="kryoptic.sql"
+			export KRYOPTIC_CONF="$KRYOPTIC_DB:1"
+			# Init token
+			$PKCS11_TOOL --init-token --so-pin="$SOPIN" --label="Kryoptic token" --module="$P11LIB"
+			$PKCS11_TOOL --init-pin --pin="$PIN" --so-pin="$SOPIN" --label="Kryoptic token" --module="$P11LIB"
+			;;
 		"readonly")
 			GENERATE_KEYS=0
 			if [[ ! -z "$2" && -f "$2" ]]; then
@@ -165,7 +176,7 @@ function card_setup() {
 		*)
 			echo "Error: Missing argument."
 			echo "    Usage:"
-			echo "        runtest.sh [softhsm|opencryptoki|myeid|sc-hsm|readonly [pkcs-library.so]]"
+			echo "        runtest.sh [softhsm|opencryptoki|myeid|sc-hsm|kryoptic|readonly [pkcs-library.so]]"
 			exit 1;
 			;;
 	esac
@@ -175,6 +186,10 @@ function card_setup() {
 		generate_cert "RSA:1024" "01" "RSA_auth" 1
 		# Generate 2048b RSA Key pair
 		generate_cert "RSA:2048" "02" "RSA2048" 1
+		# Generate 3082b RSA Key pair
+		generate_cert "RSA:3072" "09" "RSA3072" 1
+		# Generate 4096 RSA Key pair
+		generate_cert "RSA:4096" "10" "RSA4096" 1
 		if [[ $ECC_KEYS -eq 1 ]]; then
 			# Generate 256b ECC Key pair
 			generate_cert "EC:secp256r1" "03" "ECC_auth" 1
@@ -202,6 +217,9 @@ function card_cleanup() {
 		"softhsm")
 			rm .softhsm2.conf
 			rm -rf ".tokens"
+			;;
+		"kryoptic")
+			rm kryoptic.sql
 			;;
 	esac
 }
