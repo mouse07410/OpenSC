@@ -165,9 +165,9 @@
 						<option>--key-type</option>
 						<replaceable>specification</replaceable>
 					</term>
-					<listitem><para>Specify the type and length (bytes if symmetric) of the key to create,
-					for example RSA:1024, EC:prime256v1, GOSTR3410-2012-256:B,
-					DES:8, DES3:24, AES:16 or GENERIC:64. If the key type was incompletely specified, possible values are listed.</para></listitem>
+					<listitem><para>Specify the type and (not always compulsory) flavour (byte-wise symmetric key length, bit-wise asymmetric key length,
+					elliptic curve identifier, etc.) of the key to create, for example RSA:2048, EC:prime256v1, GOSTR3410-2012-256:B,
+					DES:8, DES3:24, AES:16, AES: or GENERIC:64. If the key type was incompletely specified, possible values are listed.</para></listitem>
 				</varlistentry>
 
 				<varlistentry>
@@ -827,6 +827,20 @@
 					<listitem><para>Sets the length of the tag for AEAD ciphers to
 					<replaceable>num</replaceable> bits.
 					</para></listitem>
+				</varlistentry>
+
+				<varlistentry>
+					<term>
+						<option>--salt-file</option> <replaceable>filename</replaceable>
+					</term>
+					<listitem><para>Specify the file containing the salt for HKDF (optional)</para></listitem>
+				</varlistentry>
+
+				<varlistentry>
+					<term>
+						<option>--info-file</option> <replaceable>filename</replaceable>
+					</term>
+					<listitem><para>Specify the file containing the info for HKDF (optional)</para></listitem>
 				</varlistentry>
 
 			</variablelist>
