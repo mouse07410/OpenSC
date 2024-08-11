@@ -2318,15 +2318,11 @@ parse_pss_params(CK_SESSION_HANDLE session, CK_OBJECT_HANDLE key,
 		hashlen = hash_length(pss_params->hashAlg);
 
 		if (opt_salt_len_given == 1) { /* salt size explicitly given */
-<<<<<<< HEAD
-			unsigned long modlen = (get_private_key_length(session, key) + 7) / 8;
-=======
 			unsigned long modlen = 0;
 
 			modlen = (get_private_key_length(session, key) + 7) / 8;
 			if (modlen == 0)
 				util_fatal("Incorrect length of private key");
->>>>>>> upstream/master
 			switch (opt_salt_len) {
 			case -1: /* salt size equals to digest size */
 				pss_params->sLen = hashlen;
@@ -2793,7 +2789,7 @@ static void decrypt_data(CK_SLOT_ID slot, CK_SESSION_HANDLE session,
 		util_fatal("Mechanism %s illegal or not supported\n", p11_mechanism_to_name(opt_mechanism));
 	}
 
-<<<<<<< HEAD
+#ifdef WEIRD_RSA
 
 	/* If an RSA-OAEP mechanism, it needs parameters */
 	if (oaep_params.hashAlg) {
@@ -2816,9 +2812,8 @@ static void decrypt_data(CK_SLOT_ID slot, CK_SESSION_HANDLE session,
 			oaep_params.ulSourceDataLen);
 
 	}
+#endif /* WEIRD_RSA */
 
-=======
->>>>>>> upstream/master
 	if (opt_input == NULL)
 		fd_in = 0;
 	else if ((fd_in = open(opt_input, O_RDONLY | O_BINARY)) < 0)
@@ -8037,19 +8032,12 @@ static int encrypt_decrypt(CK_SESSION_HANDLE session,
 	unsigned char	orig_data[512] = {'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', '\0'};
 	unsigned char	encrypted[512], data[512];
 	CK_MECHANISM	mech;
-<<<<<<< HEAD
 	CK_ULONG	encrypted_len = 0, data_len = 0;
 	int             failed = 0;
 	CK_RV           rv = 0;
 	int             pad = 0;
 	CK_MECHANISM_TYPE hash_alg = CKM_SHA256;
 	CK_RSA_PKCS_MGF_TYPE mgf = CKG_MGF1_SHA256;
-=======
-	CK_ULONG	encrypted_len, data_len;
-	int             failed;
-	CK_RV           rv;
-	int pad;
->>>>>>> upstream/master
 	CK_RSA_PKCS_OAEP_PARAMS oaep_params;
 
 	printf("    %s: ", p11_mechanism_to_name(mech_type));
@@ -8079,12 +8067,8 @@ static int encrypt_decrypt(CK_SESSION_HANDLE session,
 		build_rsa_oaep_params(&oaep_params, &mech, param, param_len);
 
 		pad = RSA_PKCS1_OAEP_PADDING;
-<<<<<<< HEAD
 		/* Limit the input length to <= mod_len-2-2*hlen */
-		size_t len = 2 + 2*hash_length(hash_alg);
-=======
 		size_t len = 2 + 2 * hash_length(oaep_params.hashAlg);
->>>>>>> upstream/master
 		if (len >= mod_len) {
 			printf("Incompatible mechanism and key size (len=%lu must be smaller than mod_len=%lu\n",
 				len, mod_len);
@@ -8140,15 +8124,10 @@ static int encrypt_decrypt(CK_SESSION_HANDLE session,
 		return 0;
 	}
 	if (mech_type == CKM_RSA_PKCS_OAEP) {
-<<<<<<< HEAD
-#if (defined(EVP_PKEY_CTX_set_rsa_oaep_md) && defined(EVP_PKEY_CTX_set_rsa_mgf1_md)) || (OPENSSL_VERSION_NUMBER >= 0x10002000L)
-		const EVP_MD *md = NULL;
-		switch (hash_alg) {
-=======
+//#if (defined(EVP_PKEY_CTX_set_rsa_oaep_md) && defined(EVP_PKEY_CTX_set_rsa_mgf1_md)) || (OPENSSL_VERSION_NUMBER >= 0x10002000L)
 #if OPENSSL_VERSION_NUMBER >= 0x10002000L
-		const EVP_MD *md;
+		const EVP_MD *md = NULL;
 		switch (oaep_params.hashAlg) {
->>>>>>> upstream/master
 		case CKM_SHA_1:
 			md = EVP_sha1();
 			break;
@@ -8253,7 +8232,7 @@ static int encrypt_decrypt(CK_SESSION_HANDLE session,
 
 	switch (mech_type) {
 	case CKM_RSA_PKCS_OAEP:
-<<<<<<< HEAD
+#ifdef WEIRD_RSA
 		oaep_params.hashAlg = hash_alg;
 		oaep_params.mgf = mgf;
 
@@ -8276,7 +8255,7 @@ static int encrypt_decrypt(CK_SESSION_HANDLE session,
 
 		mech.pParameter = &oaep_params;
 		mech.ulParameterLen = sizeof(oaep_params);
-
+#endif /* WEIRD_RSA */
 #if 0 /* debugging output, not needed now */
 		fprintf(stderr, "OAEP parameters: hashAlg=%s, mgf=%s, label source: type=%lu, ptr=%p, len=%lu\n",
 			p11_mechanism_to_name(oaep_params.hashAlg),
@@ -8286,8 +8265,6 @@ static int encrypt_decrypt(CK_SESSION_HANDLE session,
 			oaep_params.ulSourceDataLen);
 #endif /* 0 */
 
-=======
->>>>>>> upstream/master
 		break;
 	case CKM_RSA_X_509:
 	case CKM_RSA_PKCS:
