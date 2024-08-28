@@ -2781,14 +2781,21 @@ pgp_calculate_and_store_fingerprint(sc_card_t *card, time_t ctime,
 	/* update the blob containing fingerprints (00C5) */
 	sc_log(card->ctx, "Updating fingerprint blob 00C5.");
 	fpseq_blob = pgp_find_blob(card, 0x00C5);
-	if (fpseq_blob == NULL)
-		LOG_TEST_GOTO_ERR(card->ctx, SC_ERROR_OUT_OF_MEMORY, "Cannot find blob 00C5");
+	if (fpseq_blob == NULL) {
+		r = SC_ERROR_OUT_OF_MEMORY;
+		LOG_TEST_GOTO_ERR(card->ctx, r, "Cannot find blob 00C5");
+	}
+	if (20U * key_info->key_id > fpseq_blob->len) {
+		r = SC_ERROR_OBJECT_NOT_VALID;
+		LOG_TEST_GOTO_ERR(card->ctx, r, "The 00C5 blob is not large enough");
+	}
 
 	/* save the fingerprints sequence */
 	newdata = malloc(fpseq_blob->len);
-	if (newdata == NULL)
-		LOG_TEST_GOTO_ERR(card->ctx, SC_ERROR_OUT_OF_MEMORY,
-			"Not enough memory to update fingerprint blob 00C5");
+	if (newdata == NULL) {
+		r = SC_ERROR_OUT_OF_MEMORY;
+		LOG_TEST_GOTO_ERR(card->ctx, r, "Not enough memory to update fingerprint blob 00C5");
+	}
 
 	memcpy(newdata, fpseq_blob->data, fpseq_blob->len);
 	/* move p to the portion holding the fingerprint of the current key */
@@ -2903,6 +2910,9 @@ pgp_parse_and_set_pubkey_output(sc_card_t *card, u8* data, size_t data_len,
 
 		/* RSA modulus */
 		if (tag == 0x0081) {
+			if (key_info->algorithm != SC_OPENPGP_KEYALGO_RSA) {
+				LOG_FUNC_RETURN(card->ctx, SC_ERROR_UNKNOWN_DATA_RECEIVED);
+			}
 			if ((BYTES4BITS(key_info->u.rsa.modulus_len) < len)  /* modulus_len is in bits */
 				|| key_info->u.rsa.modulus == NULL) {
 
@@ -2918,6 +2928,9 @@ pgp_parse_and_set_pubkey_output(sc_card_t *card, u8* data, size_t data_len,
 		}
 		/* RSA public exponent */
 		else if (tag == 0x0082) {
+			if (key_info->algorithm != SC_OPENPGP_KEYALGO_RSA) {
+				LOG_FUNC_RETURN(card->ctx, SC_ERROR_UNKNOWN_DATA_RECEIVED);
+			}
 			if ((BYTES4BITS(key_info->u.rsa.exponent_len) < len)  /* exponent_len is in bits */
 				|| key_info->u.rsa.exponent == NULL) {
 
@@ -2933,6 +2946,10 @@ pgp_parse_and_set_pubkey_output(sc_card_t *card, u8* data, size_t data_len,
 		}
 		/* ECC public key */
 		else if (tag == 0x0086) {
+			if (key_info->algorithm != SC_OPENPGP_KEYALGO_ECDSA &&
+					key_info->algorithm != SC_OPENPGP_KEYALGO_ECDH) {
+				LOG_FUNC_RETURN(card->ctx, SC_ERROR_UNKNOWN_DATA_RECEIVED);
+			}
 			/* set the output data */
 			/* len is ecpoint length + format byte
 			 * see section 7.2.14 of 3.3.1 specs */
@@ -2944,6 +2961,7 @@ pgp_parse_and_set_pubkey_output(sc_card_t *card, u8* data, size_t data_len,
 					LOG_FUNC_RETURN(card->ctx, SC_ERROR_NOT_ENOUGH_MEMORY);
 			}
 			memcpy(key_info->u.ec.ecpoint, part + 1, len - 1);
+			key_info->u.ec.ecpoint_len = len - 1;
 		}
 
 		/* go to next part to parse */
