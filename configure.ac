@@ -7,9 +7,9 @@ define([PRODUCT_TARNAME], [opensc])
 define([PRODUCT_BUGREPORT], [https://github.com/mouse07410/OpenSC/issues])
 define([PRODUCT_URL], [https://github.com/mouse07410/OpenSC])
 define([PACKAGE_VERSION_MAJOR], [0])
-define([PACKAGE_VERSION_MINOR], [25])
-define([PACKAGE_VERSION_FIX], [1])
-define([PACKAGE_SUFFIX], [])
+define([PACKAGE_VERSION_MINOR], [26])
+define([PACKAGE_VERSION_FIX], [0])
+define([PACKAGE_SUFFIX], [-rc1])
 
 define([VS_FF_LEGAL_COPYRIGHT], [OpenSC Project])
 define([VS_FF_LEGAL_COMPANY_NAME], [OpenSC Project])
@@ -46,9 +46,9 @@ OPENSC_VS_FF_PRODUCT_URL="VS_FF_PRODUCT_URL"
 #   (Code changed:                      REVISION++)
 #   (Oldest interface changed/removed:  OLDEST++)
 #   (Interfaces added:                  CURRENT++, REVISION=0)
-OPENSC_LT_CURRENT="11"
-OPENSC_LT_OLDEST="11"
-OPENSC_LT_REVISION="2"
+OPENSC_LT_CURRENT="12"
+OPENSC_LT_OLDEST="12"
+OPENSC_LT_REVISION="0"
 OPENSC_LT_AGE="$((${OPENSC_LT_CURRENT}-${OPENSC_LT_OLDEST}))"
 
 AC_CONFIG_SRCDIR([src/libopensc/sc.c])
@@ -148,6 +148,8 @@ AX_CODE_COVERAGE()
 
 AX_CHECK_COMPILE_FLAG([-Wunknown-warning-option], [have_unknown_warning_option="yes"], [have_unknown_warning_option="no"])
 AM_CONDITIONAL([HAVE_UNKNOWN_WARNING_OPTION], [test "${have_unknown_warning_option}" = "yes"])
+AX_CHECK_COMPILE_FLAG([-Wshorten-64-to-32], [have_shorten_warning_option="yes"], [have_shorten_warning_option="no"])
+AM_CONDITIONAL([HAVE_SHORTEN_WARNING_OPTION], [test "${have_shorten_warning_option}" = "yes"])
 
 AX_VALGRIND_CHECK()
 

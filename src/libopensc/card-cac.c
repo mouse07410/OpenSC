@@ -252,7 +252,7 @@ static int cac_apdu_io(sc_card_t *card, int ins, int p1, int p2,
 	size_t * recvbuflen)
 {
 	int r;
-	sc_apdu_t apdu;
+	sc_apdu_t apdu = {0};
 	u8 rbufinitbuf[CAC_MAX_SIZE];
 	u8 *rbuf;
 	size_t rbuflen;
@@ -389,13 +389,13 @@ fail:
 static int cac_read_file(sc_card_t *card, int file_type, u8 **out_buf, size_t *out_len)
 {
 	u8 params[2];
-	u8 count[2];
+	u8 count[2] = {0};
 	u8 *out = NULL;
-	u8 *out_ptr;
+	u8 *out_ptr = NULL;
 	size_t offset = 0;
 	size_t size = 0;
 	size_t left = 0;
-	size_t len;
+	size_t len = 0;
 	int r;
 
 	params[0] = file_type;
@@ -458,7 +458,7 @@ static int cac_read_binary(sc_card_t *card, unsigned int idx,
 	const u8 *tl_ptr, *val_ptr, *tl_start;
 	u8 *tlv_ptr;
 	const u8 *cert_ptr;
-	size_t tl_len, val_len, tlv_len;
+	size_t tl_len = 0, val_len = 0, tlv_len;
 	size_t len, tl_head_len, cert_len;
 	u8 cert_type, tag;
 
@@ -1293,10 +1293,10 @@ static int cac_parse_aid(sc_card_t *card, cac_private_data_t *priv, const u8 *ai
 	/* Call without OID set will just select the AID without subsequent
 	 * OID selection, which we need to figure out just now
 	 */
-	cac_select_file_by_type(card, &new_object.path, NULL);
+	r = cac_select_file_by_type(card, &new_object.path, NULL);
+	LOG_TEST_RET(card->ctx, r, "Cannot select AID");
 	r = cac_get_properties(card, &prop);
-	if (r < 0)
-		return SC_ERROR_INTERNAL;
+	LOG_TEST_RET(card->ctx, r, "Cannot get CAC properties");
 
 	for (i = 0; i < prop.num_objects; i++) {
 		/* don't fail just because we have more certs than we can support */
@@ -1519,7 +1519,7 @@ static int cac_parse_CCC(sc_card_t *card, cac_private_data_t *priv, const u8 *tl
 static int cac_process_CCC(sc_card_t *card, cac_private_data_t *priv, int depth)
 {
 	u8 *tl = NULL, *val = NULL;
-	size_t tl_len, val_len;
+	size_t tl_len = 0, val_len = 0;
 	int r;
 
 	if (depth > CAC_MAX_CCC_DEPTH) {

@@ -4428,7 +4428,7 @@ static int piv_get_challenge(sc_card_t *card, u8 *rnd, size_t len)
 	const u8 *p;
 	size_t out_len = 0;
 	int r;
-	unsigned int tag_out, cla_out;
+	unsigned int tag_out = 0, cla_out = 0;
 	piv_private_data_t * priv = PIV_DATA(card);
 
 	LOG_FUNC_CALLED(card->ctx);
@@ -5468,9 +5468,16 @@ static int piv_match_card_continued(sc_card_t *card)
 	 * Will fail for other reasons if wrong applet is selected or bad PIV implementation.
 	 */
 
-	/* first test if PIV is active applet without using AID If fails use the AID */
+	/*
+	* if ATR matched or user forced card type 
+	* test if PIV is active applet without using AID If fails use the AID 
+	*/
 
-	r = piv_find_discovery(card);
+	if (card->type != SC_CARD_TYPE_PIV_II_BASE)
+		r = piv_find_discovery(card);
+	else
+		r = SC_CARD_TYPE_UNKNOWN;
+
 	if (r < 0) {
 		piv_obj_cache_free_entry(card, PIV_OBJ_DISCOVERY, 0); /* don't cache  on failure */
 		r = piv_find_aid(card);

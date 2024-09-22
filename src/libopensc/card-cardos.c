@@ -94,14 +94,14 @@ static void fixup_transceive_length(const struct sc_card *card,
 
 static int cardos_match_card(sc_card_t *card)
 {
-	unsigned char atr[SC_MAX_ATR_SIZE];
+	unsigned char atr[SC_MAX_ATR_SIZE] = {0};
 	int i;
 
 	i = _sc_match_atr(card, cardos_atrs, &card->type);
 	if (i < 0)
 		return 0;
 
-	memcpy(atr, card->atr.value, sizeof(atr));
+	memcpy(atr, card->atr.value, card->atr.len);
 
 	/* Do not change card type for CIE! */
 	if (card->type == SC_CARD_TYPE_CARDOS_CIE_V1)
@@ -114,8 +114,8 @@ static int cardos_match_card(sc_card_t *card)
 		return 1;
 	if (card->type == SC_CARD_TYPE_CARDOS_M4_2) {
 		int rv;
-		sc_apdu_t apdu;
-		u8 rbuf[SC_MAX_APDU_BUFFER_SIZE];
+		sc_apdu_t apdu = {0};
+		u8 rbuf[SC_MAX_APDU_BUFFER_SIZE] = {0};
 		/* first check some additional ATR bytes */
 		if ((atr[4] != 0xff && atr[4] != 0x02) ||
 		    (atr[6] != 0x10 && atr[6] != 0x0a) ||
@@ -131,7 +131,7 @@ static int cardos_match_card(sc_card_t *card)
 		apdu.lc = 0;
 		rv = sc_transmit_apdu(card, &apdu);
 		LOG_TEST_RET(card->ctx, rv, "APDU transmit failed");
-		if (apdu.sw1 != 0x90 || apdu.sw2 != 0x00)
+		if (apdu.sw1 != 0x90 || apdu.sw2 != 0x00 || apdu.resplen < 2)
 			return 0;
 		if (apdu.resp[0] != atr[10] ||
 		    apdu.resp[1] != atr[11])
@@ -1281,7 +1281,7 @@ cardos_lifecycle_get(sc_card_t *card, int *mode)
 	LOG_TEST_RET(card->ctx, r, "Card returned error");
 
 	if (apdu.resplen < 1) {
-		LOG_TEST_RET(card->ctx, r, "Lifecycle byte not in response");
+		LOG_TEST_RET(card->ctx, SC_ERROR_UNKNOWN_DATA_RECEIVED, "Lifecycle byte not in response");
 	}
 
 	r = SC_SUCCESS;

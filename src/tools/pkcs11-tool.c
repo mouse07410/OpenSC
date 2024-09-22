@@ -147,8 +147,23 @@ static struct ec_curve_info {
 	{"secp256k1",		"1.3.132.0.10", "06052B8104000A", 256, 0},
 	{"secp521k1",		"1.3.132.0.35", "06052B81040023", 521, 0},
 
-	{"edwards25519","1.3.6.1.4.1159.15.1", "130c656477617264733235353139", 255, CKM_EC_EDWARDS_KEY_PAIR_GEN},
-	{"curve25519", "1.3.6.1.4.3029.1.5.1", "130b63757276653235353139", 255, CKM_EC_MONTGOMERY_KEY_PAIR_GEN},
+	/* Some of the following may not yet be supported by the OpenSC module, but may be by other modules */
+	/* OpenPGP extensions by Yubikey and GNUK are not defined in RFCs, so pass by printable string */
+	/* See PKCS#11 3.0 2.3.7 */
+	{"edwards25519", "1.3.6.1.4.1.11591.15.1", "130c656477617264733235353139", 255, CKM_EC_EDWARDS_KEY_PAIR_GEN}, /* send by curve name */
+	{"curve25519",   "1.3.6.1.4.1.3029.1.5.1", "130a63757276653235353139",     255, CKM_EC_MONTGOMERY_KEY_PAIR_GEN}, /* send by curve name */
+
+	/* RFC8410, EDWARDS and MONTGOMERY curves are used by GnuPG and also by OpenSSL */
+
+	{"X25519",  "1.3.101.110", "06032b656e", 255, CKM_EC_MONTGOMERY_KEY_PAIR_GEN}, /* RFC 4810 send by OID */
+	{"X448",    "1.3.101.111", "06032b656f", 448, CKM_EC_MONTGOMERY_KEY_PAIR_GEN}, /* RFC 4810 send by OID */
+	{"Ed25519", "1.3.101.112", "06032b6570", 255, CKM_EC_EDWARDS_KEY_PAIR_GEN}, /* RFC 4810 send by OID */
+	{"Ed448",   "1.3.101.113", "06032b6571", 448, CKM_EC_EDWARDS_KEY_PAIR_GEN}, /* RFC 4810 send by OID */
+
+	/* GnuPG openpgp curves as used in gnupg-card are equivalent to RFC8410 OIDs */
+	{"cv25519", "1.3.101.110", "06032b656e", 255, CKM_EC_MONTGOMERY_KEY_PAIR_GEN},
+	{"ed25519", "1.3.101.112", "06032b6570", 255, CKM_EC_EDWARDS_KEY_PAIR_GEN},
+	/* OpenSC card-openpgp.c will map these to what is need on the card */
 
 	{NULL, NULL, NULL, 0, 0},
 };
@@ -2176,6 +2191,27 @@ static int unlock_pin(CK_SLOT_ID slot, CK_SESSION_HANDLE sess, int login_type)
 	return 0;
 }
 
+/* return matching ec_curve_info or NULL based on ec_params */
+static const struct ec_curve_info *
+match_ec_curve_by_params(const unsigned char *ec_params, CK_ULONG ec_params_size)
+{
+	char ecpbuf[64];
+
+	if (ec_params_size > (sizeof(ecpbuf) / 2)) {
+		util_fatal("Invalid EC params");
+	}
+
+	sc_bin_to_hex(ec_params, ec_params_size, ecpbuf, sizeof(ecpbuf), 0);
+
+	for (size_t i = 0; ec_curve_infos[i].name != NULL; ++i) {
+		if (strcmp(ec_curve_infos[i].ec_params, ecpbuf) == 0) {
+			return &ec_curve_infos[i];
+		}
+	}
+
+	return NULL;
+}
+
 /* return digest length in bytes */
 static unsigned long hash_length(const unsigned long hash) {
 	unsigned long sLen = 0;
@@ -2362,6 +2398,9 @@ static void sign_data(CK_SLOT_ID slot, CK_SESSION_HANDLE session,
 	CK_MECHANISM	mech;
 	CK_RSA_PKCS_PSS_PARAMS pss_params;
 	CK_MAC_GENERAL_PARAMS mac_gen_param;
+	CK_EDDSA_PARAMS eddsa_params = {
+			.phFlag = CK_FALSE,
+	};
 	CK_RV		rv;
 	CK_ULONG	sig_len;
 	int		fd;
@@ -2376,6 +2415,29 @@ static void sign_data(CK_SLOT_ID slot, CK_SESSION_HANDLE session,
 	memset(&mech, 0, sizeof(mech));
 	mech.mechanism = opt_mechanism;
 	hashlen = parse_pss_params(session, key, &mech, &pss_params);
+
+	/* support pure EdDSA only */
+	if (opt_mechanism == CKM_EDDSA) {
+		const struct ec_curve_info *curve;
+		unsigned char *ec_params;
+		CK_ULONG ec_params_size = 0;
+
+		ec_params = getEC_PARAMS(session, key, &ec_params_size);
+		if (ec_params == NULL) {
+			util_fatal("Key has no EC_PARAMS attribute");
+		}
+
+		curve = match_ec_curve_by_params(ec_params, ec_params_size);
+		if (curve == NULL) {
+			util_fatal("Unknown or unsupported EC curve used in key");
+		}
+
+		/* Ed448: need the params defined but default to false */
+		if (curve->size == 448) {
+			mech.pParameter = &eddsa_params;
+			mech.ulParameterLen = (CK_ULONG)sizeof(eddsa_params);
+		}
+	}
 
 	if (opt_input == NULL)
 		fd = 0;
@@ -2516,6 +2578,9 @@ static void verify_signature(CK_SLOT_ID slot, CK_SESSION_HANDLE session,
 	CK_MECHANISM	mech;
 	CK_RSA_PKCS_PSS_PARAMS pss_params;
 	CK_MAC_GENERAL_PARAMS mac_gen_param;
+	CK_EDDSA_PARAMS eddsa_params = {
+			.phFlag = CK_FALSE,
+	};
 	CK_RV		rv = 0;
 	CK_ULONG	sig_len=0;
 	int		fd=0, fd2=0;
@@ -2543,6 +2608,29 @@ static void verify_signature(CK_SLOT_ID slot, CK_SESSION_HANDLE session,
 #ifdef P11DEBUG
 			fprintf(stderr, "Warning, requesting salt length recovery from signature (supported only in in opensc pkcs11 module).\n");
 #endif /* P11DEBUG */
+		}
+	}
+
+	/* support pure EdDSA only */
+	if (opt_mechanism == CKM_EDDSA) {
+		const struct ec_curve_info *curve;
+		unsigned char *ec_params;
+		CK_ULONG ec_params_size = 0;
+
+		ec_params = getEC_PARAMS(session, key, &ec_params_size);
+		if (ec_params == NULL) {
+			util_fatal("Key has no EC_PARAMS attribute");
+		}
+
+		curve = match_ec_curve_by_params(ec_params, ec_params_size);
+		if (curve == NULL) {
+			util_fatal("Unknown or unsupported EC curve used in key");
+		}
+
+		/* Ed448: need the params defined but default to false */
+		if (curve->size == 448) {
+			mech.pParameter = &eddsa_params;
+			mech.ulParameterLen = (CK_ULONG)sizeof(eddsa_params);
 		}
 	}
 
