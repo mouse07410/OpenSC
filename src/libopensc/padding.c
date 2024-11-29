@@ -481,7 +481,7 @@ static int sc_pkcs1_add_pss_padding(sc_context_t *scctx, unsigned int hash, unsi
 	EVP_MD_CTX* ctx = NULL;
 	u8 buf[8];
 	u8 salt[PSS_MAX_SALT_SIZE], mask[EVP_MAX_MD_SIZE];
-	size_t mod_length = (mod_bits + 7) / 8;
+	size_t mod_length = BYTES4BITS(mod_bits);
 
 	if (*out_len < mod_length)
 		return SC_ERROR_BUFFER_TOO_SMALL;
@@ -615,7 +615,7 @@ int sc_pkcs1_encode(sc_context_t *ctx, unsigned long flags,
 	size_t tmp_len = *out_len;
 	const u8    *tmp = in;
 	unsigned int hash_algo, pad_algo;
-	size_t mod_len = (mod_bits + 7) / 8;
+	size_t mod_len = BYTES4BITS(mod_bits);
 #ifdef ENABLE_OPENSSL
 	size_t sLen = -1;
 	EVP_MD* md = NULL;
