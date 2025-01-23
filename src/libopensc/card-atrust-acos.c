@@ -426,7 +426,7 @@ static int atrust_acos_select_file(struct sc_card *card,
 	else if (in_path->type == SC_PATH_TYPE_PATH)
 	{
 		u8 n_pathbuf[SC_MAX_PATH_SIZE];
-		int bMatch = -1;
+		size_t bMatch = 0;
 
 		/* Select with path (sequence of File-IDs) */
 		/* ACOS only supports one
@@ -456,15 +456,13 @@ static int atrust_acos_select_file(struct sc_card *card,
 		    && card->cache.current_path.len >= 2
 		    && card->cache.current_path.len <= pathlen )
 		{
-			bMatch = 0;
 			for (i=0; i < card->cache.current_path.len; i+=2)
 				if (card->cache.current_path.value[i] == path[i]
 				    && card->cache.current_path.value[i+1] == path[i+1] )
 					bMatch += 2;
 		}
 
-		if ( card->cache.valid && bMatch >= 0 )
-		{
+		if (card->cache.valid && bMatch > 2) {
 			if ( pathlen - bMatch == 2 )
 				/* we are in the right directory */
 				return atrust_acos_select_fid(card, path[bMatch], path[bMatch+1], file_out);
@@ -507,9 +505,7 @@ static int atrust_acos_select_file(struct sc_card *card,
 				/* nothing left to do */
 				return SC_SUCCESS;
 			}
-		}
-		else
-		{
+		} else {
 			/* no usable cache */
 			for ( i=0; i<pathlen-2; i+=2 )
 			{

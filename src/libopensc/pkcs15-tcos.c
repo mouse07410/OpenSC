@@ -68,7 +68,7 @@ static int insert_cert(
 		return 2;
 	}
 	cert_len = r; /* actual number of read bytes */
-	if (cert_len < 7 || (size_t)(7 + cert[5]) > cert_len) {
+	if (cert_len < 4) {
 		sc_log(ctx, "Invalid certificate length");
 		return 3;
 	}
@@ -78,7 +78,9 @@ static int insert_cert(
 	}
 
 	/* some certificates are prefixed by an OID */
-	if (cert[4] == 0x06 && cert[5] < 10 && cert[6 + cert[5]] == 0x30 && cert[7 + cert[5]] == 0x82) {
+	if (cert_len >= 5 && (size_t)(7 + cert[5]) <= cert_len &&
+			cert[4] == 0x06 && cert[5] < 10 && cert[6 + cert[5]] == 0x30 &&
+			cert[7 + cert[5]] == 0x82) {
 		if ((size_t)(9 + cert[5]) > cert_len) {
 			sc_log(ctx, "Invalid certificate length");
 			return 3;
@@ -138,13 +140,10 @@ static int insert_key(
 			prkey_info.path.len -= 2;
 		sc_append_file_id(&prkey_info.path, 0x5349);
 		if (sc_select_file(card, &prkey_info.path, NULL) != SC_SUCCESS) {
-			sc_log(ctx, 
-				"Select(%s) failed\n",
-				sc_print_path(&prkey_info.path));
+			sc_log(ctx, "Select(%s) failed", sc_print_path(&prkey_info.path));
 			return 1;
 		}
-		sc_log(ctx, 
-			"Searching for Key-Ref %02X\n", key_reference);
+		sc_log(ctx, "Searching for Key-Ref %02X", key_reference);
 		while ((r = sc_read_record(card, ++rec_no, 0, buf, sizeof(buf), SC_RECORD_BY_REC_NR)) > 0) {
 			int found = 0;
 			if (buf[0] != 0xA0 || r < 2)
@@ -157,7 +156,7 @@ static int insert_key(
 				break;
 		}
 		if (r <= 0) {
-			sc_log(ctx, "No EF_KEYD-Record found\n");
+			sc_log(ctx, "No EF_KEYD-Record found");
 			return 1;
 		}
 		for (i = 0; i + 1 < r; i += 2 + buf[i + 1]) {
@@ -169,9 +168,7 @@ static int insert_key(
 	} else {
 		if (sc_select_file(card, &prkey_info.path, &f) != SC_SUCCESS
 			   	|| !f->prop_attr || f->prop_attr_len < 2){
-			sc_log(ctx, 
-				"Select(%s) failed\n",
-				sc_print_path(&prkey_info.path));
+			sc_log(ctx, "Select(%s) failed", sc_print_path(&prkey_info.path));
 			sc_file_free(f);
 			return 1;
 		}
@@ -241,13 +238,10 @@ static int insert_pin(
 		}
 		sc_append_file_id(&pin_info.path, 0x5049);
 		if (sc_select_file(card, &pin_info.path, NULL) != SC_SUCCESS) {
-			sc_log(ctx, 
-				"Select(%s) failed\n",
-				sc_print_path(&pin_info.path));
+			sc_log(ctx, "Select(%s) failed", sc_print_path(&pin_info.path));
 			return 1;
 		}
-		sc_log(ctx, 
-			"Searching for PIN-Ref %02X\n", pin_reference);
+		sc_log(ctx, "Searching for PIN-Ref %02X", pin_reference);
 		while ((r = sc_read_record(card, ++rec_no, 0, buf, sizeof(buf), SC_RECORD_BY_REC_NR)) > 0) {
 			int found = 0, fbz = -1;
 			if (r < 2 || buf[0] != 0xA0)
@@ -369,7 +363,7 @@ static int detect_netkey(
 		insert_cert(p15card, dirpath(dir,"C000"), 0x49, 1, "SigG Zertifikat 1");
 		insert_cert(p15card, dirpath(dir,"4331"), 0x49, 1, "SigG Zertifikat 2");
 		insert_cert(p15card, dirpath(dir,"4332"), 0x49, 1, "SigG Zertifikat 3");
-		
+
 		if(card->type==SC_CARD_TYPE_TCOS_V3){
 			insert_key(p15card, dirpath(dir,"0000"), 0x49, 0x84, 2048, 5, "SigG Schluessel");
 		} else {

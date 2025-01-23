@@ -2450,7 +2450,7 @@ static void sign_data(CK_SLOT_ID slot, CK_SESSION_HANDLE session,
 		util_fatal("Cannot read from %s: %m", opt_input);
 
 	if (opt_mechanism == CKM_RSA_PKCS_PSS && (size_t)sz != hashlen) {
-		util_fatal("For %s mechanism, message size (got %z bytes) "
+		util_fatal("For %s mechanism, message size (got %zd bytes) "
 			"must be equal to specified digest length (%lu)\n",
 			p11_mechanism_to_name(opt_mechanism), sz, hashlen);
 	} else if (opt_mechanism == CKM_AES_CMAC_GENERAL) {
@@ -2696,7 +2696,7 @@ static void verify_signature(CK_SLOT_ID slot, CK_SESSION_HANDLE session,
 		util_fatal("Cannot read from %s: %m", opt_input);
 
 	if (opt_mechanism == CKM_RSA_PKCS_PSS && (size_t)sz != hashlen) {
-		util_fatal("For %s mechanism, message size (got %z bytes)"
+		util_fatal("For %s mechanism, message size (got %zd bytes)"
 			" must be equal to specified digest length (%lu)\n",
 			p11_mechanism_to_name(opt_mechanism), sz, hashlen);
 	} else if (opt_mechanism == CKM_AES_CMAC_GENERAL) {
@@ -6050,7 +6050,7 @@ static void show_cert(CK_SESSION_HANDLE sess, CK_OBJECT_HANDLE obj)
 			BIO *bio = BIO_new(BIO_s_file());
 			BIO_set_fp(bio, stdout, BIO_NOCLOSE);
 			printf("  subject:    DN: ");
-			X509_NAME_print(bio, name, XN_FLAG_RFC2253);
+			X509_NAME_print_ex(bio, name, 0, XN_FLAG_RFC2253);
 			printf("\n");
 			BIO_free(bio);
 			X509_NAME_free(name);
@@ -7928,7 +7928,7 @@ static int test_verify(CK_SESSION_HANDLE sess)
 	return errors;
 }
 
-#if OPENSC_VERSION_MAJOR == 0 && OPENSC_VERSION_MINOR <= 25
+#if OPENSC_VERSION_MAJOR == 0 && OPENSC_VERSION_MINOR <= 26
 #else
 #ifdef ENABLE_OPENSSL
 static int wrap_unwrap(CK_SESSION_HANDLE session,
@@ -8052,7 +8052,7 @@ static int wrap_unwrap(CK_SESSION_HANDLE session,
  */
 static int test_unwrap(CK_SESSION_HANDLE sess)
 {
-#if OPENSC_VERSION_MAJOR == 0 && OPENSC_VERSION_MINOR <= 25
+#if OPENSC_VERSION_MAJOR == 0 && OPENSC_VERSION_MINOR <= 26
 	/* temporarily disable test, see https://github.com/OpenSC/OpenSC/issues/1796 */
 	return 0;
 #else

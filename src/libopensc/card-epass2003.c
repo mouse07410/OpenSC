@@ -2009,7 +2009,7 @@ epass2003_select_path(struct sc_card *card, const u8 pathbuf[16], const size_t l
 	u8 n_pathbuf[SC_MAX_PATH_SIZE];
 	const u8 *path = pathbuf;
 	size_t pathlen = len;
-	int bMatch = -1;
+	size_t bMatch = 0;
 	unsigned int i;
 	int r;
 
@@ -2034,7 +2034,6 @@ epass2003_select_path(struct sc_card *card, const u8 pathbuf[16], const size_t l
 			&& card->cache.current_path.type == SC_PATH_TYPE_PATH
 			&& card->cache.current_path.len >= 2
 			&& card->cache.current_path.len <= pathlen) {
-		bMatch = 0;
 		for (i = 0; i < card->cache.current_path.len; i += 2)
 			if (card->cache.current_path.value[i] == path[i]
 					&& card->cache.current_path.value[i + 1] == path[i + 1])
@@ -3046,11 +3045,14 @@ epass2003_erase_card(struct sc_card *card)
 {
 	static const unsigned char install_magic_pin[26] = {
 		/* compare install_secret_key */
-		0x06,0x01,0x10,0x16, 0x16,0x16,0x00,0x0f, 0xff,0x66,
-		0x31,0x32,0x33,0x34, 0x35,0x36,0x37,0x38,
-		0x31,0x32,0x33,0x34, 0x35,0x36,0x37,0x38,
+			0x06, 0x01, 0x10, 0x16, 0x16, 0x16, 0x00, 0x0f, 0xff, 0x66,
+			0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38,
+			0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38,
 	};
-	static const unsigned char magic_pin[16] = "1234567812345678";
+	static const unsigned char magic_pin[16] = {
+			0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38,
+			0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38,
+	};
 	static const unsigned char mf_path[2] = { 0x3f, 0x00 };
 	sc_apdu_t apdu;
 	int r;
