@@ -1027,7 +1027,7 @@ static int read_ssh_key(void)
 		unsigned char buf[64];
 		size_t n, len;
 
-		n = pubkey->u.eddsa.pubkey.len;
+		n = pubkey->u.ec.ecpointQ.len;
 		if (n != 32) {
 			fprintf(stderr, "Wrong public key length\n");
 			goto fail2;
@@ -1045,7 +1045,7 @@ static int read_ssh_key(void)
 		buf[len++] = 0;
 		buf[len++] = 0;
 		buf[len++] = n & 0xff;
-		memcpy(buf + len, pubkey->u.eddsa.pubkey.value, n);
+		memcpy(buf + len, pubkey->u.ec.ecpointQ.value, n);
 		len += n;
 
 		print_ssh_key(outf, alg, obj, buf, len);
