@@ -2863,6 +2863,7 @@ typedef union
 	CK_GCM_PARAMS gcm;
 	CK_CHACHA20_PARAMS chacha20;
 	CK_SALSA20_CHACHA20_POLY1305_PARAMS chacha20poly1305;
+	CK_AES_CTR_PARAMS ctr;
 } params_t;
 
 static void
@@ -2903,6 +2904,16 @@ build_params(
 		params->gcm.ulTagBits = opt_tag_bits;
 		mech->pParameter = &params->gcm;
 		mech->ulParameterLen = sizeof(params->gcm);
+		break;
+	case CKM_AES_CTR:
+		*iv = hex_string_to_byte_array(opt_iv, &iv_size, "IV");
+		if (iv_size != 16U) {
+			util_fatal("Invalid IV length %zu", iv_size);
+		}
+		memcpy(&params->ctr.cb[0], *iv, sizeof(params->ctr.cb));
+		params->ctr.ulCounterBits = 128U;
+		mech->pParameter = &params->ctr;
+		mech->ulParameterLen = sizeof(params->ctr);
 		break;
 	case CKM_CHACHA20:
 		*iv = hex_string_to_byte_array(opt_iv, &iv_size, "IV");
@@ -3420,6 +3431,13 @@ static int gen_keypair(CK_SLOT_ID slot, CK_SESSION_HANDLE session,
 				n_privkey_attr++;
 			}
 
+			if (opt_key_usage_default || opt_key_usage_decrypt) {
+				FILL_ATTR(publicKeyTemplate[n_pubkey_attr], CKA_ENCRYPT, &_true, sizeof(_true));
+				n_pubkey_attr++;
+				FILL_ATTR(privateKeyTemplate[n_privkey_attr], CKA_DECRYPT, &_true, sizeof(_true));
+				n_privkey_attr++;
+			}
+
 			FILL_ATTR(publicKeyTemplate[n_pubkey_attr], CKA_EC_PARAMS, ec_curve_infos[ii].ec_params, ec_curve_infos[ii].ec_params_size);
 			n_pubkey_attr++;
 			FILL_ATTR(publicKeyTemplate[n_pubkey_attr], CKA_KEY_TYPE, &key_type, sizeof(key_type));
@@ -3586,6 +3604,10 @@ static int gen_keypair(CK_SLOT_ID slot, CK_SESSION_HANDLE session,
 	}
 
 	if (opt_allowed_mechanisms_len > 0) {
+		FILL_ATTR(publicKeyTemplate[n_pubkey_attr],
+				CKA_ALLOWED_MECHANISMS, opt_allowed_mechanisms,
+				sizeof(CK_MECHANISM_TYPE) * opt_allowed_mechanisms_len);
+		n_pubkey_attr++;
 		FILL_ATTR(privateKeyTemplate[n_privkey_attr],
 			CKA_ALLOWED_MECHANISMS, opt_allowed_mechanisms,
 			sizeof(CK_MECHANISM_TYPE) * opt_allowed_mechanisms_len);
@@ -4957,6 +4979,12 @@ static CK_RV write_object(CK_SESSION_HANDLE session)
 #else
 		util_fatal("No OpenSSL support, cannot write public key");
 #endif
+		if (opt_allowed_mechanisms_len > 0) {
+			FILL_ATTR(pubkey_templ[n_pubkey_attr],
+					CKA_ALLOWED_MECHANISMS, opt_allowed_mechanisms,
+					sizeof(CK_MECHANISM_TYPE) * opt_allowed_mechanisms_len);
+			n_pubkey_attr++;
+		}
 		break;
 	case CKO_SECRET_KEY:
 		clazz = CKO_SECRET_KEY;
@@ -5046,6 +5074,12 @@ static CK_RV write_object(CK_SESSION_HANDLE session)
 		}
 		if (opt_object_id_len != 0)  {
 			FILL_ATTR(seckey_templ[n_seckey_attr], CKA_ID, opt_object_id, opt_object_id_len);
+			n_seckey_attr++;
+		}
+		if (opt_allowed_mechanisms_len > 0) {
+			FILL_ATTR(seckey_templ[n_seckey_attr],
+					CKA_ALLOWED_MECHANISMS, opt_allowed_mechanisms,
+					sizeof(CK_MECHANISM_TYPE) * opt_allowed_mechanisms_len);
 			n_seckey_attr++;
 		}
 		break;
@@ -6128,18 +6162,16 @@ show_key(CK_SESSION_HANDLE sess, CK_OBJECT_HANDLE obj)
 		printf("none");
 	printf("\n");
 
-	if (!pub) {
-		mechs = getALLOWED_MECHANISMS(sess, obj, &size);
-		if (mechs && size) {
-			unsigned int n;
+	mechs = getALLOWED_MECHANISMS(sess, obj, &size);
+	if (mechs && size) {
+		unsigned int n;
 
-			printf("  Allowed mechanisms: ");
-			for (n = 0; n < size; n++) {
-				printf("%s%s", (n != 0 ? "," : ""),
+		printf("  Allowed mechanisms: ");
+		for (n = 0; n < size; n++) {
+			printf("%s%s", (n != 0 ? "," : ""),
 					p11_mechanism_to_name(mechs[n]));
-			}
-			printf("\n");
 		}
+		printf("\n");
 	}
 	if ((unique_id = getUNIQUE_ID(sess, obj, NULL)) != NULL) {
 		printf("  Unique ID:  %s\n", unique_id);
@@ -6719,9 +6751,31 @@ static int read_object(CK_SESSION_HANDLE session)
 						ASN1_PRINTABLESTRING_free(curve);
 					} else if (d2i_ASN1_OBJECT(&obj, &a, (long)len) != NULL) {
 						int nid = OBJ_obj2nid(obj);
-						if (nid != NID_ED25519 && nid != NID_X25519) {
-							util_fatal("Unknown curve OID, expected NID_ED25519 (%d), got %d",
-									NID_ED25519, nid);
+						if (nid != NID_ED25519 &&
+								nid != NID_X25519
+#if defined(EVP_PKEY_ED448)
+								&& nid != NID_ED448
+#endif
+#if defined(EVP_PKEY_X448)
+								&& nid != NID_X448
+#endif
+						) {
+							util_fatal("Unknown curve OID, expected NID_ED25519 (%d), NID_X25519 (%d), "
+#if defined(EVP_PKEY_ED448)
+								   "NID_ED448 (%d), "
+#endif
+#if defined(EVP_PKEY_X448)
+								   "NID_X448 (%d), "
+#endif
+								   "got %d",
+									NID_ED25519, NID_X25519,
+#if defined(EVP_PKEY_ED448)
+									NID_ED448,
+#endif
+#if defined(EVP_PKEY_X448)
+									NID_X448,
+#endif
+									nid);
 						}
 						ASN1_OBJECT_free(obj);
 					} else {
@@ -6733,9 +6787,9 @@ static int read_object(CK_SESSION_HANDLE session)
 				}
 
 				value = getEC_POINT(session, obj, &len);
-				/* PKCS11 3.0 errta and 3.1 say Edwards and Montgomery
+				/* PKCS11 3.0 errata and 3.1 say Edwards and Montgomery
 				 * return raw byte strings, convert to OCTET string for OpenSSL
-				 * Will asccept as OCTET STRING and BIT_STRING
+				 * Will accept as OCTET STRING and BIT_STRING
 				 */
 				a = value;
 				os = d2i_ASN1_OCTET_STRING(NULL, &a, (long)len);
@@ -6755,7 +6809,7 @@ static int read_object(CK_SESSION_HANDLE session)
 				if (type == CKK_EC_EDWARDS && os->length == BYTES4BITS(255))
 					raw_pk = EVP_PKEY_ED25519;
 #if defined(EVP_PKEY_ED448)
-				else if (type == CKK_EC_EDWARDS && os->length == BYTES4BITS(448))
+				else if (type == CKK_EC_EDWARDS && os->length == ED448_KEY_SIZE_BYTES)
 					raw_pk = EVP_PKEY_ED448;
 #endif /* EVP_PKEY_ED448 */
 #if defined(EVP_PKEY_X25519)
