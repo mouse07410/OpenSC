@@ -89,7 +89,8 @@ if test "$FORCE_OPENSSL_BUILD" == "1" || ! pkg-config libcrypto --atleast-versio
 			git clone --depth=1 https://github.com/openssl/openssl.git -b openssl-3.0
 		fi
 		cd openssl
-		./Configure darwin64-x86_64 no-shared --prefix=$PREFIX enable-ec_nistp_64_gcc_128
+		sed -ie 's!my @disablables = (!my @disablables = (\n    "apps",!' Configure
+		./Configure darwin64-x86_64 no-shared no-apps --prefix=$PREFIX enable-ec_nistp_64_gcc_128
 		make clean
 		make update
 		make depend
@@ -287,7 +288,7 @@ pkgbuild --root ${BUILDPATH}/target --component-plist MacOSX/target.plist --scri
 pkgbuild --root ${BUILDPATH}/target_startup --component-plist MacOSX/target_startup.plist --identifier org.opensc-project.startup --version @PACKAGE_VERSION@ --install-location / OpenSC-startup.pkg
 
 # Build product
-productbuild --distribution $DISTRIBUTION_XML --package-path . --resources MacOSX/resources "${imagedir}/OpenSC @PACKAGE_VERSION@.pkg"
+productbuild --distribution MacOSX/Distribution.xml --package-path . --resources MacOSX/resources "${imagedir}/OpenSC @PACKAGE_VERSION@.pkg"
 
 # Sign installer
 if test -n "${INSTALLER_SIGN_IDENTITY}"; then

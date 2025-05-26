@@ -2692,7 +2692,7 @@ static void verify_signature(CK_SLOT_ID slot, CK_SESSION_HANDLE session,
 			 */
 			tmp = bytes;
 			if (sc_asn1_read_tag((const u8 **)&tmp, len, &cla, &tag, &taglen) != SC_SUCCESS ||
-					len < 2 || len > 255) {
+					len < 2 || len > 255 || taglen < 1) {
 				free(bytes);
 				util_fatal("Key not supported");
 			}
@@ -2806,7 +2806,7 @@ build_rsa_oaep_params(
 		oaep_params->mgf = CKG_MGF1_SHA3_512;
 		break;
 	default:
-		printf("hash-algorithm %s unknown, defaulting to CKM_SHA256\n", p11_mechanism_to_name(opt_hash_alg));
+		fprintf(stderr, "hash-algorithm %s unknown, defaulting to CKM_SHA256\n", p11_mechanism_to_name(opt_hash_alg));
 		oaep_params->hashAlg = CKM_SHA256;
 		/* fall through */
 	case CKM_SHA256:
@@ -2823,7 +2823,7 @@ build_rsa_oaep_params(
 	if (opt_mgf != 0) {
 		oaep_params->mgf = opt_mgf;
 	} else {
-		printf("mgf not set, defaulting to %s\n", p11_mgf_to_name(oaep_params->mgf));
+		fprintf(stderr, "mgf not set, defaulting to %s\n", p11_mgf_to_name(oaep_params->mgf));
 	}
 
 	/* PKCS11 3.0 is vague about setting CKZ_DATA_SPECIFIED */
@@ -2834,7 +2834,7 @@ build_rsa_oaep_params(
 	mech->pParameter = oaep_params;
 	mech->ulParameterLen = sizeof(*oaep_params);
 
-	printf("OAEP parameters: hashAlg=%s, mgf=%s, source_type=%lu, source_ptr=%p, source_len=%lu\n",
+	fprintf(stderr, "OAEP parameters: hashAlg=%s, mgf=%s, source_type=%lu, source_ptr=%p, source_len=%lu\n",
 			p11_mechanism_to_name(oaep_params->hashAlg),
 			p11_mgf_to_name(oaep_params->mgf),
 			oaep_params->source,
@@ -4548,7 +4548,7 @@ err:
 
 /*  Edwards and Montogmery keys have the same format */
 static int
-parse_ed_mont_pkey(EVP_PKEY *pkey, int type, int pk_type, struct ec_curve_info *ec_curve_info, int private, struct gostkey_info *gost)
+parse_ed_mont_pkey(EVP_PKEY *pkey, CK_KEY_TYPE type, int pk_type, struct ec_curve_info *ec_curve_info, int private, struct gostkey_info *gost)
 {
 	unsigned char *key;
 	size_t key_size;
@@ -6801,7 +6801,7 @@ static int read_object(CK_SESSION_HANDLE session)
 				if (!os) {
 					if ((os = ASN1_OCTET_STRING_new()) == NULL)
 						util_fatal("cannot decode EC_POINT");
-					if (ASN1_OCTET_STRING_set(os, value, (long)len) == 0) {
+					if (ASN1_OCTET_STRING_set(os, value, (int)len) == 0) {
 						util_fatal("cannot decode EC_POINT");
 					}
 				}

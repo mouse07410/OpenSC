@@ -107,22 +107,16 @@ static int select_nqapplet(sc_card_t *card, u8 *version_major, u8 *version_minor
 {
 	int rv;
 	sc_context_t *ctx = card->ctx;
-	sc_apdu_t apdu;
 	u8 buffer[APPLET_VERSION_LEN + APPLET_MEMTYPE_LEN + APPLET_SERIALNR_LEN + 2];
 	size_t cb_buffer = sizeof(buffer);
 	size_t cb_aid = sizeof(nqapplet_aid);
 
 	LOG_FUNC_CALLED(card->ctx);
 
-	sc_format_apdu_ex(&apdu, 0x00, 0xA4, 0x04, 0x00, nqapplet_aid, cb_aid, buffer, cb_buffer);
+	rv = iso7816_select_aid(card, nqapplet_aid, cb_aid, buffer, &cb_buffer);
+	LOG_TEST_RET(card->ctx, rv, "Failed to select NQ-Applet.");
 
-	rv = sc_transmit_apdu(card, &apdu);
-	LOG_TEST_RET(ctx, rv, "APDU transmit failure.");
-
-	rv = sc_check_sw(card, apdu.sw1, apdu.sw2);
-	LOG_TEST_RET(card->ctx, rv, "Card returned error");
-
-	if (apdu.resplen < APPLET_VERSION_LEN + APPLET_MEMTYPE_LEN + APPLET_SERIALNR_LEN) {
+	if (cb_buffer < APPLET_VERSION_LEN + APPLET_MEMTYPE_LEN + APPLET_SERIALNR_LEN) {
 		SC_FUNC_RETURN(ctx, SC_LOG_DEBUG_NORMAL, SC_ERROR_WRONG_LENGTH);
 	}
 
@@ -138,7 +132,7 @@ static int select_nqapplet(sc_card_t *card, u8 *version_major, u8 *version_minor
 		*serial_nr_len = cb;
 	}
 
-	LOG_FUNC_RETURN(card->ctx, SC_SUCCESS);
+	LOG_FUNC_RETURN(ctx, SC_SUCCESS);
 }
 
 /* driver operations API */
@@ -190,9 +184,10 @@ static int nqapplet_finish(struct sc_card *card)
 	LOG_FUNC_RETURN(card->ctx, SC_SUCCESS);
 }
 
-static int nqapplet_get_response(struct sc_card *card, size_t *cb_resp, u8 *resp)
+static int
+nqapplet_get_response(struct sc_card *card, size_t *cb_resp, u8 *resp)
 {
-	struct sc_apdu apdu;
+	struct sc_apdu apdu = {0};
 	int rv;
 	size_t resplen;
 
@@ -204,12 +199,12 @@ static int nqapplet_get_response(struct sc_card *card, size_t *cb_resp, u8 *resp
 
 	rv = sc_transmit_apdu(card, &apdu);
 	LOG_TEST_RET(card->ctx, rv, "APDU transmit failed");
-	if (apdu.resplen == 0) {
-		LOG_FUNC_RETURN(card->ctx, sc_check_sw(card, apdu.sw1, apdu.sw2));
-	}
 
 	*cb_resp = apdu.resplen;
 
+	if (apdu.resplen == 0) {
+		LOG_FUNC_RETURN(card->ctx, sc_check_sw(card, apdu.sw1, apdu.sw2));
+	}
 	if (apdu.sw1 == 0x90 && apdu.sw2 == 0x00) {
 		rv = SC_SUCCESS;
 	} else if (apdu.sw1 == 0x61) {
