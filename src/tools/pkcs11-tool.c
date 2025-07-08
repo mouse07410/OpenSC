@@ -154,19 +154,19 @@ static struct ec_curve_info {
 	/* Some of the following may not yet be supported by the OpenSC module, but may be by other modules */
 	/* OpenPGP extensions by Yubikey and GNUK are not defined in RFCs, so pass by printable string */
 	/* See PKCS#11 3.0 2.3.7 */
-	{"edwards25519", "1.3.6.1.4.1.11591.15.1", (unsigned char*)"\x13\x0c\x65\x64\x77\x61\x72\x64\x73\x32\x35\x35\x31\x39", 14, 255, CKM_EC_EDWARDS_KEY_PAIR_GEN}, /* send by curve name */
-	{"curve25519",   "1.3.6.1.4.1.3029.1.5.1", (unsigned char*)"\x13\x0a\x63\x75\x72\x76\x65\x32\x35\x35\x31\x39", 12, 255, CKM_EC_MONTGOMERY_KEY_PAIR_GEN}, /* send by curve name */
+	{"edwards25519", "1.3.6.1.4.1.11591.15.1", (unsigned char*)"\x13\x0c\x65\x64\x77\x61\x72\x64\x73\x32\x35\x35\x31\x39", 14, 256, CKM_EC_EDWARDS_KEY_PAIR_GEN}, /* send by curve name */
+	{"curve25519",   "1.3.6.1.4.1.3029.1.5.1", (unsigned char*)"\x13\x0a\x63\x75\x72\x76\x65\x32\x35\x35\x31\x39", 12, 256, CKM_EC_MONTGOMERY_KEY_PAIR_GEN}, /* send by curve name */
 
 	/* RFC8410, EDWARDS and MONTGOMERY curves are used by GnuPG and also by OpenSSL */
 
-	{"X25519",  "1.3.101.110", (unsigned char*)"\x06\x03\x2b\x65\x6e", 5, 255, CKM_EC_MONTGOMERY_KEY_PAIR_GEN}, /* RFC 4810 send by OID */
+	{"X25519",  "1.3.101.110", (unsigned char*)"\x06\x03\x2b\x65\x6e", 5, 256, CKM_EC_MONTGOMERY_KEY_PAIR_GEN}, /* RFC 4810 send by OID */
 	{"X448",    "1.3.101.111", (unsigned char*)"\x06\x03\x2b\x65\x6f", 5, 448, CKM_EC_MONTGOMERY_KEY_PAIR_GEN}, /* RFC 4810 send by OID */
 	{"Ed25519", "1.3.101.112", (unsigned char*)"\x06\x03\x2b\x65\x70", 5, 255, CKM_EC_EDWARDS_KEY_PAIR_GEN}, /* RFC 4810 send by OID */
-	{"Ed448",   "1.3.101.113", (unsigned char*)"\x06\x03\x2b\x65\x71", 5, 448, CKM_EC_EDWARDS_KEY_PAIR_GEN}, /* RFC 4810 send by OID */
+	{"Ed448",   "1.3.101.113", (unsigned char*)"\x06\x03\x2b\x65\x71", 5, 456, CKM_EC_EDWARDS_KEY_PAIR_GEN}, /* RFC 4810 send by OID */
 
 	/* GnuPG openpgp curves as used in gnupg-card are equivalent to RFC8410 OIDs */
-	{"cv25519", "1.3.101.110", (unsigned char*)"\x06\x03\x2b\x65\x6e", 5, 255, CKM_EC_MONTGOMERY_KEY_PAIR_GEN},
-	{"ed25519", "1.3.101.112", (unsigned char*)"\x06\x03\x2b\x65\x70", 5, 255, CKM_EC_EDWARDS_KEY_PAIR_GEN},
+	{"cv25519", "1.3.101.110", (unsigned char*)"\x06\x03\x2b\x65\x6e", 5, 256, CKM_EC_MONTGOMERY_KEY_PAIR_GEN},
+	{"ed25519", "1.3.101.112", (unsigned char*)"\x06\x03\x2b\x65\x70", 5, 256, CKM_EC_EDWARDS_KEY_PAIR_GEN},
 	/* OpenSC card-openpgp.c will map these to what is need on the card */
 
 	{NULL, NULL, NULL, 0, 0, 0},
@@ -425,6 +425,7 @@ static const char *option_help[] = {
 		"Specify the required length (in bits) for the authentication tag for AEAD ciphers",
 		"Specify the file containing the salt for HKDF (optional)",
 		"Specify the file containing the info for HKDF (optional)",
+		"When reading a public key, try to read PUBLIC_KEY_INFO (DER encoding of SPKI)",
 };
 
 static const char *	app_name = "pkcs11-tool"; /* for utils.c */
@@ -575,6 +576,9 @@ struct gostkey_info {
 	struct sc_lv_data param_oid;
 	struct sc_lv_data public;
 	struct sc_lv_data private;
+#ifdef EC_POINT_NO_ASN1_OCTET_STRING
+	size_t header_len;
+#endif
 };
 
 static void		show_cryptoki_info(void);
@@ -2416,7 +2420,8 @@ parse_pss_params(CK_SESSION_HANDLE session, CK_OBJECT_HANDLE key,
 static void sign_data(CK_SLOT_ID slot, CK_SESSION_HANDLE session,
 		CK_OBJECT_HANDLE key)
 {
-	unsigned char	in_buffer[1025], sig_buffer[512];
+	unsigned char in_buffer[1025];
+	CK_BYTE_PTR sig_buffer = NULL;
 	CK_MECHANISM	mech;
 	CK_RSA_PKCS_PSS_PARAMS pss_params;
 	CK_MAC_GENERAL_PARAMS mac_gen_param;
@@ -2424,7 +2429,7 @@ static void sign_data(CK_SLOT_ID slot, CK_SESSION_HANDLE session,
 			.phFlag = CK_FALSE,
 	};
 	CK_RV		rv;
-	CK_ULONG	sig_len;
+	CK_ULONG sig_len = 0;
 	int		fd;
 	ssize_t sz;
 	unsigned long	hashlen;
@@ -2455,7 +2460,7 @@ static void sign_data(CK_SLOT_ID slot, CK_SESSION_HANDLE session,
 		}
 
 		/* Ed448: need the params defined but default to false */
-		if (curve->size == 448) {
+		if (curve->size == 456) {
 			mech.pParameter = &eddsa_params;
 			mech.ulParameterLen = (CK_ULONG)sizeof(eddsa_params);
 		}
@@ -2497,6 +2502,7 @@ static void sign_data(CK_SLOT_ID slot, CK_SESSION_HANDLE session,
 			//login(session,CKU_CONTEXT_SPECIFIC);
 		}
 
+#if 0
 		sig_len = sizeof(sig_buffer);
 		rv =  p11->C_Sign(session, in_buffer, sz, sig_buffer, &sig_len);
 
@@ -2513,6 +2519,15 @@ static void sign_data(CK_SLOT_ID slot, CK_SESSION_HANDLE session,
 		if (rv != CKR_OK) {
 			fprintf(stderr, "%s:%d C_Sign failed with %s\n", __FILE__, __LINE__, CKR2Str(rv));
 			p11_fatal("C_Sign", rv);
+
+#else
+		rv = p11->C_Sign(session, in_buffer, sz, sig_buffer, &sig_len);
+		if (rv == CKR_OK) {
+			sig_buffer = malloc(sig_len);
+			if (!sig_buffer)
+				util_fatal("malloc() failure\n");
+			rv = p11->C_Sign(session, in_buffer, sz, sig_buffer, &sig_len);
+#endif /* 0 */
 		}
 	}
 
@@ -2547,7 +2562,15 @@ static void sign_data(CK_SLOT_ID slot, CK_SESSION_HANDLE session,
 			sz = read(fd, in_buffer, sizeof(in_buffer));
 		} while (sz > 0);
 
-		sig_len = sizeof(sig_buffer);
+		/* Signature buffer may have been allocated above */
+		free(sig_buffer);
+		sig_buffer = NULL;
+		rv = p11->C_SignFinal(session, sig_buffer, &sig_len);
+		if (rv != CKR_OK)
+			p11_fatal("C_SignFinal", rv);
+		sig_buffer = malloc(sig_len);
+		if (!sig_buffer)
+			util_fatal("malloc() failure\n");
 		rv = p11->C_SignFinal(session, sig_buffer, &sig_len);
 		if (rv != CKR_OK) {
 			fprintf(stderr, "%s:%d C_SignFinal failed with %s\n", __FILE__, __LINE__, CKR2Str(rv));
@@ -2579,10 +2602,9 @@ static void sign_data(CK_SLOT_ID slot, CK_SESSION_HANDLE session,
 				util_fatal("Failed to convert signature to ASN.1 sequence format");
 			}
 
-			memcpy(sig_buffer, seq, seqlen);
+			free(sig_buffer);
+			sig_buffer = seq;
 			sig_len = seqlen;
-
-			free(seq);
 		}
 	}
 	sz = write(fd, sig_buffer, sig_len);
@@ -2591,12 +2613,14 @@ static void sign_data(CK_SLOT_ID slot, CK_SESSION_HANDLE session,
 		util_fatal("Failed to write to %s: %m", opt_output);
 	if (fd != 1)
 		close(fd);
+	free(sig_buffer);
 }
 
 static void verify_signature(CK_SLOT_ID slot, CK_SESSION_HANDLE session,
 		CK_OBJECT_HANDLE key)
 {
-	unsigned char	in_buffer[1025], sig_buffer[512];
+	unsigned char in_buffer[1025];
+	CK_BYTE_PTR sig_buffer = NULL;
 	CK_MECHANISM	mech;
 	CK_RSA_PKCS_PSS_PARAMS pss_params;
 	CK_MAC_GENERAL_PARAMS mac_gen_param;
@@ -2606,6 +2630,7 @@ static void verify_signature(CK_SLOT_ID slot, CK_SESSION_HANDLE session,
 	CK_RV		rv = 0;
 	CK_ULONG	sig_len=0;
 	int		fd=0, fd2=0;
+	struct stat sig_st;
 	ssize_t         sz, sz2;
 	unsigned long   hashlen=0;
 
@@ -2650,7 +2675,7 @@ static void verify_signature(CK_SLOT_ID slot, CK_SESSION_HANDLE session,
 		}
 
 		/* Ed448: need the params defined but default to false */
-		if (curve->size == 448) {
+		if (curve->size == 456) {
 			mech.pParameter = &eddsa_params;
 			mech.ulParameterLen = (CK_ULONG)sizeof(eddsa_params);
 		}
@@ -2662,7 +2687,17 @@ static void verify_signature(CK_SLOT_ID slot, CK_SESSION_HANDLE session,
 	else if ((fd2 = open(opt_signature_file, O_RDONLY|O_BINARY)) < 0)
 		util_fatal("Cannot open %s: %m", opt_signature_file);
 
+#if 0
 	sz2 = read(fd2, sig_buffer, sizeof(sig_buffer)); // sz2 <- size of signature
+#else
+	else if (fstat(fd2, &sig_st) != 0)
+		util_fatal("Couldn't get size of file \"", opt_signature_file);
+	sig_len = sig_st.st_size;
+	sig_buffer = malloc(sig_len);
+	if (!sig_buffer)
+		util_fatal("malloc() failure\n");
+	sz2 = read(fd2, sig_buffer, sig_len);
+#endif /* 0 */
 	if (sz2 < 0)
 		util_fatal("Cannot read from %s: %m", opt_signature_file);
 
@@ -2773,6 +2808,7 @@ static void verify_signature(CK_SLOT_ID slot, CK_SESSION_HANDLE session,
 		util_fatal("Invalid signature");
 	else
 		util_fatal("Signature verification failed: rv = %s (0x%0x)\n", CKR2Str(rv), (unsigned int)rv);
+	free(sig_buffer);
 }
 
 static void
@@ -4195,7 +4231,7 @@ do_read_key(unsigned char *data, size_t data_len, int private, EVP_PKEY **key)
 #define RSA_GET_BN(RSA, LOCALNAME, BNVALUE) \
 	do { \
 		if (BNVALUE) { \
-			RSA->LOCALNAME = malloc(BN_num_bytes(BNVALUE)); \
+			RSA->LOCALNAME = OPENSSL_malloc(BN_num_bytes(BNVALUE)); \
 			if (!RSA->LOCALNAME) \
 				util_fatal("malloc() failure\n"); \
 			RSA->LOCALNAME##_len = BN_bn2bin(BNVALUE, RSA->LOCALNAME); \
@@ -4307,7 +4343,7 @@ parse_gost_pkey(EVP_PKEY *pkey, int private, struct gostkey_info *gost)
 	if (rv < 0)
 		return -1;
 
-	gost->param_oid.value = malloc(rv);
+	gost->param_oid.value = OPENSSL_malloc(rv);
 	if (!gost->param_oid.value)
 		return -1;
 
@@ -4323,7 +4359,7 @@ parse_gost_pkey(EVP_PKEY *pkey, int private, struct gostkey_info *gost)
 			return -1;
 #endif
 		gost->private.len = BN_num_bytes(bignum);
-		gost->private.value = malloc(gost->private.len);
+		gost->private.value = OPENSSL_malloc(gost->private.len);
 		if (!gost->private.value) {
 #if OPENSSL_VERSION_NUMBER >= 0x30000000L
 			BN_free(bignum);
@@ -4343,21 +4379,22 @@ parse_gost_pkey(EVP_PKEY *pkey, int private, struct gostkey_info *gost)
 #else
 		group = EC_GROUP_new_by_curve_name_ex(osslctx, NULL, nid);
 		EVP_PKEY_get_octet_string_param(pkey, OSSL_PKEY_PARAM_PUB_KEY, NULL, 0, &pubkey_len);
-		if (!(pubkey = malloc(pubkey_len)) ||
-			EVP_PKEY_get_octet_string_param(pkey, OSSL_PKEY_PARAM_PUB_KEY, pubkey, pubkey_len, NULL) != 1 ||
-			!(point = EC_POINT_new(group)) ||
-			EC_POINT_oct2point(group, point, pubkey, pubkey_len, NULL) != 1) {
+		if (!(pubkey = OPENSSL_malloc(pubkey_len)) ||
+				EVP_PKEY_get_octet_string_param(pkey, OSSL_PKEY_PARAM_PUB_KEY, pubkey, pubkey_len, NULL) != 1 ||
+				!(point = EC_POINT_new(group)) ||
+				EC_POINT_oct2point(group, point, pubkey, pubkey_len, NULL) != 1) {
 			EC_GROUP_free(group);
 			EC_POINT_free(point);
 			return -1;
 		}
+		OPENSSL_free(pubkey);
 #endif
 		rv = -1;
 		if (X && Y && point && group)
 			rv = EC_POINT_get_affine_coordinates(group, point, X, Y, NULL);
 		if (rv == 1) {
 			gost->public.len = BN_num_bytes(X) + BN_num_bytes(Y);
-			gost->public.value = malloc(gost->public.len);
+			gost->public.value = OPENSSL_malloc(gost->public.len);
 			if (!gost->public.value)
 				rv = -1;
 			else
@@ -4404,7 +4441,7 @@ parse_ec_pkey(EVP_PKEY *pkey, int private, struct gostkey_info *gost)
 		}
 #endif
 		gost->private.len = BN_num_bytes(bignum);
-		gost->private.value = malloc(gost->private.len);
+		gost->private.value = OPENSSL_malloc(gost->private.len);
 		if (!gost->private.value) {
 #if OPENSSL_VERSION_NUMBER >= 0x30000000L
 			BN_free(bignum);
@@ -4429,7 +4466,7 @@ parse_ec_pkey(EVP_PKEY *pkey, int private, struct gostkey_info *gost)
 #else
 		EVP_PKEY_get_octet_string_param(pkey, OSSL_PKEY_PARAM_ENCODED_PUBLIC_KEY, buf, sizeof(buf), &point_len);
 #endif
-		gost->public.value = malloc(MAX_HEADER_LEN+point_len);
+		gost->public.value = OPENSSL_malloc(MAX_HEADER_LEN + point_len);
 		if (!gost->public.value)
 			return -1;
 		point = gost->public.value;
@@ -4440,6 +4477,8 @@ parse_ec_pkey(EVP_PKEY *pkey, int private, struct gostkey_info *gost)
 #ifdef EC_POINT_NO_ASN1_OCTET_STRING // workaround for non-compliant cards not expecting DER encoding
 		gost->public.len   -= header_len;
 		gost->public.value += header_len;
+		// store header_len to restore public.value before free it
+		gost->header_len = header_len;
 #endif
 	}
 
@@ -4599,11 +4638,29 @@ parse_ed_mont_pkey(EVP_PKEY *pkey, CK_KEY_TYPE type, int pk_type, struct ec_curv
 	return 0;
 }
 #endif
-static void gost_info_free(struct gostkey_info gost)
+static void
+gost_info_free(struct gostkey_info gost)
 {
+#ifdef EC_POINT_NO_ASN1_OCTET_STRING // restore public.value before free it
+	if (gost.public.value)
+		gost.public.value -= gost.header_len;
+#endif
 	OPENSSL_free(gost.param_oid.value);
 	OPENSSL_free(gost.public.value);
 	OPENSSL_free(gost.private.value);
+}
+
+static void
+rsa_info_free(struct rsakey_info rsa)
+{
+	OPENSSL_free(rsa.modulus);
+	OPENSSL_free(rsa.public_exponent);
+	OPENSSL_free(rsa.private_exponent);
+	OPENSSL_free(rsa.prime_1);
+	OPENSSL_free(rsa.prime_2);
+	OPENSSL_free(rsa.exponent_1);
+	OPENSSL_free(rsa.exponent_2);
+	OPENSSL_free(rsa.coefficient);
 }
 #endif
 
@@ -4823,6 +4880,10 @@ static CK_RV write_object(CK_SESSION_HANDLE session)
 			FILL_ATTR(privkey_templ[n_privkey_attr], CKA_DERIVE, &_true, sizeof(_true));
 			n_privkey_attr++;
 		}
+		if (opt_key_usage_wrap) {
+			FILL_ATTR(privkey_templ[n_privkey_attr], CKA_UNWRAP, &_true, sizeof(_true));
+			n_privkey_attr++;
+		}
 		if (opt_always_auth != 0) {
 			FILL_ATTR(privkey_templ[n_privkey_attr], CKA_ALWAYS_AUTHENTICATE,
 				&_true, sizeof(_true));
@@ -4932,6 +4993,10 @@ static CK_RV write_object(CK_SESSION_HANDLE session)
 		}
 		if (opt_key_usage_derive != 0) {
 			FILL_ATTR(pubkey_templ[n_pubkey_attr], CKA_DERIVE, &_true, sizeof(_true));
+			n_pubkey_attr++;
+		}
+		if (opt_key_usage_wrap) {
+			FILL_ATTR(pubkey_templ[n_pubkey_attr], CKA_WRAP, &_true, sizeof(_true));
 			n_pubkey_attr++;
 		}
 
@@ -5175,6 +5240,7 @@ static CK_RV write_object(CK_SESSION_HANDLE session)
 
 #ifdef ENABLE_OPENSSL
 	gost_info_free(gost);
+	rsa_info_free(rsa);
 	EVP_PKEY_free(evp_key);
 #endif /* ENABLE_OPENSSL */
 
@@ -6173,6 +6239,7 @@ show_key(CK_SESSION_HANDLE sess, CK_OBJECT_HANDLE obj)
 		}
 		printf("\n");
 	}
+	free(mechs);
 	if ((unique_id = getUNIQUE_ID(sess, obj, NULL)) != NULL) {
 		printf("  Unique ID:  %s\n", unique_id);
 		free(unique_id);
@@ -6806,14 +6873,14 @@ static int read_object(CK_SESSION_HANDLE session)
 					}
 				}
 
-				if (type == CKK_EC_EDWARDS && os->length == BYTES4BITS(255))
+				if (type == CKK_EC_EDWARDS && os->length == BYTES4BITS(256))
 					raw_pk = EVP_PKEY_ED25519;
 #if defined(EVP_PKEY_ED448)
 				else if (type == CKK_EC_EDWARDS && os->length == ED448_KEY_SIZE_BYTES)
 					raw_pk = EVP_PKEY_ED448;
 #endif /* EVP_PKEY_ED448 */
 #if defined(EVP_PKEY_X25519)
-				else if (type == CKK_EC_MONTGOMERY && os->length == BYTES4BITS(255))
+				else if (type == CKK_EC_MONTGOMERY && os->length == BYTES4BITS(256))
 					raw_pk = EVP_PKEY_X25519;
 #endif /*EVP_PKEY_X25519 */
 #if defined(EVP_PKEY_X448)

@@ -34,12 +34,16 @@ jobs:
   build:
     name: build-${{ matrix.dist }}-${{ matrix.arch }}-${{ matrix.build }}
     strategy:
+      fail-fast: false
       matrix:
         dist: ['22.04', '24.04']
         arch: ['amd64', 'arm64']
         build: ['dist', 'valgrind']
         exclude:
           - build: dist
+            arch: arm64
+          - dist: 22.04
+            build: valgrind
             arch: arm64
     runs-on: ubuntu-${{ matrix.dist }}${{ matrix.arch == 'arm64' && '-arm' || '' }}
     steps:
