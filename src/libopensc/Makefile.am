@@ -2,7 +2,7 @@ include $(top_srcdir)/win32/ltrc.inc
 
 MAINTAINERCLEANFILES = $(srcdir)/Makefile.in
 
-EXTRA_DIST = Makefile.mak opensc.dll.manifest
+EXTRA_DIST = Makefile.mak
 
 lib_LTLIBRARIES = libopensc.la
 noinst_HEADERS = cards.h ctbcs.h internal.h muscle.h muscle-filesystem.h \
@@ -13,7 +13,7 @@ noinst_HEADERS = cards.h ctbcs.h internal.h muscle.h muscle-filesystem.h \
 	authentic.h iasecc.h iasecc-sdo.h sm.h card-sc-hsm.h \
 	pace.h cwa14890.h cwa-dnie.h card-gids.h aux-data.h \
 	jpki.h sc-ossl-compat.h card-npa.h card-openpgp.h \
-	card-eoi.h ccid-types.h reader-tr03119.h \
+	card-eoi.h card-dtrust.h ccid-types.h reader-tr03119.h \
 	card-cac-common.h card-cardos-common.h
 
 AM_CPPFLAGS = -D'OPENSC_CONF_PATH="$(sysconfdir)/opensc.conf"' \
