@@ -19,6 +19,18 @@ define([VS_FF_PRODUCT_NAME], [OpenSC smartcard framework])
 define([VS_FF_PRODUCT_UPDATES], [https://github.com/mouse07410/OpenSC/releases])
 define([VS_FF_PRODUCT_URL], [https://github.com/mouse07410/OpenSC])
 
+m4_esyscmd([awk -F= '
+  /^[[:space:]]*#/      { next }
+  /^[[:space:]]*$/      { next }
+  {
+    key = $1; val = $2;
+    gsub(/^[[:space:]]+|[[:space:]]+$/, "", key);
+    gsub(/^[[:space:]]+|[[:space:]]+$/, "", val);
+    printf("m4_define([%s],[%s])\n", key, val);
+  }
+' "VERSION.mk"])
+
+
 m4_sinclude(m4/version.m4.ci)
 
 # Hint: MacOSX/build-package.in contains minimum OpenSSL reference
@@ -421,8 +433,8 @@ if test "${GIT_CHECKOUT}" = "yes"; then
 	OPENSC_SCM_REVISION="OpenSC-${REVISION_DESCRIPTION}, ${HASH_COMMIT_DATE}"
 	OPENSC_VERSION_REVISION="$(${GIT} rev-list ${GIT_TAG_COMMIT}..HEAD --count || echo 0)"
 else
-	OPENSC_SCM_REVISION="No Git revision info available"
-	OPENSC_VERSION_REVISION="0"
+	OPENSC_SCM_REVISION="PACKAGE_SCM_REVISION"
+	OPENSC_VERSION_REVISION="PACKAGE_VERSION_REVISION"
 fi
 
 dnl C Compiler features
@@ -1211,9 +1223,7 @@ AC_CONFIG_FILES([
 	src/minidriver/Makefile
 	src/minidriver/opensc-minidriver.inf
 	win32/Makefile
-	win32/winconfig.h
 	win32/OpenSC.iss
-	win32/OpenSC.wxs
 	MacOSX/Makefile
 	MacOSX/build-package
 	MacOSX/Distribution.xml
