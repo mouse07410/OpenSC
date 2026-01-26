@@ -439,6 +439,24 @@
 	],
 	[
 		"01",
+		"RSA_PKCS",
+		"YES",
+		"YES"
+	],
+	[
+		"01",
+		"RSA_X_509",
+		"YES",
+		"YES"
+	],
+	[
+		"01",
+		"MD5_RSA_PKCS",
+		"YES",
+		""
+	],
+	[
+		"01",
 		"SHA1_RSA_PKCS",
 		"YES",
 		""
@@ -464,6 +482,24 @@
 	[
 		"01",
 		"SHA224_RSA_PKCS",
+		"YES",
+		""
+	],
+	[
+		"02",
+		"RSA_PKCS",
+		"YES",
+		"YES"
+	],
+	[
+		"02",
+		"RSA_X_509",
+		"YES",
+		"YES"
+	],
+	[
+		"02",
+		"MD5_RSA_PKCS",
 		"YES",
 		""
 	],
@@ -521,6 +557,11 @@
 	],
 	[
 		"01",
+		"MD5_RSA_PKCS",
+		"YES"
+	],
+	[
+		"01",
 		"SHA1_RSA_PKCS",
 		"YES"
 	],
@@ -542,6 +583,11 @@
 	[
 		"01",
 		"SHA224_RSA_PKCS",
+		"YES"
+	],
+	[
+		"02",
+		"MD5_RSA_PKCS",
 		"YES"
 	],
 	[

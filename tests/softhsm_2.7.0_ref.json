@@ -540,8 +540,56 @@
 		""
 	],
 	[
+		"03",
+		"ECDSA_SHA1",
+		"YES",
+		""
+	],
+	[
+		"03",
+		"ECDSA_SHA256",
+		"YES",
+		""
+	],
+	[
+		"03",
+		"ECDSA_SHA384",
+		"YES",
+		""
+	],
+	[
+		"03",
+		"ECDSA_SHA512",
+		"YES",
+		""
+	],
+	[
 		"04",
 		"ECDSA",
+		"YES",
+		""
+	],
+	[
+		"04",
+		"ECDSA_SHA1",
+		"YES",
+		""
+	],
+	[
+		"04",
+		"ECDSA_SHA256",
+		"YES",
+		""
+	],
+	[
+		"04",
+		"ECDSA_SHA384",
+		"YES",
+		""
+	],
+	[
+		"04",
+		"ECDSA_SHA512",
 		"YES",
 		""
 	]],
@@ -636,6 +684,8 @@
 		"DECRYPT",
 		"WRAP",
 		"UNWRAP",
+		"ENCAPSULATE",
+		"DECAPSULATE",
 		"DERIVE PUBLIC",
 		"DERIVE PRIVATE",
 		"ALWAYS AUTH"
@@ -654,6 +704,8 @@
 		"YES",
 		"",
 		"",
+		"",
+		"",
 		""
 	],
 	[
@@ -670,6 +722,8 @@
 		"YES",
 		"",
 		"",
+		"",
+		"",
 		""
 	],
 	[
@@ -684,6 +738,8 @@
 		"YES",
 		"YES",
 		"YES",
+		"",
+		"",
 		"YES",
 		"YES",
 		""
@@ -700,6 +756,8 @@
 		"YES",
 		"YES",
 		"YES",
+		"",
+		"",
 		"YES",
 		"YES",
 		""
@@ -716,6 +774,8 @@
 		"YES",
 		"YES",
 		"YES",
+		"",
+		"",
 		"",
 		"",
 		""

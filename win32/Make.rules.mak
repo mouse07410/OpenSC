@@ -18,6 +18,7 @@ MINIDRIVER_DEF = /DENABLE_MINIDRIVER
 WIXFLAGS = -d ENABLE_MINIDRIVER $(WIXFLAGS)
 
 #Build MSI with the Windows Installer XML (WIX) toolkit
+MSI_NAME = $(PRODUCT_NAME)-$(PACKAGE_VERSION_MAJOR).$(PACKAGE_VERSION_MINOR).$(PACKAGE_VERSION_FIX)_$(PLATFORM)$(DIST_SUFFIX).msi
 !IF "$(WIX_PACKAGES)" == ""
 WIX_PACKAGES = $(TOPDIR)\win32\packages
 WIX_VERSION = 6.0.2
@@ -164,7 +165,7 @@ COPTS = /O1 /$(BUILD_TYPE) $(COPTS)
 	rc $(DEFS) /l 0x0409 /I$(TOPDIR)\win32 $<
 
 .exports.def:
-	echo LIBRARY $* > $*.def
+	echo LIBRARY > $*.def
 	echo EXPORTS >> $*.def
 	type $*.exports >> $*.def
 

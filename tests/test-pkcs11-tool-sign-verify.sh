@@ -2,6 +2,7 @@
 SOURCE_PATH=${SOURCE_PATH:-..}
 
 TOKENTYPE=$1
+TOKENTYPE=${TOKENTYPE:-$TEST_PKCS11_BACKEND}
 
 if [ "${TOKENTYPE}" == "" ]; then
     TOKENTYPE=softhsm
@@ -31,6 +32,10 @@ for HASH in "" "SHA1" "SHA224" "SHA256" "SHA384" "SHA512"; do
 
     if [[ "$ID" == "rhel" || "$ID_LIKE" =~ ".*rhel.*" ]] && [[ "$VERSION" -gt 8 ]] && [[ "$HASH" == "SHA1" ]]; then
         RETOSSL="1"
+    fi
+    # Kryoptic does not do SHA1 anymore
+    if [[ "$TOKENTYPE" == "kryoptic" ]] && [[ "$HASH" == "SHA1" ]]; then
+        continue;
     fi
     for SIGN_KEY in "01" "02"; do
         METHOD="RSA-PKCS"
@@ -173,6 +178,13 @@ for HASH in "" "SHA1" "SHA224" "SHA256" "SHA384" "SHA512"; do
 
     # Skip hashed algorithms (do not support encryption & decryption)
     if [[ ! -z "$HASH" ]]; then
+        continue;
+    fi
+    # Skip in FIPS mode -- RSA-PKCS encryption is no longer allowed
+    if [[ -e "/etc/system-fips" ]]; then
+        continue;
+    fi
+    if [[ -f "/proc/sys/crypto/fips_enabled" && $(cat /proc/sys/crypto/fips_enabled) == "1" ]]; then
         continue;
     fi
     METHOD="RSA-PKCS"

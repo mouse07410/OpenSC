@@ -2,6 +2,7 @@
 SOURCE_PATH=${SOURCE_PATH:-..}
 
 TOKENTYPE=$1
+TOKENTYPE=${TOKENTYPE:-$TEST_PKCS11_BACKEND}
 
 if [ "${TOKENTYPE}" == "softokn" ]; then
 	echo "p11test not supported"
@@ -38,7 +39,14 @@ function filter_log() {
 }
 
 REF_FILE="$BUILD_PATH/tests/${TOKENTYPE}_ref.json"
+if [[ "$TOKENTYPE" == "softhsm" ]]; then
+	VERSION=$(softhsm2-util --version)
+	REF_FILE="$SOURCE_PATH/tests/${TOKENTYPE}_${VERSION}_ref.json"
+fi
 if [[ -f "/proc/sys/crypto/fips_enabled" && $(cat /proc/sys/crypto/fips_enabled) == "1" ]]; then
+	REF_FILE="$SOURCE_PATH/tests/${TOKENTYPE}_fips_ref.json"
+fi
+if [[ -e "/etc/system-fips" ]]; then
 	REF_FILE="$SOURCE_PATH/tests/${TOKENTYPE}_fips_ref.json"
 fi
 

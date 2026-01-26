@@ -1,6 +1,6 @@
 MAINTAINERCLEANFILES = $(srcdir)/Makefile.in
 
-EXTRA_DIST = softhsm_ref.json softhsm_fips_ref.json
+EXTRA_DIST = softhsm_2.6.1_ref.json softhsm_2.7.0_ref.json softhsm_fips_ref.json
 
 TEST_EXTENSIONS = .sh
 # This pushes the valgrind command to the test environment
@@ -20,7 +20,7 @@ LOG_COMPILER = $(LOG_VALGRIND)
 # the LD_PRELOAD is to avoid false positive leaks from pcsclite
 AM_TESTS_ENVIRONMENT += \
 	VALGRIND='$(LOG_VALGRIND)'; \
-	LD_PRELOAD='/usr/lib/x86_64-linux-gnu/libpcsclite.so.1';
+	LD_PRELOAD='$(PCSCLITE_PATH)'
 endif
 
 dist_noinst_SCRIPTS = common.sh \
@@ -58,4 +58,4 @@ endif
 endif
 endif
 # no tests expected to fail
-#XFAIL_TESTS =
+#XFAIL_TESTS=

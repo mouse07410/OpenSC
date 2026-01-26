@@ -11,7 +11,7 @@ if VALGRIND_ENABLED
 #VALGRIND_SUPPRESSIONS_FILES = $(top_srcdir)/tests/opensc.supp
 VALGRIND_FLAGS = --num-callers=30 -q --keep-debuginfo=yes --gen-suppressions=all
 # to avoid false positive leaks from pcsclite
-TESTS_ENVIRONMENT = LD_PRELOAD='/usr/lib/x86_64-linux-gnu/libpcsclite.so.1'
+TESTS_ENVIRONMENT = LD_PRELOAD='$(PCSCLITE_PATH)'
 endif
 
 noinst_PROGRAMS = asn1 simpletlv cachedir pkcs15filter openpgp-tool hextobin \
@@ -30,6 +30,7 @@ AM_CFLAGS = -I$(top_srcdir)/src/ \
 AM_CPPFLAGS =$(CODE_COVERAGE_CPPFLAGS)
 LDADD = $(top_builddir)/src/libopensc/libopensc.la \
 	$(top_builddir)/src/common/libscdl.la \
+	$(top_builddir)/src/common/libcompat.la \
 	$(CODE_COVERAGE_LIBS) \
 	$(OPTIONAL_OPENSSL_LIBS) \
 	$(CMOCKA_LIBS)

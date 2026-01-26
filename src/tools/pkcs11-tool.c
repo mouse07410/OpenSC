@@ -197,6 +197,7 @@ enum {
 	OPT_KEY_USAGE_DECRYPT,
 	OPT_KEY_USAGE_DERIVE,
 	OPT_KEY_USAGE_WRAP,
+	OPT_KEY_USAGE_ENCAPSULATE,
 	OPT_PRIVATE,
 	OPT_SENSITIVE,
 	OPT_EXTRACTABLE,
@@ -285,6 +286,7 @@ static const struct option options[] = {
 	{ "usage-decrypt",	0, NULL,		OPT_KEY_USAGE_DECRYPT },
 	{ "usage-derive",	0, NULL,		OPT_KEY_USAGE_DERIVE },
 	{ "usage-wrap",	0, NULL,		OPT_KEY_USAGE_WRAP },
+	{ "usage-encapsulate",	0, NULL,		OPT_KEY_USAGE_ENCAPSULATE },
 	{ "write-object",	1, NULL,		'w' },
 	{ "read-object",	0, NULL,		'r' },
 	{ "delete-object",	0, NULL,		'b' },
@@ -336,7 +338,7 @@ static const struct option options[] = {
 	{ "public-key-info",	0, NULL,		OPT_PUBLIC_KEY_INFO},
 	{ "uri",		1, NULL,		OPT_URI},
 	{ "uri-with-slot-id",	0, NULL,		OPT_URI_WITH_SLOT_ID},
-	{ NULL, 0, NULL, 0 }
+	{ NULL, 0, NULL, 0 },
 };
 // clang-format on
 
@@ -381,6 +383,7 @@ static const char *option_help[] = {
 		"Specify 'decrypt' key usage flag (sets DECRYPT in privkey and ENCRYPT in pubkey for RSA, sets both DECRYPT and ENCRYPT for secret keys)",
 		"Specify 'derive' key usage flag (EC only)",
 		"Specify 'wrap' key usage flag",
+		"Specify 'encapsulate' key usage flag (sets ENCAPSULATE in public and DECAPSULATE in private)",
 		"Write an object (key, cert, data) to the card",
 		"Get object's CKA_VALUE attribute (use with --type)",
 		"Delete an object (use with --type cert/data/privkey/pubkey/secrkey)",
@@ -431,7 +434,9 @@ static const char *option_help[] = {
 		"Specify the file containing the info for HKDF (optional)",
 		"When reading a public key, try to read PUBLIC_KEY_INFO (DER encoding of SPKI)",
 		"Specify the PKCS#11 URI for module, slot, token or object",
-		"Include SlotId in PKCS#11 URI"};
+		"Include SlotId in PKCS#11 URI",
+		"",
+};
 
 static const char *	app_name = "pkcs11-tool"; /* for utils.c */
 
@@ -480,6 +485,7 @@ static int		opt_key_usage_sign = 0;
 static int		opt_key_usage_decrypt = 0;
 static int		opt_key_usage_derive = 0;
 static int		opt_key_usage_wrap = 0;
+static int		opt_key_usage_encapsulate = 0;
 static int		opt_key_usage_default = 1; /* uses defaults if no opt_key_usage options */
 static int		opt_derive_pass_der = 0;
 static unsigned long	opt_random_bytes = 0;
@@ -579,13 +585,20 @@ struct rsakey_info {
 	unsigned char	*coefficient;
 	int		coefficient_len;
 };
-struct gostkey_info {
+struct generalkey_info {
 	struct sc_lv_data param_oid;
 	struct sc_lv_data public;
 	struct sc_lv_data private;
 #ifdef EC_POINT_NO_ASN1_OCTET_STRING
 	size_t header_len;
 #endif
+};
+
+struct pqckey_info {
+	struct sc_lv_data public;
+	struct sc_lv_data private;
+	struct sc_lv_data seed;
+	long int type;
 };
 
 static void		show_cryptoki_info(void);
@@ -751,11 +764,14 @@ ATTR_METHOD(EXTRACTABLE, CK_BBOOL);			/* getEXTRACTABLE */
 ATTR_METHOD(NEVER_EXTRACTABLE, CK_BBOOL);		/* getNEVER_EXTRACTABLE */
 ATTR_METHOD(LOCAL, CK_BBOOL);				/* getLOCAL */
 ATTR_METHOD(OPENSC_NON_REPUDIATION, CK_BBOOL);		/* getOPENSC_NON_REPUDIATION */
+ATTR_METHOD(ENCAPSULATE, CK_BBOOL);			/* getENCAPSULATE */
+ATTR_METHOD(DECAPSULATE, CK_BBOOL);			/* getDECAPSULATE */
 ATTR_METHOD(KEY_TYPE, CK_KEY_TYPE);			/* getKEY_TYPE */
 ATTR_METHOD(CERTIFICATE_TYPE, CK_CERTIFICATE_TYPE);	/* getCERTIFICATE_TYPE */
 ATTR_METHOD(MODULUS_BITS, CK_ULONG);			/* getMODULUS_BITS */
 ATTR_METHOD(VALUE_LEN, CK_ULONG);			/* getVALUE_LEN */
 ATTR_METHOD(PROFILE_ID, CK_ULONG);			/* getPROFILE_ID */
+ATTR_METHOD(PARAMETER_SET, CK_ULONG);			/* getPARAMETER_SET */
 VARATTR_METHOD(LABEL, char);				/* getLABEL */
 VARATTR_METHOD(UNIQUE_ID, char);			/* getUNIQUE_ID */
 VARATTR_METHOD(APPLICATION, char);			/* getAPPLICATION */
@@ -819,6 +835,9 @@ int main(int argc, char * argv[])
 	int do_generate_random = 0;
 	char *s = NULL;
 	CK_RV rv;
+
+	static_assert(sizeof(options) / sizeof(options[0]) == sizeof(option_help) / sizeof(option_help[0]),
+			"Inconsistent size of the options and options_help structures!");
 
 #ifdef _WIN32
 	char expanded_val[PATH_MAX];
@@ -1124,6 +1143,10 @@ int main(int argc, char * argv[])
 			break;
 		case OPT_KEY_USAGE_WRAP:
 			opt_key_usage_wrap = 1;
+			opt_key_usage_default = 0;
+			break;
+		case OPT_KEY_USAGE_ENCAPSULATE:
+			opt_key_usage_encapsulate = 1;
 			opt_key_usage_default = 0;
 			break;
 		case OPT_PRIVATE:
@@ -2338,7 +2361,7 @@ static int unlock_pin(CK_SLOT_ID slot, CK_SESSION_HANDLE sess, int login_type)
 			return -1;
 		}
 
-		if (!new_pin || !*new_pin || strlen(new_pin) > 20) {
+		if (strlen(new_pin) > 20) {
 			if (new_pin != opt_new_pin)
 				free(new_pin);
 			return 1;
@@ -2573,6 +2596,8 @@ static void sign_data(CK_SLOT_ID slot, CK_SESSION_HANDLE session,
 	CK_BYTE_PTR sig_buffer = NULL;
 	CK_MECHANISM	mech;
 	CK_RSA_PKCS_PSS_PARAMS pss_params;
+	CK_SIGN_ADDITIONAL_CONTEXT sign_params = {0};
+	CK_HASH_SIGN_ADDITIONAL_CONTEXT hash_sign_params = {0};
 	CK_MAC_GENERAL_PARAMS mac_gen_param;
 	CK_EDDSA_PARAMS eddsa_params = {
 			.phFlag = CK_FALSE,
@@ -2592,8 +2617,18 @@ static void sign_data(CK_SLOT_ID slot, CK_SESSION_HANDLE session,
 	mech.mechanism = opt_mechanism;
 	hashlen = parse_pss_params(session, key, &mech, &pss_params);
 
-	/* support pure EdDSA only */
-	if (opt_mechanism == CKM_EDDSA) {
+	if (opt_input == NULL)
+		fd = 0;
+	else if ((fd = open(opt_input, O_RDONLY | O_BINARY)) < 0)
+		util_fatal("Cannot open %s: %m", opt_input);
+
+	sz = read(fd, in_buffer, sizeof(in_buffer));
+	if (sz < 0)
+		util_fatal("Cannot read from %s: %m", opt_input);
+
+	switch (opt_mechanism) {
+	case CKM_EDDSA: {
+		/* support pure EdDSA only */
 		const struct ec_curve_info *curve;
 		unsigned char *ec_params;
 		CK_ULONG ec_params_size = 0;
@@ -2613,22 +2648,16 @@ static void sign_data(CK_SLOT_ID slot, CK_SESSION_HANDLE session,
 			mech.pParameter = &eddsa_params;
 			mech.ulParameterLen = (CK_ULONG)sizeof(eddsa_params);
 		}
+		break;
 	}
-
-	if (opt_input == NULL)
-		fd = 0;
-	else if ((fd = open(opt_input, O_RDONLY|O_BINARY)) < 0)
-		util_fatal("Cannot open %s: %m", opt_input);
-
-	sz = read(fd, in_buffer, sizeof(in_buffer));
-	if (sz < 0)
-		util_fatal("Cannot read from %s: %m", opt_input);
-
-	if (opt_mechanism == CKM_RSA_PKCS_PSS && (size_t)sz != hashlen) {
-		util_fatal("For %s mechanism, message size (got %zd bytes) "
-			"must be equal to specified digest length (%lu)\n",
-			p11_mechanism_to_name(opt_mechanism), sz, hashlen);
-	} else if (opt_mechanism == CKM_AES_CMAC_GENERAL) {
+	case CKM_RSA_PKCS_PSS:
+		if ((size_t)sz != hashlen) {
+			util_fatal("For %s mechanism, message size (got %zd bytes) "
+				   "must be equal to specified digest length (%lu)\n",
+					p11_mechanism_to_name(opt_mechanism), sz, hashlen);
+		}
+		break;
+	case CKM_AES_CMAC_GENERAL:
 		if (opt_mac_gen_param == 0 || opt_mac_gen_param > 16) {
 			util_fatal("For %s mechanism, the option --mac-general-param "
 				   "is mandatory and its value must be comprised between 1 and "
@@ -2638,6 +2667,50 @@ static void sign_data(CK_SLOT_ID slot, CK_SESSION_HANDLE session,
 		mac_gen_param = opt_mac_gen_param;
 		mech.pParameter = &mac_gen_param;
 		mech.ulParameterLen = sizeof(CK_MAC_GENERAL_PARAMS);
+		break;
+	case CKM_ML_DSA:
+	case CKM_HASH_ML_DSA_SHA224:
+	case CKM_HASH_ML_DSA_SHA256:
+	case CKM_HASH_ML_DSA_SHA384:
+	case CKM_HASH_ML_DSA_SHA512:
+	case CKM_HASH_ML_DSA_SHA3_224:
+	case CKM_HASH_ML_DSA_SHA3_256:
+	case CKM_HASH_ML_DSA_SHA3_384:
+	case CKM_HASH_ML_DSA_SHA3_512:
+	case CKM_HASH_ML_DSA_SHAKE128:
+	case CKM_HASH_ML_DSA_SHAKE256:
+	case CKM_SLH_DSA:
+	case CKM_HASH_SLH_DSA_SHA224:
+	case CKM_HASH_SLH_DSA_SHA256:
+	case CKM_HASH_SLH_DSA_SHA384:
+	case CKM_HASH_SLH_DSA_SHA512:
+	case CKM_HASH_SLH_DSA_SHA3_224:
+	case CKM_HASH_SLH_DSA_SHA3_256:
+	case CKM_HASH_SLH_DSA_SHA3_384:
+	case CKM_HASH_SLH_DSA_SHA3_512:
+	case CKM_HASH_SLH_DSA_SHAKE128:
+	case CKM_HASH_SLH_DSA_SHAKE256:
+		/* TODO allow setting hedge and context */
+		mech.pParameter = &sign_params;
+		mech.ulParameterLen = sizeof(CK_SIGN_ADDITIONAL_CONTEXT);
+		break;
+	case CKM_HASH_ML_DSA:
+	case CKM_HASH_SLH_DSA:
+		if (opt_hash_alg == 0) {
+			util_fatal("The mechanism %s requires a hash-algorithm",
+					p11_mechanism_to_name(opt_mechanism));
+		}
+		hashlen = hash_length(opt_hash_alg);
+		if ((size_t)sz != hashlen) {
+			util_fatal("For %s mechanism, message size (got %zd bytes) "
+				   "must be equal to specified digest length (%lu)\n",
+					p11_mechanism_to_name(opt_mechanism), sz, hashlen);
+		}
+		hash_sign_params.hash = opt_hash_alg;
+		/* TODO allow setting hedge and context */
+		mech.pParameter = &hash_sign_params;
+		mech.ulParameterLen = sizeof(CK_HASH_SIGN_ADDITIONAL_CONTEXT);
+		break;
 	}
 
 	rv = CKR_CANCEL;
@@ -2777,8 +2850,10 @@ static void verify_signature(CK_SLOT_ID slot, CK_SESSION_HANDLE session,
 			.phFlag = CK_FALSE,
 	};
 	CK_RV		rv = 0;
-	CK_ULONG	sig_len=0;
-	int		fd=0, fd2=0;
+	CK_ULONG	sig_len = 0;
+	int		fd = 0, fd2 = 0;
+	CK_SIGN_ADDITIONAL_CONTEXT sign_params = {0};
+	CK_HASH_SIGN_ADDITIONAL_CONTEXT hash_sign_params = {0};
 	struct stat sig_st;
 	ssize_t         sz, sz2;
 	unsigned long   hashlen=0;
@@ -2807,8 +2882,36 @@ static void verify_signature(CK_SLOT_ID slot, CK_SESSION_HANDLE session,
 		}
 	}
 
-	/* support pure EdDSA only */
-	if (opt_mechanism == CKM_EDDSA) {
+	/* Open a signature file */
+	if (opt_signature_file == NULL)
+		util_fatal("No file with signature provided. Use --signature-file");
+	else if ((fd2 = open(opt_signature_file, O_RDONLY | O_BINARY)) < 0)
+		util_fatal("Cannot open %s: %m", opt_signature_file);
+	else if (fstat(fd2, &sig_st) != 0)
+		util_fatal("Couldn't get size of file \"", opt_signature_file);
+	sig_len = sig_st.st_size;
+	sig_buffer = malloc(sig_len);
+	if (!sig_buffer)
+		util_fatal("malloc() failure\n");
+	sz2 = read(fd2, sig_buffer, sig_len);
+	if (sz2 < 0)
+		util_fatal("Cannot read from %s: %m", opt_signature_file);
+
+	close(fd2);
+
+	/* Open the data file */
+	if (opt_input == NULL)
+		fd = 0;
+	else if ((fd = open(opt_input, O_RDONLY | O_BINARY)) < 0)
+		util_fatal("Cannot open %s: %m", opt_input);
+
+	sz = read(fd, in_buffer, sizeof(in_buffer));
+	if (sz < 0)
+		util_fatal("Cannot read from %s: %m", opt_input);
+
+	switch (opt_mechanism) {
+	case CKM_EDDSA: {
+		/* support pure EdDSA only */
 		const struct ec_curve_info *curve;
 		unsigned char *ec_params;
 		CK_ULONG ec_params_size = 0;
@@ -2828,35 +2931,18 @@ static void verify_signature(CK_SLOT_ID slot, CK_SESSION_HANDLE session,
 			mech.pParameter = &eddsa_params;
 			mech.ulParameterLen = (CK_ULONG)sizeof(eddsa_params);
 		}
+		break;
 	}
-
-	/* Open a signature file */
-	if (opt_signature_file == NULL)
-		util_fatal("No file with signature provided. Use --signature-file");
-	else if ((fd2 = open(opt_signature_file, O_RDONLY|O_BINARY)) < 0)
-		util_fatal("Cannot open %s: %m", opt_signature_file);
-
-#if 0
-	sz2 = read(fd2, sig_buffer, sizeof(sig_buffer)); // sz2 <- size of signature
-#else
-	else if (fstat(fd2, &sig_st) != 0)
-		util_fatal("Couldn't get size of file \"", opt_signature_file);
-	sig_len = sig_st.st_size;
-	sig_buffer = malloc(sig_len);
-	if (!sig_buffer)
-		util_fatal("malloc() failure\n");
-	sz2 = read(fd2, sig_buffer, sig_len);
-#endif /* 0 */
-	if (sz2 < 0)
-		util_fatal("Cannot read from %s: %m", opt_signature_file);
-
-	close(fd2);
-
-	if (opt_mechanism == CKM_ECDSA || opt_mechanism == CKM_ECDSA_SHA1 ||
-		opt_mechanism == CKM_ECDSA_SHA256 || opt_mechanism == CKM_ECDSA_SHA384 ||
-		opt_mechanism == CKM_ECDSA_SHA512 || opt_mechanism == CKM_ECDSA_SHA224 ||
-		opt_mechanism == CKM_ECDSA_SHA3_224 || opt_mechanism == CKM_ECDSA_SHA3_256 ||
-		opt_mechanism == CKM_ECDSA_SHA3_384 || opt_mechanism == CKM_ECDSA_SHA3_512) {
+	case CKM_ECDSA:
+	case CKM_ECDSA_SHA1:
+	case CKM_ECDSA_SHA256:
+	case CKM_ECDSA_SHA384:
+	case CKM_ECDSA_SHA512:
+	case CKM_ECDSA_SHA224:
+	case CKM_ECDSA_SHA3_224:
+	case CKM_ECDSA_SHA3_256:
+	case CKM_ECDSA_SHA3_384:
+	case CKM_ECDSA_SHA3_512:
 		if (opt_sig_format && (!strcmp(opt_sig_format, "openssl") ||
 							   !strcmp(opt_sig_format, "sequence"))) {
 
@@ -2891,23 +2977,15 @@ static void verify_signature(CK_SLOT_ID slot, CK_SESSION_HANDLE session,
 			memcpy(sig_buffer, rs_buffer, rs_len);
 			sz2 = rs_len;
 		}
-	}
-
-	/* Open the data file */
-	if (opt_input == NULL)
-		fd = 0;
-	else if ((fd = open(opt_input, O_RDONLY|O_BINARY)) < 0)
-		util_fatal("Cannot open %s: %m", opt_input);
-
-	sz = read(fd, in_buffer, sizeof(in_buffer));
-	if (sz < 0)
-		util_fatal("Cannot read from %s: %m", opt_input);
-
-	if (opt_mechanism == CKM_RSA_PKCS_PSS && (size_t)sz != hashlen) {
-		util_fatal("For %s mechanism, message size (got %zd bytes)"
-			" must be equal to specified digest length (%lu)\n",
-			p11_mechanism_to_name(opt_mechanism), sz, hashlen);
-	} else if (opt_mechanism == CKM_AES_CMAC_GENERAL) {
+		break;
+	case CKM_RSA_PKCS_PSS:
+		if ((size_t)sz != hashlen) {
+			util_fatal("For %s mechanism, message size (got %zd bytes)"
+				   " must be equal to specified digest length (%lu)\n",
+					p11_mechanism_to_name(opt_mechanism), sz, hashlen);
+		}
+		break;
+	case CKM_AES_CMAC_GENERAL:
 		if (opt_mac_gen_param == 0 || opt_mac_gen_param > 16) {
 			util_fatal("For %s mechanism, the option --mac-general-param "
 				   "is mandatory and its value must be comprised between 1 and "
@@ -2917,6 +2995,50 @@ static void verify_signature(CK_SLOT_ID slot, CK_SESSION_HANDLE session,
 		mac_gen_param = opt_mac_gen_param;
 		mech.pParameter = &mac_gen_param;
 		mech.ulParameterLen = sizeof(CK_MAC_GENERAL_PARAMS);
+		break;
+	case CKM_ML_DSA:
+	case CKM_HASH_ML_DSA_SHA224:
+	case CKM_HASH_ML_DSA_SHA256:
+	case CKM_HASH_ML_DSA_SHA384:
+	case CKM_HASH_ML_DSA_SHA512:
+	case CKM_HASH_ML_DSA_SHA3_224:
+	case CKM_HASH_ML_DSA_SHA3_256:
+	case CKM_HASH_ML_DSA_SHA3_384:
+	case CKM_HASH_ML_DSA_SHA3_512:
+	case CKM_HASH_ML_DSA_SHAKE128:
+	case CKM_HASH_ML_DSA_SHAKE256:
+	case CKM_SLH_DSA:
+	case CKM_HASH_SLH_DSA_SHA224:
+	case CKM_HASH_SLH_DSA_SHA256:
+	case CKM_HASH_SLH_DSA_SHA384:
+	case CKM_HASH_SLH_DSA_SHA512:
+	case CKM_HASH_SLH_DSA_SHA3_224:
+	case CKM_HASH_SLH_DSA_SHA3_256:
+	case CKM_HASH_SLH_DSA_SHA3_384:
+	case CKM_HASH_SLH_DSA_SHA3_512:
+	case CKM_HASH_SLH_DSA_SHAKE128:
+	case CKM_HASH_SLH_DSA_SHAKE256:
+		/* TODO allow setting hedge and context */
+		mech.pParameter = &sign_params;
+		mech.ulParameterLen = sizeof(CK_SIGN_ADDITIONAL_CONTEXT);
+		break;
+	case CKM_HASH_ML_DSA:
+	case CKM_HASH_SLH_DSA:
+		if (opt_hash_alg == 0) {
+			util_fatal("The mechanism %s requires a hash-algorithm",
+					p11_mechanism_to_name(opt_mechanism));
+		}
+		hashlen = hash_length(opt_hash_alg);
+		if ((size_t)sz != hashlen) {
+			util_fatal("For %s mechanism, message size (got %zd bytes) "
+				   "must be equal to specified digest length (%lu)\n",
+					p11_mechanism_to_name(opt_mechanism), sz, hashlen);
+		}
+		hash_sign_params.hash = opt_hash_alg;
+		/* TODO allow setting hedge and context */
+		mech.pParameter = &hash_sign_params;
+		mech.ulParameterLen = sizeof(CK_HASH_SIGN_ADDITIONAL_CONTEXT);
+		break;
 	}
 
 	rv = CKR_CANCEL;
@@ -3505,6 +3627,9 @@ static int gen_keypair(CK_SLOT_ID slot, CK_SESSION_HANDLE session,
 		{CKA_SENSITIVE, &_true, sizeof(_true)},
 	};
 	unsigned long int gost_key_type = -1;
+	CK_ML_DSA_PARAMETER_SET_TYPE ml_dsa_parameter_set = 0;
+	CK_ML_KEM_PARAMETER_SET_TYPE ml_kem_parameter_set = 0;
+	CK_SLH_DSA_PARAMETER_SET_TYPE slh_dsa_parameter_set = 0;
 	int n_privkey_attr = 4;
 	CK_ULONG key_type = CKK_RSA;
 	CK_RV rv;
@@ -3739,8 +3864,127 @@ static int gen_keypair(CK_SLOT_ID slot, CK_SESSION_HANDLE session,
 				FILL_ATTR(privateKeyTemplate[n_privkey_attr], CKA_DERIVE, &_true, sizeof(_true));
 				n_privkey_attr++;
 			}
-		}
-		else {
+		} else if (strncasecmp(type, "ML-DSA-", strlen("ML-DSA-")) == 0) {
+			CK_MECHANISM_TYPE mtypes[] = {CKM_ML_DSA_KEY_PAIR_GEN};
+			size_t mtypes_num = sizeof(mtypes) / sizeof(mtypes[0]);
+
+			key_type = CKK_ML_DSA;
+
+			if (strcmp(type, "ML-DSA-44") == 0) {
+				ml_dsa_parameter_set = CKP_ML_DSA_44;
+			} else if (strcmp(type, "ML-DSA-65") == 0) {
+				ml_dsa_parameter_set = CKP_ML_DSA_65;
+			} else if (strcmp(type, "ML-DSA-87") == 0) {
+				ml_dsa_parameter_set = CKP_ML_DSA_87;
+			} else {
+				util_fatal("Invalid ML-DSA key type '%s'", type);
+			}
+
+			if (!opt_mechanism_used)
+				if (!find_mechanism(slot, CKF_GENERATE_KEY_PAIR, mtypes, mtypes_num, &opt_mechanism))
+					util_fatal("Generate ML-DSA mechanism not supported");
+
+			FILL_ATTR(publicKeyTemplate[n_pubkey_attr], CKA_PARAMETER_SET,
+					&ml_dsa_parameter_set, sizeof(CK_ML_DSA_PARAMETER_SET_TYPE));
+			n_pubkey_attr++;
+			FILL_ATTR(privateKeyTemplate[n_privkey_attr], CKA_PARAMETER_SET,
+					&ml_dsa_parameter_set, sizeof(CK_ML_DSA_PARAMETER_SET_TYPE));
+			n_privkey_attr++;
+
+			if (opt_key_usage_default || opt_key_usage_sign) {
+				FILL_ATTR(publicKeyTemplate[n_pubkey_attr], CKA_VERIFY, &_true, sizeof(_true));
+				n_pubkey_attr++;
+				FILL_ATTR(privateKeyTemplate[n_privkey_attr], CKA_SIGN, &_true, sizeof(_true));
+				n_privkey_attr++;
+			}
+
+		} else if (strncasecmp(type, "ML-KEM-", strlen("ML-KEM-")) == 0) {
+			CK_MECHANISM_TYPE mtypes[] = {CKM_ML_KEM_KEY_PAIR_GEN};
+			size_t mtypes_num = sizeof(mtypes) / sizeof(mtypes[0]);
+
+			key_type = CKK_ML_KEM;
+
+			if (strcmp(type, "ML-KEM-512") == 0) {
+				ml_kem_parameter_set = CKP_ML_KEM_512;
+			} else if (strcmp(type, "ML-KEM-768") == 0) {
+				ml_kem_parameter_set = CKP_ML_KEM_768;
+			} else if (strcmp(type, "ML-KEM-1024") == 0) {
+				ml_kem_parameter_set = CKP_ML_KEM_1024;
+			} else {
+				util_fatal("Invalid ML-KEM key type '%s'", type);
+			}
+
+			if (!opt_mechanism_used)
+				if (!find_mechanism(slot, CKF_GENERATE_KEY_PAIR, mtypes, mtypes_num, &opt_mechanism))
+					util_fatal("Generate ML-KEM mechanism not supported");
+
+			FILL_ATTR(publicKeyTemplate[n_pubkey_attr], CKA_PARAMETER_SET,
+					&ml_kem_parameter_set, sizeof(CK_ML_KEM_PARAMETER_SET_TYPE));
+			n_pubkey_attr++;
+			FILL_ATTR(privateKeyTemplate[n_privkey_attr], CKA_PARAMETER_SET,
+					&ml_kem_parameter_set, sizeof(CK_ML_KEM_PARAMETER_SET_TYPE));
+			n_privkey_attr++;
+
+			if (opt_key_usage_default || opt_key_usage_encapsulate) {
+				FILL_ATTR(publicKeyTemplate[n_pubkey_attr], CKA_ENCAPSULATE, &_true, sizeof(_true));
+				n_pubkey_attr++;
+				FILL_ATTR(privateKeyTemplate[n_privkey_attr], CKA_DECAPSULATE, &_true, sizeof(_true));
+				n_privkey_attr++;
+			}
+
+		} else if (strncasecmp(type, "SLH-DSA-", strlen("SLH-DSA-")) == 0) {
+			CK_MECHANISM_TYPE mtypes[] = {CKM_SLH_DSA_KEY_PAIR_GEN};
+			size_t mtypes_num = sizeof(mtypes) / sizeof(mtypes[0]);
+
+			key_type = CKK_SLH_DSA;
+
+			if (strcmp(type, "SLH-DSA-SHA2-128S") == 0) {
+				slh_dsa_parameter_set = CKP_SLH_DSA_SHA2_128S;
+			} else if (strcmp(type, "SLH-DSA-SHAKE-128S") == 0) {
+				slh_dsa_parameter_set = CKP_SLH_DSA_SHAKE_128S;
+			} else if (strcmp(type, "SLH-DSA-SHA2-128F") == 0) {
+				slh_dsa_parameter_set = CKP_SLH_DSA_SHA2_128F;
+			} else if (strcmp(type, "SLH-DSA-SHAKE-128F") == 0) {
+				slh_dsa_parameter_set = CKP_SLH_DSA_SHAKE_128F;
+			} else if (strcmp(type, "SLH-DSA-SHA2-192S") == 0) {
+				slh_dsa_parameter_set = CKP_SLH_DSA_SHA2_192S;
+			} else if (strcmp(type, "SLH-DSA-SHAKE-192S") == 0) {
+				slh_dsa_parameter_set = CKP_SLH_DSA_SHAKE_192S;
+			} else if (strcmp(type, "SLH-DSA-SHA2-192F") == 0) {
+				slh_dsa_parameter_set = CKP_SLH_DSA_SHA2_192F;
+			} else if (strcmp(type, "SLH-DSA-SHAKE-192F") == 0) {
+				slh_dsa_parameter_set = CKP_SLH_DSA_SHAKE_192F;
+			} else if (strcmp(type, "SLH-DSA-SHA2-256S") == 0) {
+				slh_dsa_parameter_set = CKP_SLH_DSA_SHA2_256S;
+			} else if (strcmp(type, "SLH-DSA-SHAKE-256S") == 0) {
+				slh_dsa_parameter_set = CKP_SLH_DSA_SHAKE_256S;
+			} else if (strcmp(type, "SLH-DSA-SHA2-256F") == 0) {
+				slh_dsa_parameter_set = CKP_SLH_DSA_SHA2_256F;
+			} else if (strcmp(type, "SLH-DSA-SHAKE-256F") == 0) {
+				slh_dsa_parameter_set = CKP_SLH_DSA_SHAKE_256F;
+			} else {
+				util_fatal("Invalid SLH-DSA key type '%s'", type);
+			}
+
+			if (!opt_mechanism_used)
+				if (!find_mechanism(slot, CKF_GENERATE_KEY_PAIR, mtypes, mtypes_num, &opt_mechanism))
+					util_fatal("Generate SLH-DSA mechanism not supported");
+
+			FILL_ATTR(publicKeyTemplate[n_pubkey_attr], CKA_PARAMETER_SET,
+					&slh_dsa_parameter_set, sizeof(CK_SLH_DSA_PARAMETER_SET_TYPE));
+			n_pubkey_attr++;
+			FILL_ATTR(privateKeyTemplate[n_privkey_attr], CKA_PARAMETER_SET,
+					&slh_dsa_parameter_set, sizeof(CK_SLH_DSA_PARAMETER_SET_TYPE));
+			n_privkey_attr++;
+
+			if (opt_key_usage_default || opt_key_usage_sign) {
+				FILL_ATTR(publicKeyTemplate[n_pubkey_attr], CKA_VERIFY, &_true, sizeof(_true));
+				n_pubkey_attr++;
+				FILL_ATTR(privateKeyTemplate[n_privkey_attr], CKA_SIGN, &_true, sizeof(_true));
+				n_privkey_attr++;
+			}
+
+		} else {
 			util_fatal("Unknown key pair type %s", type);
 		}
 
@@ -4119,6 +4363,7 @@ unwrap_key(CK_SESSION_HANDLE session)
 	} else {
 		util_fatal("Unsupported key type %s", opt_key_type);
 	}
+	/* TODO: Add PQC algorithms*/
 
 	FILL_ATTR(keyTemplate[n_attr], CKA_KEY_TYPE, &key_type, sizeof(key_type));
 	n_attr++;
@@ -4462,7 +4707,7 @@ parse_rsa_pkey(EVP_PKEY *pkey, int private, struct rsakey_info *rsa)
 
 #if !defined(OPENSSL_NO_EC)
 static int
-parse_gost_pkey(EVP_PKEY *pkey, int private, struct gostkey_info *gost)
+parse_gost_pkey(EVP_PKEY *pkey, int private, struct generalkey_info *gost)
 {
 	unsigned char *pder;
 	BIGNUM *X, *Y;
@@ -4565,19 +4810,19 @@ parse_gost_pkey(EVP_PKEY *pkey, int private, struct gostkey_info *gost)
 }
 
 static int
-parse_ec_pkey(EVP_PKEY *pkey, int private, struct gostkey_info *gost)
+parse_ec_pkey(EVP_PKEY *pkey, int private, struct generalkey_info *ec)
 {
 #if OPENSSL_VERSION_NUMBER < 0x30000000L
 	const EC_KEY *src = EVP_PKEY_get0_EC_KEY(pkey);
 	const BIGNUM *bignum;
 	if (!src)
 		return -1;
-	gost->param_oid.len = i2d_ECParameters((EC_KEY *)src, &gost->param_oid.value);
+	ec->param_oid.len = i2d_ECParameters((EC_KEY *)src, &ec->param_oid.value);
 #else
 	BIGNUM *bignum = NULL;
-	gost->param_oid.len = i2d_KeyParams(pkey, &gost->param_oid.value);
+	ec->param_oid.len = i2d_KeyParams(pkey, &ec->param_oid.value);
 #endif
-	if (gost->param_oid.len <= 0) {
+	if (ec->param_oid.len <= 0) {
 		return -1;
 	}
 
@@ -4589,15 +4834,15 @@ parse_ec_pkey(EVP_PKEY *pkey, int private, struct gostkey_info *gost)
 			return -1;
 		}
 #endif
-		gost->private.len = BN_num_bytes(bignum);
-		gost->private.value = OPENSSL_malloc(gost->private.len);
-		if (!gost->private.value) {
+		ec->private.len = BN_num_bytes(bignum);
+		ec->private.value = OPENSSL_malloc(ec->private.len);
+		if (!ec->private.value) {
 #if OPENSSL_VERSION_NUMBER >= 0x30000000L
 			BN_free(bignum);
 #endif
 			return -1;
 		}
-		BN_bn2bin(bignum, gost->private.value);
+		BN_bn2bin(bignum, ec->private.value);
 #if OPENSSL_VERSION_NUMBER >= 0x30000000L
 		BN_free(bignum);
 #endif
@@ -4615,24 +4860,138 @@ parse_ec_pkey(EVP_PKEY *pkey, int private, struct gostkey_info *gost)
 #else
 		EVP_PKEY_get_octet_string_param(pkey, OSSL_PKEY_PARAM_ENCODED_PUBLIC_KEY, buf, sizeof(buf), &point_len);
 #endif
-		gost->public.value = OPENSSL_malloc(MAX_HEADER_LEN + point_len);
-		if (!gost->public.value)
+		ec->public.value = OPENSSL_malloc(MAX_HEADER_LEN + point_len);
+		if (!ec->public.value)
 			return -1;
-		point = gost->public.value;
+		point = ec->public.value;
 		ASN1_put_object(&point, 0, (int)point_len, V_ASN1_OCTET_STRING, V_ASN1_UNIVERSAL);
-		header_len = point-gost->public.value;
+		header_len = point - ec->public.value;
 		memcpy(point, buf, point_len);
-		gost->public.len = header_len+point_len;
+		ec->public.len = header_len + point_len;
 #ifdef EC_POINT_NO_ASN1_OCTET_STRING // workaround for non-compliant cards not expecting DER encoding
-		gost->public.len   -= header_len;
-		gost->public.value += header_len;
+		ec->public.len   -= header_len;
+		ec->public.value += header_len;
 		// store header_len to restore public.value before free it
-		gost->header_len = header_len;
+		ec->header_len = header_len;
 #endif
 	}
 
 	return 0;
 }
+
+#if OPENSSL_VERSION_NUMBER >= 0x30500000L
+static int
+parse_pqc_pkey(EVP_PKEY *pkey, CK_KEY_TYPE type, int private, struct pqckey_info *pqc)
+{
+	int rc;
+
+	const char *str_name = EVP_PKEY_get0_type_name(pkey);
+	if (strcmp(str_name, "ML-DSA-44") == 0) {
+		pqc->type = CKP_ML_DSA_44;
+	} else if (strcmp(str_name, "ML-DSA-65") == 0) {
+		pqc->type = CKP_ML_DSA_65;
+	} else if (strcmp(str_name, "ML-DSA-87") == 0) {
+		pqc->type = CKP_ML_DSA_87;
+	} else if (strcmp(str_name, "ML-KEM-512") == 0) {
+		pqc->type = CKP_ML_KEM_512;
+	} else if (strcmp(str_name, "ML-KEM-768") == 0) {
+		pqc->type = CKP_ML_KEM_768;
+	} else if (strcmp(str_name, "ML-KEM-1024") == 0) {
+		pqc->type = CKP_ML_KEM_1024;
+	} else if (strcmp(str_name, "SLH-DSA-SHA2-128f") == 0) {
+		pqc->type = CKP_SLH_DSA_SHA2_128F;
+	} else if (strcmp(str_name, "SLH-DSA-SHA2-128s") == 0) {
+		pqc->type = CKP_SLH_DSA_SHA2_128S;
+	} else if (strcmp(str_name, "SLH-DSA-SHA2-192f") == 0) {
+		pqc->type = CKP_SLH_DSA_SHA2_192F;
+	} else if (strcmp(str_name, "SLH-DSA-SHA2-192s") == 0) {
+		pqc->type = CKP_SLH_DSA_SHA2_192S;
+	} else if (strcmp(str_name, "SLH-DSA-SHA2-256f") == 0) {
+		pqc->type = CKP_SLH_DSA_SHA2_256F;
+	} else if (strcmp(str_name, "SLH-DSA-SHA2-256s") == 0) {
+		pqc->type = CKP_SLH_DSA_SHA2_256S;
+	} else if (strcmp(str_name, "SLH-DSA-SHAKE-128f") == 0) {
+		pqc->type = CKP_SLH_DSA_SHAKE_128F;
+	} else if (strcmp(str_name, "SLH-DSA-SHAKE-128s") == 0) {
+		pqc->type = CKP_SLH_DSA_SHAKE_128S;
+	} else if (strcmp(str_name, "SLH-DSA-SHAKE-192f") == 0) {
+		pqc->type = CKP_SLH_DSA_SHAKE_192F;
+	} else if (strcmp(str_name, "SLH-DSA-SHAKE-192s") == 0) {
+		pqc->type = CKP_SLH_DSA_SHAKE_192S;
+	} else if (strcmp(str_name, "SLH-DSA-SHAKE-256f") == 0) {
+		pqc->type = CKP_SLH_DSA_SHAKE_256F;
+	} else if (strcmp(str_name, "SLH-DSA-SHAKE-256s") == 0) {
+		pqc->type = CKP_SLH_DSA_SHAKE_256S;
+	}
+	if (private) {
+		size_t priv_len = 0;
+		char *seed_param = NULL;
+
+		/* Some keys might have only the seed -- skip if not available */
+		rc = EVP_PKEY_get_octet_string_param(pkey, OSSL_PKEY_PARAM_PRIV_KEY, NULL, 0, &priv_len);
+		if (rc == 1) {
+			pqc->private.len = priv_len;
+			if (!(pqc->private.value = OPENSSL_malloc(priv_len))) {
+				return -1;
+			}
+			rc = EVP_PKEY_get_octet_string_param(pkey, OSSL_PKEY_PARAM_PRIV_KEY,
+					pqc->private.value, priv_len, NULL);
+			if (rc != 1) {
+				OPENSSL_free(pqc->private.value);
+				return -1;
+			}
+		} else {
+			switch (type) {
+			case CKK_ML_DSA:
+				seed_param = OSSL_PKEY_PARAM_ML_DSA_SEED;
+				break;
+			case CKK_SLH_DSA:
+				seed_param = OSSL_PKEY_PARAM_SLH_DSA_SEED;
+				break;
+			}
+			if (seed_param != NULL) {
+				size_t seed_len = 0;
+				rc = EVP_PKEY_get_octet_string_param(pkey, seed_param, NULL, 0, &seed_len);
+				if (rc != 1) {
+					util_fatal("Neither PRIVATE key value nor seed available");
+				}
+				pqc->seed.len = seed_len;
+				if (!(pqc->seed.value = OPENSSL_malloc(pqc->seed.len))) {
+					OPENSSL_free(pqc->private.value);
+					return -1;
+				}
+				rc = EVP_PKEY_get_octet_string_param(pkey, seed_param, pqc->seed.value,
+						pqc->seed.len, NULL);
+				if (rc != 1) {
+					OPENSSL_free(pqc->private.value);
+					OPENSSL_free(pqc->seed.value);
+					return -1;
+				}
+			} else {
+				util_fatal("PRIVATE key value not available");
+			}
+		}
+	} else {
+		size_t pub_len;
+
+		rc = EVP_PKEY_get_octet_string_param(pkey, OSSL_PKEY_PARAM_PUB_KEY, NULL, 0, &pub_len);
+		if (rc != 1) {
+			return -1;
+		}
+		pqc->public.len = pub_len;
+		if (!(pqc->public.value = OPENSSL_malloc(pub_len))) {
+			return -1;
+		}
+		rc = EVP_PKEY_get_octet_string_param(pkey, OSSL_PKEY_PARAM_PUB_KEY, pqc->public.value,
+				pqc->public.len, NULL);
+		if (rc != 1) {
+			OPENSSL_free(pqc->public.value);
+			return -1;
+		}
+	}
+	return 0;
+}
+#endif
 
 #ifdef ENABLE_OPENSSL
 /* Return PKCS11 key type based on OpenSSL EVP_PKEY type
@@ -4652,82 +5011,141 @@ evp_pkey2ck_key_type(EVP_PKEY *pkey, CK_KEY_TYPE *type, int *pk_type, struct ec_
 	if (ec_curve_info)
 		*ec_curve_info = NULL;
 
+	switch (*pk_type) {
 #if defined(EVP_PKEY_RSA)
-	if (*pk_type == EVP_PKEY_RSA) {
+	case EVP_PKEY_RSA:
 		*type = CKK_RSA;
 		return CKR_OK;
-	}
 #endif
 
 #if defined(EVP_PKEY_EC)
-	if (*pk_type == EVP_PKEY_EC) {
+	case EVP_PKEY_EC:
 		*type = CKK_EC;
 		return CKR_OK;
-	}
 #endif
 
 #if defined(EVP_PKEY_ED25519)
-	if (*pk_type == EVP_PKEY_ED25519) {
+	case EVP_PKEY_ED25519:
 		*type = CKK_EC_EDWARDS;
 		if (ec_curve_info == NULL)
 			goto err;
 		*ec_curve_info = match_ec_curve_by_name("Ed25519");
 		return CKR_OK;
-	}
 #endif
 
 #if defined(EVP_PKEY_ED448)
-	if (*pk_type == EVP_PKEY_ED448) {
+	case EVP_PKEY_ED448:
 		*type = CKK_EC_EDWARDS;
 		if (ec_curve_info == NULL)
 			goto err;
 		*ec_curve_info = match_ec_curve_by_name("Ed448");
 		return CKR_OK;
-	}
 #endif
 
 #if defined(EVP_PKEY_X25519)
-	if (*pk_type == EVP_PKEY_X25519) {
+	case EVP_PKEY_X25519:
 		*type = CKK_EC_MONTGOMERY;
 		if (ec_curve_info == NULL)
 			goto err;
 		*ec_curve_info = match_ec_curve_by_name("X25519");
 		return CKR_OK;
-	}
 #endif
 
 #if defined(EVP_PKEY_X448)
-	if (*pk_type == EVP_PKEY_X448) {
+	case EVP_PKEY_X448:
 		*type = CKK_EC_MONTGOMERY;
 		if (ec_curve_info == NULL)
 			goto err;
 		*ec_curve_info = match_ec_curve_by_name("X448");
 		return CKR_OK;
-	}
 #endif
 
 #if defined(NID_id_GostR3410_2001)
-	if (*pk_type == NID_id_GostR3410_2001) {
+	case NID_id_GostR3410_2001:
 		*type = CKK_GOSTR3410;
 		return CKR_OK;
-	}
 #endif
 
 #if defined(EVP_PKEY_GOSTR3411)
-	if (*pk_type == EVP_PKEY_GOSTR3411) {
+	case EVP_PKEY_GOSTR3411:
 		*type = CKK_GOSTR3411;
 		return CKR_OK;
-	}
 #endif
 
 #if defined(EVP_PKEY_GOST28147)
-	if (*pk_type == EVP_PKEY_GOST28147) {
+	case EVP_PKEY_GOST28147:
 		*type = CKK_GOST28147;
 		return CKR_OK;
-	}
 #endif
+
+#if defined(EVP_PKEY_ML_DSA_44) && defined(EVP_PKEY_ML_DSA_65) && defined(EVP_PKEY_ML_DSA_87)
+	case EVP_PKEY_ML_DSA_44:
+	case EVP_PKEY_ML_DSA_65:
+	case EVP_PKEY_ML_DSA_87:
+		*type = CKK_ML_DSA;
+		return CKR_OK;
+#endif
+
+#if defined(EVP_PKEY_ML_KEM_512) && defined(EVP_PKEY_ML_KEM_768) && defined(EVP_PKEY_ML_KEM_1024)
+	case EVP_PKEY_ML_KEM_512:
+	case EVP_PKEY_ML_KEM_768:
+	case EVP_PKEY_ML_KEM_1024:
+		*type = CKK_ML_KEM;
+		return CKR_OK;
+#endif
+
+#if defined(EVP_PKEY_SLH_DSA_SHA2_128S)
+	case EVP_PKEY_SLH_DSA_SHA2_128S:
+	case EVP_PKEY_SLH_DSA_SHAKE_128S:
+	case EVP_PKEY_SLH_DSA_SHA2_128F:
+	case EVP_PKEY_SLH_DSA_SHAKE_128F:
+	case EVP_PKEY_SLH_DSA_SHA2_192S:
+	case EVP_PKEY_SLH_DSA_SHAKE_192S:
+	case EVP_PKEY_SLH_DSA_SHA2_192F:
+	case EVP_PKEY_SLH_DSA_SHAKE_192F:
+	case EVP_PKEY_SLH_DSA_SHA2_256S:
+	case EVP_PKEY_SLH_DSA_SHAKE_256S:
+	case EVP_PKEY_SLH_DSA_SHA2_256F:
+	case EVP_PKEY_SLH_DSA_SHAKE_256F:
+		*type = CKK_SLH_DSA;
+		return CKR_OK;
+#endif
+	}
+
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+	/* Still no dice? Try the new OpenSSL 3.0 API */
+	const char *str_name = EVP_PKEY_get0_type_name(pkey);
+	if (strcmp(str_name, "ML-DSA-44") == 0 ||
+			strcmp(str_name, "ML-DSA-65") == 0 ||
+			strcmp(str_name, "ML-DSA-87") == 0) {
+		*type = CKK_ML_DSA;
+		return CKR_OK;
+	} else if (strcmp(str_name, "ML-KEM-512") == 0 ||
+			strcmp(str_name, "ML-KEM-768") == 0 ||
+			strcmp(str_name, "ML-KEM-1024") == 0) {
+		*type = CKK_ML_KEM;
+		return CKR_OK;
+	} else if (strcmp(str_name, "SLH-DSA-SHA2-128f") == 0 ||
+			strcmp(str_name, "SLH-DSA-SHA2-128s") == 0 ||
+			strcmp(str_name, "SLH-DSA-SHA2-192f") == 0 ||
+			strcmp(str_name, "SLH-DSA-SHA2-192s") == 0 ||
+			strcmp(str_name, "SLH-DSA-SHA2-256f") == 0 ||
+			strcmp(str_name, "SLH-DSA-SHA2-256s") == 0 ||
+			strcmp(str_name, "SLH-DSA-SHAKE-128f") == 0 ||
+			strcmp(str_name, "SLH-DSA-SHAKE-128s") == 0 ||
+			strcmp(str_name, "SLH-DSA-SHAKE-192f") == 0 ||
+			strcmp(str_name, "SLH-DSA-SHAKE-192s") == 0 ||
+			strcmp(str_name, "SLH-DSA-SHAKE-256f") == 0 ||
+			strcmp(str_name, "SLH-DSA-SHAKE-256s") == 0) {
+		*type = CKK_SLH_DSA;
+		return CKR_OK;
+	}
+
+#endif
+
 err:
 	/* unsupported by OpenSSL, PKCS11 or this program */
+	printf("  ERR: Key type %d not supported\n", *pk_type);
 	*type = CKK_OPENSC_UNDEFINED;
 	*pk_type = -1;
 	return CKR_FUNCTION_NOT_SUPPORTED;
@@ -4736,7 +5154,7 @@ err:
 
 /*  Edwards and Montogmery keys have the same format */
 static int
-parse_ed_mont_pkey(EVP_PKEY *pkey, CK_KEY_TYPE type, int pk_type, struct ec_curve_info *ec_curve_info, int private, struct gostkey_info *gost)
+parse_ed_mont_pkey(EVP_PKEY *pkey, CK_KEY_TYPE type, int pk_type, struct ec_curve_info *ec_curve_info, int private, struct generalkey_info *gost)
 {
 	unsigned char *key;
 	size_t key_size;
@@ -4788,15 +5206,15 @@ parse_ed_mont_pkey(EVP_PKEY *pkey, CK_KEY_TYPE type, int pk_type, struct ec_curv
 }
 #endif
 static void
-gost_info_free(struct gostkey_info gost)
+general_key_info_free(struct generalkey_info key_info)
 {
 #ifdef EC_POINT_NO_ASN1_OCTET_STRING // restore public.value before free it
-	if (gost.public.value)
-		gost.public.value -= gost.header_len;
+	if (key_info.public.value)
+		key_info.public.value -= key_info.header_len;
 #endif
-	OPENSSL_free(gost.param_oid.value);
-	OPENSSL_free(gost.public.value);
-	OPENSSL_free(gost.private.value);
+	OPENSSL_free(key_info.param_oid.value);
+	OPENSSL_free(key_info.public.value);
+	OPENSSL_free(key_info.private.value);
 }
 
 static void
@@ -4812,6 +5230,16 @@ rsa_info_free(struct rsakey_info rsa)
 	OPENSSL_free(rsa.coefficient);
 }
 #endif
+
+#ifdef ENABLE_OPENSSL
+static void
+pqc_key_info_free(struct pqckey_info pqc)
+{
+	OPENSSL_free(pqc.public.value);
+	OPENSSL_free(pqc.private.value);
+	OPENSSL_free(pqc.seed.value);
+}
+#endif /* ENABLE_OPENSSL */
 
 /* Currently for certificates (-type cert), private keys (-type privkey),
    public keys (-type pubkey) and data objects (-type data). */
@@ -4838,14 +5266,16 @@ static CK_RV write_object(CK_SESSION_HANDLE session)
 #ifdef ENABLE_OPENSSL
 	struct x509cert_info cert;
 	struct rsakey_info rsa;
-	struct gostkey_info gost;
+	struct generalkey_info general_key;
+	struct pqckey_info pqc_key;
 	EVP_PKEY *evp_key = NULL;
 	int pk_type = -1;
 	struct ec_curve_info *ec_curve_info = NULL;
 
 	memset(&cert, 0, sizeof(cert));
 	memset(&rsa,  0, sizeof(rsa));
-	memset(&gost,  0, sizeof(gost));
+	memset(&general_key, 0, sizeof(general_key));
+	memset(&pqc_key, 0, sizeof(pqc_key));
 #endif
 
 	f = fopen(opt_file_to_write, "rb");
@@ -4941,14 +5371,17 @@ static CK_RV write_object(CK_SESSION_HANDLE session)
 		}
 #if !defined(OPENSSL_NO_EC)
 		else if (type == CKK_GOSTR3410) {
-			rv = parse_gost_pkey(evp_key, is_private, &gost);
+			rv = parse_gost_pkey(evp_key, is_private, &general_key);
 		} else if (type == CKK_EC) {
-			rv = parse_ec_pkey(evp_key, is_private, &gost);
+			rv = parse_ec_pkey(evp_key, is_private, &general_key);
 		} else if (type == CKK_EC_EDWARDS || type == CKK_EC_MONTGOMERY) {
-			rv = parse_ed_mont_pkey(evp_key, type, pk_type, ec_curve_info, is_private, &gost);
-		}
+			rv = parse_ed_mont_pkey(evp_key, type, pk_type, ec_curve_info, is_private, &general_key);
 #endif
-		else
+#if OPENSSL_VERSION_NUMBER >= 0x30500000L
+		} else if (type == CKK_ML_DSA || type == CKK_ML_KEM || type == CKK_SLH_DSA) {
+			rv = parse_pqc_pkey(evp_key, type, is_private, &pqc_key);
+#endif
+		} else
 			util_fatal("Unsupported key type: 0x%X", pk_type);
 
 		if (rv)
@@ -5033,6 +5466,10 @@ static CK_RV write_object(CK_SESSION_HANDLE session)
 			FILL_ATTR(privkey_templ[n_privkey_attr], CKA_UNWRAP, &_true, sizeof(_true));
 			n_privkey_attr++;
 		}
+		if (opt_key_usage_encapsulate) {
+			FILL_ATTR(privkey_templ[n_privkey_attr], CKA_DECAPSULATE, &_true, sizeof(_true));
+			n_privkey_attr++;
+		}
 		if (opt_always_auth != 0) {
 			FILL_ATTR(privkey_templ[n_privkey_attr], CKA_ALWAYS_AUTHENTICATE,
 				&_true, sizeof(_true));
@@ -5075,27 +5512,40 @@ static CK_RV write_object(CK_SESSION_HANDLE session)
 			n_privkey_attr++;
 			FILL_ATTR(privkey_templ[n_privkey_attr], CKA_COEFFICIENT, rsa.coefficient, rsa.coefficient_len);
 			n_privkey_attr++;
-		}
-
-		else if ((type == CKK_EC) || (type == CKK_EC_EDWARDS) || (type == CKK_EC_MONTGOMERY)) {
+		} else if ((type == CKK_EC) || (type == CKK_EC_EDWARDS) || (type == CKK_EC_MONTGOMERY)) {
 			FILL_ATTR(privkey_templ[n_privkey_attr], CKA_KEY_TYPE, &type, sizeof(type));
 			n_privkey_attr++;
-			FILL_ATTR(privkey_templ[n_privkey_attr], CKA_EC_PARAMS, gost.param_oid.value, gost.param_oid.len);
+			FILL_ATTR(privkey_templ[n_privkey_attr], CKA_EC_PARAMS, general_key.param_oid.value, general_key.param_oid.len);
 			n_privkey_attr++;
-			FILL_ATTR(privkey_templ[n_privkey_attr], CKA_VALUE, gost.private.value, gost.private.len);
+			FILL_ATTR(privkey_templ[n_privkey_attr], CKA_VALUE, general_key.private.value, general_key.private.len);
 			n_privkey_attr++;
-
 		} else if (type == CKK_GOSTR3410) {
 			FILL_ATTR(privkey_templ[n_privkey_attr], CKA_KEY_TYPE, &type, sizeof(type));
 			n_privkey_attr++;
-			FILL_ATTR(privkey_templ[n_privkey_attr], CKA_GOSTR3410_PARAMS, gost.param_oid.value, gost.param_oid.len);
+			FILL_ATTR(privkey_templ[n_privkey_attr], CKA_GOSTR3410_PARAMS, general_key.param_oid.value, general_key.param_oid.len);
 			n_privkey_attr++;
-			FILL_ATTR(privkey_templ[n_privkey_attr], CKA_VALUE, gost.private.value, gost.private.len);
+			FILL_ATTR(privkey_templ[n_privkey_attr], CKA_VALUE, general_key.private.value, general_key.private.len);
 			/* CKA_VALUE of the GOST key has to be in the little endian order */
 			rv = sc_mem_reverse(privkey_templ[n_privkey_attr].pValue, privkey_templ[n_privkey_attr].ulValueLen);
 			if (rv)
 				return rv;
 			n_privkey_attr++;
+		} else if (type == CKK_ML_DSA || type == CKK_SLH_DSA || type == CKK_ML_KEM) {
+
+			FILL_ATTR(privkey_templ[n_privkey_attr], CKA_KEY_TYPE, &type, sizeof(type));
+			n_privkey_attr++;
+			FILL_ATTR(privkey_templ[n_privkey_attr], CKA_PARAMETER_SET, &pqc_key.type, sizeof(pqc_key.type));
+			n_privkey_attr++;
+			if (pqc_key.private.value != NULL) {
+				FILL_ATTR(privkey_templ[n_privkey_attr], CKA_VALUE,
+						pqc_key.private.value, pqc_key.private.len);
+				n_privkey_attr++;
+			}
+			if (pqc_key.seed.value != NULL) {
+				FILL_ATTR(privkey_templ[n_privkey_attr], CKA_SEED,
+						pqc_key.seed.value, pqc_key.seed.len);
+				n_privkey_attr++;
+			}
 		} else {
 			util_fatal("Unsupported CK_KEY_TYPE, cannot write private key");
 		}
@@ -5148,6 +5598,10 @@ static CK_RV write_object(CK_SESSION_HANDLE session)
 			FILL_ATTR(pubkey_templ[n_pubkey_attr], CKA_WRAP, &_true, sizeof(_true));
 			n_pubkey_attr++;
 		}
+		if (opt_key_usage_encapsulate) {
+			FILL_ATTR(pubkey_templ[n_pubkey_attr], CKA_ENCAPSULATE, &_true, sizeof(_true));
+			n_pubkey_attr++;
+		}
 
 		if (cert.subject_len != 0) {
 			FILL_ATTR(pubkey_templ[n_pubkey_attr], CKA_SUBJECT, cert.subject, cert.subject_len);
@@ -5162,6 +5616,13 @@ static CK_RV write_object(CK_SESSION_HANDLE session)
 			n_pubkey_attr++;
 			FILL_ATTR(pubkey_templ[n_pubkey_attr], CKA_PUBLIC_EXPONENT, rsa.public_exponent, rsa.public_exponent_len);
 			n_pubkey_attr++;
+		} else if (type == CKK_ML_DSA || type == CKK_SLH_DSA || type == CKK_ML_KEM) {
+			FILL_ATTR(pubkey_templ[n_pubkey_attr], CKA_KEY_TYPE, &type, sizeof(type));
+			n_pubkey_attr++;
+			FILL_ATTR(pubkey_templ[n_pubkey_attr], CKA_PARAMETER_SET, &pqc_key.type, sizeof(pqc_key.type));
+			n_pubkey_attr++;
+			FILL_ATTR(pubkey_templ[n_pubkey_attr], CKA_VALUE, &pqc_key.public.value, pqc_key.public.len);
+			n_pubkey_attr++;
 		}
 #if !defined(OPENSSL_NO_EC)
 
@@ -5169,18 +5630,18 @@ static CK_RV write_object(CK_SESSION_HANDLE session)
 
 			FILL_ATTR(pubkey_templ[n_pubkey_attr], CKA_KEY_TYPE, &type, sizeof(type));
 			n_pubkey_attr++;
-			FILL_ATTR(pubkey_templ[n_pubkey_attr], CKA_EC_PARAMS, gost.param_oid.value, gost.param_oid.len);
+			FILL_ATTR(pubkey_templ[n_pubkey_attr], CKA_EC_PARAMS, general_key.param_oid.value, general_key.param_oid.len);
 			n_pubkey_attr++;
-			FILL_ATTR(pubkey_templ[n_pubkey_attr], CKA_EC_POINT, gost.public.value, gost.public.len);
+			FILL_ATTR(pubkey_templ[n_pubkey_attr], CKA_EC_POINT, general_key.public.value, general_key.public.len);
 			n_pubkey_attr++;
 		} else if (pk_type == NID_id_GostR3410_2001) {
 			type = CKK_GOSTR3410;
 
 			FILL_ATTR(pubkey_templ[n_pubkey_attr], CKA_KEY_TYPE, &type, sizeof(type));
 			n_pubkey_attr++;
-			FILL_ATTR(pubkey_templ[n_pubkey_attr], CKA_GOSTR3410_PARAMS, gost.param_oid.value, gost.param_oid.len);
+			FILL_ATTR(pubkey_templ[n_pubkey_attr], CKA_GOSTR3410_PARAMS, general_key.param_oid.value, general_key.param_oid.len);
 			n_pubkey_attr++;
-			FILL_ATTR(pubkey_templ[n_pubkey_attr], CKA_VALUE, gost.public.value, gost.public.len);
+			FILL_ATTR(pubkey_templ[n_pubkey_attr], CKA_VALUE, general_key.public.value, general_key.public.len);
 			/* CKA_VALUE of the GOST key has to be in the little endian order */
 			rv = sc_mem_reverse(pubkey_templ[n_pubkey_attr].pValue, pubkey_templ[n_pubkey_attr].ulValueLen);
 			if (rv)
@@ -5388,7 +5849,8 @@ static CK_RV write_object(CK_SESSION_HANDLE session)
 	}
 
 #ifdef ENABLE_OPENSSL
-	gost_info_free(gost);
+	general_key_info_free(general_key);
+	pqc_key_info_free(pqc_key);
 	rsa_info_free(rsa);
 	EVP_PKEY_free(evp_key);
 #endif /* ENABLE_OPENSSL */
@@ -6180,6 +6642,8 @@ show_key(CK_SESSION_HANDLE sess, CK_OBJECT_HANDLE obj)
 	int		pub = 1;
 	int		sec = 0;
 	CK_TOKEN_INFO info;
+	CK_ULONG parameter_set;
+	int kem = 0;
 
 	switch(getCLASS(sess, obj)) {
 		case CKO_PRIVATE_KEY:
@@ -6367,6 +6831,104 @@ show_key(CK_SESSION_HANDLE sess, CK_OBJECT_HANDLE obj)
 			free(value);
 		}
 		break;
+	case CKK_ML_DSA:
+	case CKK_ML_KEM:
+	case CKK_SLH_DSA:
+		parameter_set = getPARAMETER_SET(sess, obj);
+		switch (key_type) {
+		case CKK_ML_DSA:
+			switch (parameter_set) {
+			case CKP_ML_DSA_44:
+				printf("; ML-DSA-44\n");
+				break;
+			case CKP_ML_DSA_65:
+				printf("; ML-DSA-65\n");
+				break;
+			case CKP_ML_DSA_87:
+				printf("; ML-DSA-87\n");
+				break;
+			default:
+				printf("; ML-DSA: Unknown PARAMETER_SET\n");
+				break;
+			}
+			break;
+		case CKK_ML_KEM:
+			kem = 1;
+			switch (parameter_set) {
+			case CKP_ML_KEM_512:
+				printf("; ML-KEM-512\n");
+				break;
+			case CKP_ML_KEM_768:
+				printf("; ML-KEM-768\n");
+				break;
+			case CKP_ML_KEM_1024:
+				printf("; ML-KEM-1024\n");
+				break;
+			default:
+				printf("; ML-KEM: Unknown PARAMETER_SET\n");
+				break;
+			}
+			break;
+		case CKK_SLH_DSA:
+			switch (parameter_set) {
+			case CKP_SLH_DSA_SHA2_128S:
+				printf("; SLH-DSA-SHA2-128S\n");
+				break;
+			case CKP_SLH_DSA_SHAKE_128S:
+				printf("; SLH-DSA-SHAKE-128S\n");
+				break;
+			case CKP_SLH_DSA_SHA2_128F:
+				printf("; SLH-DSA-SHA2-128F\n");
+				break;
+			case CKP_SLH_DSA_SHAKE_128F:
+				printf("; SLH-DSA-SHAKE-128F\n");
+				break;
+			case CKP_SLH_DSA_SHA2_192S:
+				printf("; SLH-DSA-SHA2-192S\n");
+				break;
+			case CKP_SLH_DSA_SHAKE_192S:
+				printf("; SLH-DSA-SHAKE-192S\n");
+				break;
+			case CKP_SLH_DSA_SHA2_192F:
+				printf("; SLH-DSA-SHA2-192F\n");
+				break;
+			case CKP_SLH_DSA_SHAKE_192F:
+				printf("; SLH-DSA-SHAKE-192F\n");
+				break;
+			case CKP_SLH_DSA_SHA2_256S:
+				printf("; SLH-DSA-SHA2-256S\n");
+				break;
+			case CKP_SLH_DSA_SHAKE_256S:
+				printf("; SLH-DSA-SHAKE-256S\n");
+				break;
+			case CKP_SLH_DSA_SHA2_256F:
+				printf("; SLH-DSA-SHA2-256F\n");
+				break;
+			case CKP_SLH_DSA_SHAKE_256F:
+				printf("; SLH-DSA-SHAKE-256F\n");
+				break;
+			default:
+				printf("; SLH-DSA: Unknown PARAMETER_SET\n");
+				break;
+			}
+			break;
+		}
+		if (pub) {
+			value = getVALUE(sess, obj, &size);
+			if (value) {
+				unsigned int n;
+
+				printf("  VALUE:      ");
+				for (n = 0; n < size; n++) {
+					if (n && (n % 32) == 0)
+						printf("\n              ");
+					printf("%02x", value[n]);
+				}
+				printf("\n");
+				free(value);
+			}
+		}
+		break;
 	default:
 		printf("; unknown key algorithm %lu\n",
 				(unsigned long) key_type);
@@ -6430,6 +6992,14 @@ show_key(CK_SESSION_HANDLE sess, CK_OBJECT_HANDLE obj)
 	}
 	if (getDERIVE(sess, obj)) {
 		printf("%sderive", sepa);
+		sepa = ", ";
+	}
+	if (pub && kem && getENCAPSULATE(sess, obj)) {
+		printf("%sencapsulate", sepa);
+		sepa = ", ";
+	}
+	if (!pub && !sec && kem && getDECAPSULATE(sess, obj)) {
+		printf("%sdecapsulate", sepa);
 		sepa = ", ";
 	}
 	if (!*sepa)
@@ -7010,26 +7580,26 @@ static int read_object(CK_SESSION_HANDLE session)
 					free(value);
 					util_fatal("cannot set OSSL_PARAM");
 				}
-			OSSL_PARAM_BLD_free(bld);
-			if (success)
-				ASN1_STRING_free(os);
-			free(value);
+				OSSL_PARAM_BLD_free(bld);
+				if (success)
+					ASN1_STRING_free(os);
+				free(value);
 
-			if (!(ctx = EVP_PKEY_CTX_new_from_name(osslctx, "EC", NULL)) ||
-					EVP_PKEY_fromdata_init(ctx) != 1) {
-				OSSL_PARAM_free(p);
-				EVP_PKEY_CTX_free(ctx);
-				util_fatal("cannot set CTX");
-			}
-			EVP_PKEY_free(pkey);
-			pkey = NULL;
-			if (EVP_PKEY_fromdata(ctx, &pkey, EVP_PKEY_PUBLIC_KEY, p) != 1) {
-				OSSL_PARAM_free(p);
-				EVP_PKEY_CTX_free(ctx);
-				util_fatal("cannot create EVP_PKEY");
-			}
-			OSSL_PARAM_free(old);
-			OSSL_PARAM_free(new);
+				if (!(ctx = EVP_PKEY_CTX_new_from_name(osslctx, "EC", NULL)) ||
+						EVP_PKEY_fromdata_init(ctx) != 1) {
+					OSSL_PARAM_free(p);
+					EVP_PKEY_CTX_free(ctx);
+					util_fatal("cannot set CTX");
+				}
+				EVP_PKEY_free(pkey);
+				pkey = NULL;
+				if (EVP_PKEY_fromdata(ctx, &pkey, EVP_PKEY_PUBLIC_KEY, p) != 1) {
+					OSSL_PARAM_free(p);
+					EVP_PKEY_CTX_free(ctx);
+					util_fatal("cannot create EVP_PKEY");
+				}
+				OSSL_PARAM_free(old);
+				OSSL_PARAM_free(new);
 
 #endif
 				if (!i2d_PUBKEY_bio(pout, pkey))
@@ -7037,7 +7607,7 @@ static int read_object(CK_SESSION_HANDLE session)
 #endif
 					/* only if compiled with a version of OpenSSL or libressl */
 					/* do more tests for the other 3 as needed */
-#ifdef EVP_PKEY_ED25519
+#if defined(EVP_PKEY_ED25519) || defined(EVP_PKEY_ED448) || defined (EVP_PKEY_X25519) || defined(EVP_PKEY_X448)
 			} else if (type == CKK_EC_EDWARDS || type == CKK_EC_MONTGOMERY) {
 				EVP_PKEY *key = NULL;
 				CK_BYTE *params = NULL;
@@ -7060,26 +7630,26 @@ static int read_object(CK_SESSION_HANDLE session)
 						int nid = OBJ_obj2nid(obj);
 						if (nid != NID_ED25519 &&
 								nid != NID_X25519
-#if defined(EVP_PKEY_ED448)
+#ifdef EVP_PKEY_ED448
 								&& nid != NID_ED448
 #endif
-#if defined(EVP_PKEY_X448)
+#ifdef EVP_PKEY_X448
 								&& nid != NID_X448
 #endif
 						) {
 							util_fatal("Unknown curve OID, expected NID_ED25519 (%d), NID_X25519 (%d), "
-#if defined(EVP_PKEY_ED448)
+#ifdef EVP_PKEY_ED448
 								   "NID_ED448 (%d), "
 #endif
-#if defined(EVP_PKEY_X448)
+#ifdef EVP_PKEY_X448
 								   "NID_X448 (%d), "
 #endif
 								   "got %d",
 									NID_ED25519, NID_X25519,
-#if defined(EVP_PKEY_ED448)
+#ifdef EVP_PKEY_ED448
 									NID_ED448,
 #endif
-#if defined(EVP_PKEY_X448)
+#ifdef EVP_PKEY_X448
 									NID_X448,
 #endif
 									nid);
@@ -7115,15 +7685,15 @@ static int read_object(CK_SESSION_HANDLE session)
 
 				if (type == CKK_EC_EDWARDS && os->length == BYTES4BITS(256)) /* note extra bit */
 					raw_pk = EVP_PKEY_ED25519;
-#if defined(EVP_PKEY_ED448)
+#ifdef EVP_PKEY_ED448
 				else if (type == CKK_EC_EDWARDS && os->length == ED448_KEY_SIZE_BYTES)
 					raw_pk = EVP_PKEY_ED448;
 #endif /* EVP_PKEY_ED448 */
-#if defined(EVP_PKEY_X25519)
+#ifdef EVP_PKEY_X25519
 				else if (type == CKK_EC_MONTGOMERY && os->length == BYTES4BITS(256)) /* note extra bit */
 					raw_pk = EVP_PKEY_X25519;
 #endif /*EVP_PKEY_X25519 */
-#if defined(EVP_PKEY_X448)
+#ifdef EVP_PKEY_X448
 				else if (type == CKK_EC_MONTGOMERY && os->length == BYTES4BITS(448))
 					raw_pk = EVP_PKEY_X448;
 #endif /* EVP_PKEY_X448 */
@@ -7142,7 +7712,124 @@ static int read_object(CK_SESSION_HANDLE session)
 				}
 
 				EVP_PKEY_free(key);
-#endif
+#endif /* defined(EVP_PKEY_ED25519) || defined(EVP_PKEY_ED448) || defined (EVP_PKEY_X25519) || defined(EVP_PKEY_X448) */
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+			} else if (type == CKK_ML_DSA || type == CKK_ML_KEM || type == CKK_SLH_DSA) {
+				unsigned long parameter_set = getPARAMETER_SET(session, obj);
+				const char *evp_name = NULL;
+				unsigned char *value = NULL;
+				unsigned long value_len = 0;
+
+				switch (type) {
+				case CKK_ML_DSA:
+					switch (parameter_set) {
+					case CKP_ML_DSA_44:
+						evp_name = "ML-DSA-44";
+						break;
+					case CKP_ML_DSA_65:
+						evp_name = "ML-DSA-65";
+						break;
+					case CKP_ML_DSA_87:
+						evp_name = "ML-DSA-87";
+						break;
+					default:
+						util_fatal("Unknown parameter set (%lu)",
+								parameter_set);
+					}
+					break;
+				case CKK_ML_KEM:
+					switch (parameter_set) {
+					case CKP_ML_KEM_512:
+						evp_name = "ML-KEM-512";
+						break;
+					case CKP_ML_KEM_768:
+						evp_name = "ML-KEM-768";
+						break;
+					case CKP_ML_KEM_1024:
+						evp_name = "ML-KEM-1024";
+						break;
+					default:
+						util_fatal("Unknown parameter set (%lu)",
+								parameter_set);
+					}
+					break;
+				case CKK_SLH_DSA:
+					switch (parameter_set) {
+					case CKP_SLH_DSA_SHA2_128S:
+						evp_name = "SLH-DSA-SHA2-128s";
+						break;
+					case CKP_SLH_DSA_SHAKE_128S:
+						evp_name = "SLH-DSA-SHAKE-128s";
+						break;
+					case CKP_SLH_DSA_SHA2_128F:
+						evp_name = "SLH-DSA-SHA2-128f";
+						break;
+					case CKP_SLH_DSA_SHAKE_128F:
+						evp_name = "SLH-DSA-SHAKE-128f";
+						break;
+					case CKP_SLH_DSA_SHA2_192S:
+						evp_name = "SLH-DSA-SHA2-192s";
+						break;
+					case CKP_SLH_DSA_SHAKE_192S:
+						evp_name = "SLH-DSA-SHAKE-192s";
+						break;
+					case CKP_SLH_DSA_SHA2_192F:
+						evp_name = "SLH-DSA-SHA2-192f";
+						break;
+					case CKP_SLH_DSA_SHAKE_192F:
+						evp_name = "SLH-DSA-SHAKE-192f";
+						break;
+					case CKP_SLH_DSA_SHA2_256S:
+						evp_name = "SLH-DSA-SHA2-256s";
+						break;
+					case CKP_SLH_DSA_SHAKE_256S:
+						evp_name = "SLH-DSA-SHAKE-256s";
+						break;
+					case CKP_SLH_DSA_SHA2_256F:
+						evp_name = "SLH-DSA-SHA2-256f";
+						break;
+					case CKP_SLH_DSA_SHAKE_256F:
+						evp_name = "SLH-DSA-SHAKE-256f";
+						break;
+					default:
+						util_fatal("Unknown parameter set (%lu)",
+								parameter_set);
+					}
+					break;
+				default:
+					util_fatal("Unknown key type (%lu)", type);
+					return -1;
+				}
+
+				/* Public key value */
+				value = getVALUE(session, obj, &value_len);
+				if (value == NULL) {
+					util_fatal("get CKA_VALUE failed");
+				}
+
+				if (!(ctx = EVP_PKEY_CTX_new_from_name(osslctx, evp_name, NULL)) ||
+						!(bld = OSSL_PARAM_BLD_new()) ||
+						OSSL_PARAM_BLD_push_octet_string(bld, "pub", value, value_len) != 1 ||
+						!(params = OSSL_PARAM_BLD_to_param(bld))) {
+					EVP_PKEY_CTX_free(ctx);
+					OSSL_PARAM_BLD_free(bld);
+					util_fatal("Unable to set key params");
+				}
+				OSSL_PARAM_BLD_free(bld);
+				if (EVP_PKEY_fromdata_init(ctx) != 1 ||
+						EVP_PKEY_fromdata(ctx, &pkey, EVP_PKEY_PUBLIC_KEY, params) != 1) {
+					EVP_PKEY_CTX_free(ctx);
+					OSSL_PARAM_free(params);
+					util_fatal("Unable to build key");
+				}
+				EVP_PKEY_CTX_free(ctx);
+				OSSL_PARAM_free(params);
+
+				if (i2d_PUBKEY_bio(pout, pkey) < 1) {
+					util_fatal("cannot write public key to output");
+				}
+				EVP_PKEY_free(pkey);
+#endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
 			} else
 				util_fatal("Reading public keys of type 0x%lX not (yet) supported", type);
 			value = BIO_copy_data(pout, &derlen);
@@ -7150,7 +7837,7 @@ static int read_object(CK_SESSION_HANDLE session)
 			len = derlen;
 #else
 			util_fatal("No OpenSSL support, cannot read public key");
-#endif
+#endif /* ENABLE_OPENSSL */
 		} /* value is PUBKEY_KEY_INFO */
 	}
 	else
@@ -10122,6 +10809,29 @@ static struct mech_info	p11_mechanisms[] = {
 	{ CKM_POLY1305_KEY_GEN,	"POLY1305-KEY-GEN", NULL, MF_UNKNOWN},
 	{ CKM_POLY1305,	"POLY1305", NULL, MF_GENERIC_HMAC_FLAGS},
 	{ CKM_CHACHA20_POLY1305,	"CHACHA20-POLY1305", NULL, MF_UNKNOWN},
+	{ CKM_ML_DSA,	"ML-DSA", "mldsa", MF_UNKNOWN},
+	{ CKM_HASH_ML_DSA_SHA224, "HASH-ML-DSA-SHA224", "mldsa-sha224", MF_UNKNOWN},
+	{ CKM_HASH_ML_DSA_SHA256, "HASH-ML-DSA-SHA256", "mldsa-sha256", MF_UNKNOWN},
+	{ CKM_HASH_ML_DSA_SHA384, "HASH-ML-DSA-SHA384", "mldsa-sha384", MF_UNKNOWN},
+	{ CKM_HASH_ML_DSA_SHA512, "HASH-ML-DSA-SHA512", "mldsa-sha512", MF_UNKNOWN},
+	{ CKM_HASH_ML_DSA_SHA3_224, "HASH-ML-DSA-SHA3_224", "mldsa-sha3-224", MF_UNKNOWN},
+	{ CKM_HASH_ML_DSA_SHA3_256, "HASH-ML-DSA-SHA3_256", "mldsa-sha3-256", MF_UNKNOWN},
+	{ CKM_HASH_ML_DSA_SHA3_384, "HASH-ML-DSA-SHA3_384", "mldsa-sha3-384", MF_UNKNOWN},
+	{ CKM_HASH_ML_DSA_SHA3_512, "HASH-ML-DSA-SHA3_512", "mldsa-sha3-512", MF_UNKNOWN},
+	{ CKM_HASH_ML_DSA_SHAKE128, "HASH-ML-DSA-SHAKE128", "mldsa-shake128", MF_UNKNOWN},
+	{ CKM_HASH_ML_DSA_SHAKE256, "HASH-ML-DSA-SHAKE256", "mldsa-shake256", MF_UNKNOWN},
+	{ CKM_ML_KEM,	"ML-KEM", "mlkem", MF_UNKNOWN},
+	{ CKM_SLH_DSA,	"SLH-DSA", "slhdsa", MF_UNKNOWN},
+	{ CKM_HASH_SLH_DSA_SHA224, "HASH-SLH-DSA-SHA224", "slhdsa-sha224", MF_UNKNOWN},
+	{ CKM_HASH_SLH_DSA_SHA256, "HASH-SLH-DSA-SHA256", "slhdsa-sha256", MF_UNKNOWN},
+	{ CKM_HASH_SLH_DSA_SHA384, "HASH-SLH-DSA-SHA384", "slhdsa-sha384", MF_UNKNOWN},
+	{ CKM_HASH_SLH_DSA_SHA512, "HASH-SLH-DSA-SHA512", "slhdsa-sha512", MF_UNKNOWN},
+	{ CKM_HASH_SLH_DSA_SHA3_224, "HASH-SLH-DSA-SHA3_224", "slhdsa-sha3-224", MF_UNKNOWN},
+	{ CKM_HASH_SLH_DSA_SHA3_256, "HASH-SLH-DSA-SHA3_256", "slhdsa-sha3-256", MF_UNKNOWN},
+	{ CKM_HASH_SLH_DSA_SHA3_384, "HASH-SLH-DSA-SHA3_384", "slhdsa-sha3-384", MF_UNKNOWN},
+	{ CKM_HASH_SLH_DSA_SHA3_512, "HASH-SLH-DSA-SHA3_512", "slhdsa-sha3-512", MF_UNKNOWN},
+	{ CKM_HASH_SLH_DSA_SHAKE128, "HASH-SLH-DSA-SHAKE128", "slhdsa-shake128", MF_UNKNOWN},
+	{ CKM_HASH_SLH_DSA_SHAKE256, "HASH-SLH-DSA-SHAKE256", "slhdsa-shake256", MF_UNKNOWN},
 	{ 0, NULL, NULL, MF_UNKNOWN },
 };
 

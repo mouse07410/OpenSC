@@ -40,6 +40,7 @@ function test_unwrapped_aes_encryption() {
 }
 
 TOKENTYPE=$1
+TOKENTYPE=${TOKENTYPE:-$TEST_PKCS11_BACKEND}
 
 if [ "${TOKENTYPE}" == "" ]; then
     TOKENTYPE=softhsm
@@ -202,7 +203,6 @@ ID_AES_UNWRAPPED_5="0103" # AES-KEY-WRAP
 ID_AES_UNWRAPPED_6="0104" # AES-KEY-WRAP-PAD
 
 is_openssl_3=$(openssl version | grep "OpenSSL 3.")
-is_softhsm2_2_6_1=$(softhsm2-util -version | grep "2.6.1")
 
 # Generate AES key for unwrap/wrap operation
 AES_WRAP=$(head /dev/urandom | sha256sum | head -c 64)
@@ -211,8 +211,9 @@ $PKCS11_TOOL "${PRIV_ARGS[@]}" --write-object aes_kek.key --id $ID_AES_WRAP --ty
     --key-type AES:32 --usage-wrap --extractable --label aes-32-wrapping-key
 assert $? "Failed to write AES key"
 
-if [[ "$TOKENTYPE" != "softhsm" || -n "$is_softhsm2_2_6_1" ]]; then
+if [[ "$TOKENTYPE" != "softhsm" ]]; then
     # CKM_AES_CBC -- SoftHSM2 AES CBC wrapping currently has a bug, the IV is not correctly used. Only IV=0 will work --*
+    # https://github.com/softhsm/SoftHSMv2/issues/782
     IV="00000000000000000000000000000000"
 
     echo "-------------------------------------------------------"
@@ -275,7 +276,7 @@ if [[ "$TOKENTYPE" != "softhsm" ]]; then
     assert $?  "AES 256 CBC PAD wrapped keys do not match"
 fi
 
-if [[ -n $is_openssl_3 ]]; then
+if [[ -n $is_openssl_3 && "$TOKENTYPE" != "softhsm" ]]; then
     echo "-------------------------------------------------------"
     echo "AES-KEY-WRAP Wrap AES test"
     echo "-------------------------------------------------------"
@@ -286,7 +287,7 @@ if [[ -n $is_openssl_3 ]]; then
     # Wrap with OpenSSL
     openssl enc -id-aes256-wrap -e -K $AES_WRAP -iv $IV -in aes.key -out openssl_wrapped.data
     assert $? "OpenSSL / Failed to AES KEY WRAP wrap AES key"
-    
+
     # Wrap with pkcs11-tool
     $PKCS11_TOOL "${PRIV_ARGS[@]}" --wrap -m AES-KEY-WRAP --id $ID_AES_WRAP --iv $IV --application-id $ID_AES_UNWRAPPED_4 \
         --output-file pkcs11_wrapped.data
@@ -349,7 +350,7 @@ if [[ -n $is_openssl_3 ]]; then
 
         # Compare original and unwrapped key
         compare_keys $? aes.key unwrapped.key
-        
+
         # Check if AES key was correctly unwrapped with encryption
         test_unwrapped_aes_encryption $AES_256_KEY $ID_AES_UNWRAPPED_4
     fi
