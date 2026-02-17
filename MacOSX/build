@@ -32,12 +32,14 @@ echo "MacOS-build: PKG_CONFIG_PATH=${PKG_CONFIG_PATH}"
 # build and package installer
 bash ./MacOSX/build-package $@
 
+# keep in sync with MacOSX/notarize
 while IFS='=' read -r key value; do
     # Skip empty or comment lines
     [[ -z "$key" || "$key" =~ ^# ]] && continue
     export "$key=$value"
 done < $BUILDPATH/VERSION.mk
 
+# keep in sync with MacOSX/notarize
 export PACKAGE_VERSION=${PACKAGE_VERSION_MAJOR}.${PACKAGE_VERSION_MINOR}.${PACKAGE_VERSION_FIX}
 export SED=/usr/bin/sed
 PREFIX=/Library/OpenSC
