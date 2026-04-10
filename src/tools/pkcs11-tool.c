@@ -23,6 +23,7 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <stdbool.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <limits.h>
@@ -147,6 +148,13 @@ static struct ec_curve_info {
 	{"brainpoolP320r1", "1.3.36.3.3.2.8.1.1.9", (unsigned char*)"\x06\x09\x2B\x24\x03\x03\x02\x08\x01\x01\x09", 11, 320, 0},
 	{"brainpoolP384r1", "1.3.36.3.3.2.8.1.1.11", (unsigned char*)"\x06\x09\x2B\x24\x03\x03\x02\x08\x01\x01\x0B", 11, 384, 0},
 	{"brainpoolP512r1", "1.3.36.3.3.2.8.1.1.13", (unsigned char*)"\x06\x09\x2B\x24\x03\x03\x02\x08\x01\x01\x0D", 11, 512, 0},
+
+	{"brainpoolP192t1", "1.3.36.3.3.2.8.1.1.4", (unsigned char*)"\x06\x09\x2B\x24\x03\x03\x02\x08\x01\x01\x04", 11, 192, 0},
+	{"brainpoolP224t1", "1.3.36.3.3.2.8.1.1.6", (unsigned char*)"\x06\x09\x2B\x24\x03\x03\x02\x08\x01\x01\x06", 11, 224, 0},
+	{"brainpoolP256t1", "1.3.36.3.3.2.8.1.1.8", (unsigned char*)"\x06\x09\x2B\x24\x03\x03\x02\x08\x01\x01\x08", 11, 256, 0},
+	{"brainpoolP320t1", "1.3.36.3.3.2.8.1.1.10", (unsigned char*)"\x06\x09\x2B\x24\x03\x03\x02\x08\x01\x01\x0A", 11, 320, 0},
+	{"brainpoolP384t1", "1.3.36.3.3.2.8.1.1.12", (unsigned char*)"\x06\x09\x2B\x24\x03\x03\x02\x08\x01\x01\x0C", 11, 384, 0},
+	{"brainpoolP512t1", "1.3.36.3.3.2.8.1.1.14", (unsigned char*)"\x06\x09\x2B\x24\x03\x03\x02\x08\x01\x01\x0E", 11, 512, 0},
 
 	{"secp192k1",		"1.3.132.0.31", (unsigned char*)"\x06\x05\x2B\x81\x04\x00\x1F", 7, 192, 0},
 	{"secp256k1",		"1.3.132.0.10", (unsigned char*)"\x06\x05\x2B\x81\x04\x00\x0A", 7, 256, 0},
@@ -781,8 +789,8 @@ VARATTR_METHOD(MODULUS, CK_BYTE);			/* getMODULUS */
 #ifdef ENABLE_OPENSSL
 VARATTR_METHOD(SUBJECT, unsigned char);			/* getSUBJECT */
 VARATTR_METHOD(SERIAL_NUMBER, unsigned char);	/* getSERIAL_NUMBER */
-VARATTR_METHOD(PUBLIC_EXPONENT, CK_BYTE);		/* getPUBLIC_EXPONENT */
 #endif
+VARATTR_METHOD(PUBLIC_EXPONENT, CK_BYTE);		/* getPUBLIC_EXPONENT */
 VARATTR_METHOD(VALUE, unsigned char);			/* getVALUE */
 VARATTR_METHOD(GOSTR3410_PARAMS, unsigned char);	/* getGOSTR3410_PARAMS */
 VARATTR_METHOD(GOSTR3411_PARAMS, unsigned char);	/* getGOSTR3411_PARAMS */
@@ -3887,9 +3895,6 @@ static int gen_keypair(CK_SLOT_ID slot, CK_SESSION_HANDLE session,
 			FILL_ATTR(publicKeyTemplate[n_pubkey_attr], CKA_PARAMETER_SET,
 					&ml_dsa_parameter_set, sizeof(CK_ML_DSA_PARAMETER_SET_TYPE));
 			n_pubkey_attr++;
-			FILL_ATTR(privateKeyTemplate[n_privkey_attr], CKA_PARAMETER_SET,
-					&ml_dsa_parameter_set, sizeof(CK_ML_DSA_PARAMETER_SET_TYPE));
-			n_privkey_attr++;
 
 			if (opt_key_usage_default || opt_key_usage_sign) {
 				FILL_ATTR(publicKeyTemplate[n_pubkey_attr], CKA_VERIFY, &_true, sizeof(_true));
@@ -3921,9 +3926,6 @@ static int gen_keypair(CK_SLOT_ID slot, CK_SESSION_HANDLE session,
 			FILL_ATTR(publicKeyTemplate[n_pubkey_attr], CKA_PARAMETER_SET,
 					&ml_kem_parameter_set, sizeof(CK_ML_KEM_PARAMETER_SET_TYPE));
 			n_pubkey_attr++;
-			FILL_ATTR(privateKeyTemplate[n_privkey_attr], CKA_PARAMETER_SET,
-					&ml_kem_parameter_set, sizeof(CK_ML_KEM_PARAMETER_SET_TYPE));
-			n_privkey_attr++;
 
 			if (opt_key_usage_default || opt_key_usage_encapsulate) {
 				FILL_ATTR(publicKeyTemplate[n_pubkey_attr], CKA_ENCAPSULATE, &_true, sizeof(_true));
@@ -3973,9 +3975,6 @@ static int gen_keypair(CK_SLOT_ID slot, CK_SESSION_HANDLE session,
 			FILL_ATTR(publicKeyTemplate[n_pubkey_attr], CKA_PARAMETER_SET,
 					&slh_dsa_parameter_set, sizeof(CK_SLH_DSA_PARAMETER_SET_TYPE));
 			n_pubkey_attr++;
-			FILL_ATTR(privateKeyTemplate[n_privkey_attr], CKA_PARAMETER_SET,
-					&slh_dsa_parameter_set, sizeof(CK_SLH_DSA_PARAMETER_SET_TYPE));
-			n_privkey_attr++;
 
 			if (opt_key_usage_default || opt_key_usage_sign) {
 				FILL_ATTR(publicKeyTemplate[n_pubkey_attr], CKA_VERIFY, &_true, sizeof(_true));
@@ -5621,7 +5620,7 @@ static CK_RV write_object(CK_SESSION_HANDLE session)
 			n_pubkey_attr++;
 			FILL_ATTR(pubkey_templ[n_pubkey_attr], CKA_PARAMETER_SET, &pqc_key.type, sizeof(pqc_key.type));
 			n_pubkey_attr++;
-			FILL_ATTR(pubkey_templ[n_pubkey_attr], CKA_VALUE, &pqc_key.public.value, pqc_key.public.len);
+			FILL_ATTR(pubkey_templ[n_pubkey_attr], CKA_VALUE, pqc_key.public.value, pqc_key.public.len);
 			n_pubkey_attr++;
 		}
 #if !defined(OPENSSL_NO_EC)
@@ -6628,6 +6627,34 @@ derive_key(CK_SLOT_ID slot, CK_SESSION_HANDLE session, CK_OBJECT_HANDLE key)
 	}
 }
 
+#define BYTES_PER_LINE 32
+void
+print_hex(const u8 *bin_input, size_t input_size, int separator, bool newline)
+{
+	char out[BYTES_PER_LINE * 3] = {0};
+	size_t out_len = BYTES_PER_LINE * 3;
+	unsigned int dec = 0;
+	unsigned int n, i;
+
+	/* If it is small enough number, convert it to deccimal */
+	if (input_size <= sizeof(unsigned int)) {
+		for (i = 0; i < input_size; i++) {
+			dec = (dec << 8) + (bin_input[i] & 0xff);
+		}
+		if (dec != 0) {
+			printf("%u (0x", dec);
+		}
+	}
+
+	for (n = 0; n < input_size; n += BYTES_PER_LINE) {
+		size_t chunk_len = MIN(input_size - n, BYTES_PER_LINE);
+		const char *indent = n + chunk_len < input_size
+				? "\n              " /* continuation of block */
+				: (newline ? "\n" : ""); /* end of the block */
+		sc_bin_to_hex(bin_input + n, chunk_len, out, out_len, separator);
+		printf("%s%s%s", out, (dec != 0 ? ")" : ""), indent);
+	}
+}
 
 static void
 show_key(CK_SESSION_HANDLE sess, CK_OBJECT_HANDLE obj)
@@ -6668,11 +6695,31 @@ show_key(CK_SESSION_HANDLE sess, CK_OBJECT_HANDLE obj)
 			/* uninitialized secret key (type 0) */
 			printf("\n");
 		} else {
-			if (pub)
-				printf("; RSA %lu bits\n",
-						(unsigned long) getMODULUS_BITS(sess, obj));
-			else
-				printf("; RSA \n");
+			unsigned char *modulus = NULL, *public_exponent = NULL;
+			CK_ULONG modulus_len, public_exponent_len;
+			unsigned long modulus_bits = 0;
+
+			printf("; RSA ");
+			modulus = getMODULUS(sess, obj, &modulus_len);
+
+			if (pub && (modulus_bits = getMODULUS_BITS(sess, obj)) != 0) {
+				printf(" %lu bits", modulus_bits);
+			} else if (modulus != NULL) {
+				/* estimate, for private key or missing*/
+				printf(" %lu bits", modulus_len * 8);
+			}
+			printf("\n");
+			if (modulus) {
+				printf("  Modulus:    ");
+				print_hex(modulus, modulus_len, 0, true);
+				free(modulus);
+			}
+			public_exponent = getPUBLIC_EXPONENT(sess, obj, &public_exponent_len);
+			if (public_exponent) {
+				printf("  Public exp: ");
+				print_hex(public_exponent, public_exponent_len, 0, true);
+				free(public_exponent);
+			}
 		}
 		break;
 	case CKK_GOSTR3410:
@@ -6694,27 +6741,16 @@ show_key(CK_SESSION_HANDLE sess, CK_OBJECT_HANDLE obj)
 
 		oid = getGOSTR3410_PARAMS(sess, obj, &size);
 		if (oid) {
-			unsigned int	n;
-
-			printf("  PARAMS OID: ");
-			for (n = 0; n < size; n++)
-				printf("%02x", oid[n]);
-			printf("\n");
+			printf("  Params OID: ");
+			print_hex(oid, size, ':', true);
 			free(oid);
 		}
 
 		if (pub)   {
 			value = getVALUE(sess, obj, &size);
 			if (value) {
-				unsigned int	n;
-
-				printf("  VALUE:      ");
-				for (n = 0; n < size; n++)   {
-					if (n && (n%32)==0)
-						printf("\n              ");
-					printf("%02x", value[n]);
-				}
-				printf("\n");
+				printf("  Value:      ");
+				print_hex(value, size, 0, true);
 				free(value);
 			}
 		}
@@ -6753,18 +6789,15 @@ show_key(CK_SESSION_HANDLE sess, CK_OBJECT_HANDLE obj)
 			 * "ECPoint ::= OCTET STRING"
 			 */
 			if (point_bytes && point_size) {
-				printf("  EC_POINT:   ");
-				for (n = 0; n < point_size; n++)
-					printf("%02x", point_bytes[n]);
-				printf("\n");
+				printf("  EC Point:   ");
+				print_hex(point_bytes, point_size, 0, true);
 			}
 
 			if (params_bytes && params_size > 0) {
 				struct sc_object_id oid;
 
-				printf("  EC_PARAMS:  ");
-				for (n = 0; n < params_size; n++)
-					printf("%02x", params_bytes[n]);
+				printf("  EC Params:  ");
+				print_hex(params_bytes, params_size, ':', false);
 
 				if (curve_info) { /* we matched it above, use printable OID */
 					printf(" (\"%s\" OID:\"%s\")\n", curve_info->name, curve_info->oid);
@@ -6819,15 +6852,8 @@ show_key(CK_SESSION_HANDLE sess, CK_OBJECT_HANDLE obj)
 		printf("\n");
 		value = getVALUE(sess, obj, &size);
 		if (value) {
-			unsigned int    n;
-
-			printf("  VALUE:      ");
-			for (n = 0; n < size; n++)   {
-				if (n && (n%32)==0)
-					printf("\n              ");
-				printf("%02x", value[n]);
-			}
-			printf("\n");
+			printf("  Value:      ");
+			print_hex(value, size, 0, true);
 			free(value);
 		}
 		break;
@@ -6916,15 +6942,8 @@ show_key(CK_SESSION_HANDLE sess, CK_OBJECT_HANDLE obj)
 		if (pub) {
 			value = getVALUE(sess, obj, &size);
 			if (value) {
-				unsigned int n;
-
-				printf("  VALUE:      ");
-				for (n = 0; n < size; n++) {
-					if (n && (n % 32) == 0)
-						printf("\n              ");
-					printf("%02x", value[n]);
-				}
-				printf("\n");
+				printf("  Value:      ");
+				print_hex(value, size, 0, true);
 				free(value);
 			}
 		}
@@ -6940,12 +6959,8 @@ show_key(CK_SESSION_HANDLE sess, CK_OBJECT_HANDLE obj)
 	}
 
 	if ((id = getID(sess, obj, &idsize)) != NULL && idsize) {
-		unsigned int	n;
-
 		printf("  ID:         ");
-		for (n = 0; n < idsize; n++)
-			printf("%02x", id[n]);
-		printf("\n");
+		print_hex(id, idsize, ':', true);
 	}
 
 	printf("  Usage:      ");
@@ -6978,7 +6993,7 @@ show_key(CK_SESSION_HANDLE sess, CK_OBJECT_HANDLE obj)
 		printf("%sverify", sepa);
 		sepa = ", ";
 	}
-	if (pub && getVERIFY_RECOVER(sess, obj)) {
+	if (pub && !sec && getVERIFY_RECOVER(sess, obj)) {
 		printf("%sverifyRecover", sepa);
 		sepa = ", ";
 	}
@@ -7145,12 +7160,8 @@ static void show_cert(CK_SESSION_HANDLE sess, CK_OBJECT_HANDLE obj)
 #endif /* ENABLE_OPENSSL */
 
 	if ((id = getID(sess, obj, &size)) != NULL && size) {
-		unsigned int	n;
-
 		printf("  ID:         ");
-		for (n = 0; n < size; n++)
-			printf("%02x", id[n]);
-		printf("\n");
+		print_hex(id, size, ':', true);
 	}
 	if ((unique_id = getUNIQUE_ID(sess, obj, NULL)) != NULL) {
 		printf("  Unique ID:  %s\n", unique_id);
@@ -9179,7 +9190,7 @@ static int test_verify(CK_SESSION_HANDLE sess)
 	return errors;
 }
 
-#if OPENSC_VERSION_MAJOR == 0 && OPENSC_VERSION_MINOR <= 26
+#if OPENSC_VERSION_MAJOR == 0 && OPENSC_VERSION_MINOR <= 27
 #else
 #ifdef ENABLE_OPENSSL
 static int wrap_unwrap(CK_SESSION_HANDLE session,
@@ -9303,7 +9314,7 @@ static int wrap_unwrap(CK_SESSION_HANDLE session,
  */
 static int test_unwrap(CK_SESSION_HANDLE sess)
 {
-#if OPENSC_VERSION_MAJOR == 0 && OPENSC_VERSION_MINOR <= 26
+#if OPENSC_VERSION_MAJOR == 0 && OPENSC_VERSION_MINOR <= 27
 	/* temporarily disable test, see https://github.com/OpenSC/OpenSC/issues/1796 */
 	return 0;
 #else
@@ -9634,17 +9645,11 @@ static int encrypt_decrypt(CK_SESSION_HANDLE session,
 	failed = data_len != in_len || memcmp(orig_data, data, data_len);
 
 	if (failed) {
-		CK_ULONG n;
-
 		printf("resulting cleartext (%lu bytes) doesn't match input (%lu bytes)\n", data_len, in_len);
 		printf("    Original:");
-		for (n = 0; n < in_len; n++)
-			printf(" %02x", orig_data[n]);
-		printf("\n");
+		print_hex(orig_data, in_len, 0, true);
 		printf("    Decrypted:");
-		for (n = 0; n < data_len; n++)
-			printf(" %02x", data[n]);
-		printf("\n");
+		print_hex(data, data_len, 0, true);
 		return 1;
 	}
 

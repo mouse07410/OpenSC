@@ -65,12 +65,12 @@ static struct sc_card_driver dtrust_drv = {
 
 struct dtrust_drv_data_t {
 	/* track PACE state */
-	unsigned char pace : 1;
-	unsigned char can : 1;
+	unsigned int pace : 1;
+	unsigned int can : 1;
 	/* global CAN from configuration file */
 	char *can_value;
 	/* use CAN cache */
-	unsigned char can_cache : 1;
+	unsigned int can_cache : 1;
 	/* PKCS#15 context for CAN caching */
 	struct sc_pkcs15_card *p15card;
 	/* save the current security environment */
@@ -609,7 +609,9 @@ dtrust_pin_cmd_get_info(struct sc_card *card,
 	switch (data->pin_reference) {
 	case PACE_PIN_ID_CAN:
 		/* unlimited number of retries */
-		*tries_left = -1;
+		if (tries_left != NULL) {
+			*tries_left = -1;
+		}
 		data->pin1.max_tries = -1;
 		data->pin1.tries_left = -1;
 		r = SC_SUCCESS;

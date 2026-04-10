@@ -30,9 +30,6 @@ m4_esyscmd([awk -F= '
   }
 ' "VERSION.mk"])
 
-
-m4_sinclude(m4/version.m4.ci)
-
 # Hint: MacOSX/build contains minimum OpenSSL reference
 m4_define([openssl_minimum_version], [1.1.1])
 
@@ -57,9 +54,9 @@ OPENSC_VS_FF_PRODUCT_UPDATES="VS_FF_PRODUCT_UPDATES"
 #   (Code changed:                      REVISION++)
 #   (Oldest interface changed/removed:  OLDEST++)
 #   (Interfaces added:                  CURRENT++, REVISION=0)
-OPENSC_LT_CURRENT="12"
-OPENSC_LT_OLDEST="12"
-OPENSC_LT_REVISION="2"
+OPENSC_LT_CURRENT="13"
+OPENSC_LT_OLDEST="13"
+OPENSC_LT_REVISION="0"
 OPENSC_LT_AGE="$((${OPENSC_LT_CURRENT}-${OPENSC_LT_OLDEST}))"
 
 AC_CONFIG_SRCDIR([src/libopensc/sc.c])
