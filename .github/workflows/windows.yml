@@ -61,7 +61,7 @@ jobs:
             fi
           fi
           PACKAGE_SUFFIX="${SUFFIX}${{ matrix.configuration == 'Light' && '-Light' || '' }}"
-          sed -i.bak "s/^PACKAGE_SUFFIX=\([-~]*[0-9a-zA-Z]*\)$/PACKAGE_SUFFIX=$PACKAGE_SUFFIX/g" VERSION.mk
+          sed -i.bak "s|^PACKAGE_SUFFIX=\([-~]*[0-9a-zA-Z]*\)$|PACKAGE_SUFFIX=$PACKAGE_SUFFIX|g" VERSION.mk
           cat VERSION.mk
           while IFS='=' read -r key value; do
               # Skip empty or comment lines
@@ -134,7 +134,7 @@ jobs:
         run: nmake /nologo /f Makefile.mak opensc.msi
       - name: Archive artifacts
         id: upload-unsigned-artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ env.ARTIFACT_NAME }}
           path: ./win32/*.msi
@@ -149,7 +149,7 @@ jobs:
           github-artifact-id: '${{ steps.upload-unsigned-artifact.outputs.artifact-id }}'
           wait-for-completion: false
       - name: Archive debug artifacts
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ env.ARTIFACT_NAME }}-dbg
           path: |

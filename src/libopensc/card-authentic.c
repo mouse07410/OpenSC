@@ -61,13 +61,14 @@ static struct sc_card_driver authentic_drv = {
 	NULL, 0, NULL
 };
 
+#define AUTHENTIC_N_PINS 8
 /*
  * FIXME: use dynamic allocation for the PIN data to reduce memory usage
  * actually size of 'authentic_private_data' 140kb
  */
 struct authentic_private_data {
-	struct sc_pin_cmd_data pins[8];
-	unsigned char pins_sha1[8][SHA_DIGEST_LENGTH];
+	struct sc_pin_cmd_data pins[AUTHENTIC_N_PINS];
+	unsigned char pins_sha1[AUTHENTIC_N_PINS][SHA_DIGEST_LENGTH];
 
 	struct sc_cplc cplc;
 };
@@ -1021,6 +1022,8 @@ authentic_chv_verify(struct sc_card *card, struct sc_pin_cmd_data *pin_cmd,
 	struct sc_context *ctx = card->ctx;
 	struct sc_apdu apdu;
 	struct sc_pin_cmd_pin *pin1 = &pin_cmd->pin1;
+	unsigned char pin_buff[SC_MAX_APDU_BUFFER_SIZE];
+	size_t pin_len;
 	int rv;
 
 	LOG_FUNC_CALLED(ctx);
@@ -1030,14 +1033,20 @@ authentic_chv_verify(struct sc_card *card, struct sc_pin_cmd_data *pin_cmd,
 		sc_format_apdu(card, &apdu, SC_APDU_CASE_1, 0x20, 0, pin_cmd->pin_reference);
 	}
 	else if (pin1->data && pin1->len)   {
-		unsigned char pin_buff[SC_MAX_APDU_BUFFER_SIZE];
-		size_t pin_len;
-
+		if (pin1->len > sizeof(pin_buff)) {
+			LOG_FUNC_RETURN(ctx, SC_ERROR_INVALID_PIN_LENGTH);
+		}
 		memcpy(pin_buff, pin1->data, pin1->len);
 		pin_len = pin1->len;
 
 		if (pin1->pad_length && pin_cmd->flags & SC_PIN_CMD_NEED_PADDING)   {
-			memset(pin_buff + pin1->len, pin1->pad_char, pin1->pad_length - pin1->len);
+			if (pin1->len > pin1->pad_length || pin1->pad_length > sizeof(pin_buff)) {
+				LOG_FUNC_RETURN(ctx, SC_ERROR_INVALID_PIN_LENGTH);
+			}
+			if (pin1->len < sizeof(pin_buff)) {
+				memset(pin_buff + pin1->len, pin1->pad_char,
+						pin1->pad_length - pin1->len);
+			}
 			pin_len = pin1->pad_length;
 		}
 
@@ -1104,6 +1113,10 @@ authentic_pin_verify(struct sc_card *card, struct sc_pin_cmd_data *pin_cmd)
 	LOG_FUNC_CALLED(ctx);
 	sc_log(ctx, "PIN(type:%X,reference:%X,data:%p,length:%zu)",
 			pin_cmd->pin_type, pin_cmd->pin_reference, pin_cmd->pin1.data, pin_cmd->pin1.len);
+
+	if (pin_cmd->pin_reference < 0 || pin_cmd->pin_reference >= AUTHENTIC_N_PINS) {
+		LOG_TEST_RET(ctx, SC_ERROR_INVALID_ARGUMENTS, "PIN reference out of bounds");
+	}
 
 	if (pin_cmd->pin1.data && !pin_cmd->pin1.len)   {
 		pin_cmd->pin1.tries_left = -1;
@@ -1201,6 +1214,10 @@ authentic_pin_change(struct sc_card *card, struct sc_pin_cmd_data *data, int *tr
 	rv = authentic_pin_get_policy(card, data, NULL);
 	LOG_TEST_RET(ctx, rv, "Get 'PIN policy' error");
 
+	if (data->pin_reference < 0 || data->pin_reference >= AUTHENTIC_N_PINS) {
+		LOG_TEST_RET(ctx, SC_ERROR_INVALID_ARGUMENTS, "PIN reference out of bounds");
+	}
+
 	memset(prv_data->pins_sha1[data->pin_reference], 0, sizeof(prv_data->pins_sha1[0]));
 
 	if (!data->pin1.data && !data->pin1.len && !data->pin2.data && !data->pin2.len)   {
@@ -1217,11 +1234,18 @@ authentic_pin_change(struct sc_card *card, struct sc_pin_cmd_data *data, int *tr
 	memset(pin_data, data->pin1.pad_char, sizeof(pin_data));
 	offs = 0;
 	if (data->pin1.data && data->pin1.len)   {
+		if (data->pin1.len > sizeof(pin_data)) {
+			LOG_TEST_RET(ctx, SC_ERROR_INVALID_ARGUMENTS, "PIN length exceeds buffer");
+		}
 		memcpy(pin_data, data->pin1.data, data->pin1.len);
 		offs += data->pin1.pad_length;
 	}
-	if (data->pin2.data && data->pin2.len)
+	if (data->pin2.data && data->pin2.len) {
+		if (data->pin2.len + offs > sizeof(pin_data)) {
+			LOG_TEST_RET(ctx, SC_ERROR_INVALID_ARGUMENTS, "PIN2 length exceeds buffer");
+		}
 		memcpy(pin_data + offs, data->pin2.data, data->pin2.len);
+	}
 
 	sc_format_apdu(card, &apdu, SC_APDU_CASE_3_SHORT, 0x24, offs ? 0x00 : 0x01, data->pin_reference);
 	apdu.data = pin_data;
@@ -1344,6 +1368,10 @@ authentic_pin_reset(struct sc_card *card, struct sc_pin_cmd_data *data, int *tri
 
 	LOG_FUNC_CALLED(ctx);
 	sc_log(ctx, "reset PIN (ref:%i,lengths %zu/%zu)", data->pin_reference, data->pin1.len, data->pin2.len);
+
+	if (data->pin_reference < 0 || data->pin_reference >= AUTHENTIC_N_PINS) {
+		LOG_TEST_RET(ctx, SC_ERROR_INVALID_ARGUMENTS, "PIN reference out of bounds");
+	}
 
 	memset(prv_data->pins_sha1[data->pin_reference], 0, sizeof(prv_data->pins_sha1[0]));
 

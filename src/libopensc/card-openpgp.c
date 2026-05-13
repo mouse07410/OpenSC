@@ -3570,7 +3570,6 @@ set_taglength_tlv(u8 *buffer, unsigned int tag, size_t length)
 {
 	u8 *p = buffer;
 
-	assert(tag <= 0xffff);
 	if (tag > 0xff)
 		*p++ = (tag >> 8) & 0xFF;
 	*p++ = tag;
@@ -3672,7 +3671,8 @@ pgp_build_extended_header_list(sc_card_t *card, sc_cardctl_openpgp_key_gen_store
 		memset(pritemplate, 0, max_prtem_len);
 
 		/* maximum 32 bit exponent length allowed on OpenPGP Card */
-		assert(key_info->u.rsa.exponent_len <= SC_OPENPGP_MAX_EXP_BITS);
+		if (key_info->u.rsa.exponent_len > SC_OPENPGP_MAX_EXP_BITS)
+			return SC_ERROR_INTERNAL;
 
 		/* We need to right justify the exponent with allowed exponent length,
 		 * e.g. from '01 00 01' to '00 01 00 01' */
@@ -3724,9 +3724,14 @@ pgp_build_extended_header_list(sc_card_t *card, sc_cardctl_openpgp_key_gen_store
 
 	for (i = 0; i < comp_to_add; i++) {
 		sc_log(ctx, "Set Tag+Length for %s (%X).", componentnames[i], componenttags[i]);
+		if (componenttags[i] > 0xffff) {
+			LOG_FUNC_RETURN(card->ctx, SC_ERROR_INVALID_DATA);
+		}
 		len = set_taglength_tlv(p, componenttags[i], componentlens[i]);
 		tpl_len += len;
 
+		if (kdata_len + componentlens[i] > sizeof(kdata))
+			LOG_FUNC_RETURN(card->ctx, SC_ERROR_INVALID_DATA);
 		/*
 		 *       <-- kdata_len --><--  Copy here  -->
 		 * kdata |===============|___________________
